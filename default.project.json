@@ -1,0 +1,11 @@
+{
+  "name": "SkyObby",
+  "tree": {
+    "$className": "DataModel",
+    "ServerScriptService": {
+      "Server": {
+        "$path": "src/server"
+      }
+    }
+  }
+}
