@@ -90,8 +90,12 @@ def main():
         }
         emit.write_map(c, mj, '%s_MapScripts::\n\t.byte 0\n' % emit.map_name(c))
         names.append(emit.map_name(c))
-    import build_interiors
-    inames, generated = build_interiors.main(list(zones))
+    import build_interiors, build_caves
+    caves = build_caves.cave_consts()
+    inames, generated = build_interiors.main(list(zones) + caves)
+    clayouts, cnames = build_caves.main(generated)
+    layouts += clayouts
+    inames += cnames
     build_interiors.outdoor_warps(zones, generated)
     groups = {emit.GROUP: names}
     for k in range(0, len(inames), 200):

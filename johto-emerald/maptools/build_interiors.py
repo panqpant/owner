@@ -27,11 +27,11 @@ INDOOR_MUSIC = {'SEQ_GS_POKESEN': 'MUS_POKE_CENTER', 'SEQ_GS_FS': 'MUS_POKE_MART
 def interior_consts():
     return [k for k, v in H.items() if v['mapType'] == 'MAP_TYPE_INTERIOR' and k in CODE]
 
-def main(outdoor_consts):
+def main(other_consts):
     vm = vanilla_maps()
     lay_ids = {l['id'] for l in json.load(open(ROOT + '/data/layouts/layouts.json'))['layouts'] if 'id' in l}
     inside = interior_consts()
-    generated = set(outdoor_consts) | set(inside)
+    generated = set(other_consts) | set(inside)
     names = []
     for c in inside:
         ev = zone_ev(c)
