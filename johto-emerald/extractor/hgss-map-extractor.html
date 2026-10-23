@@ -1,0 +1,348 @@
+<title>HGSS Map Extractor</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one narrow column of three steps (pick ROM -> check -> send), with a live terrain preview drawn from the extracted grid */
+:root {
+  --bg: #f3f1ea;
+  --panel: #fffdf6;
+  --ink: #23211c;
+  --muted: #6b665a;
+  --line: #d9d3c2;
+  --gold: #b8860b;
+  --gold-ink: #7a5800;
+  --silver: #6f7f93;
+  --ok: #2f7a3e;
+  --bad: #b23a2a;
+  --font-display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --font-body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  /* terrain preview colours */
+  --t-ground: #c9d9a4; --t-wall: #4d5e3a; --t-grass: #6fa64a; --t-water: #5b8fc9;
+  --t-ledge: #a0743f; --t-door: #d4492f; --t-other: #b8b2a0;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #17181b; --panel: #202226; --ink: #ece8dc; --muted: #a29d90; --line: #34363c;
+    --gold: #e0b03a; --gold-ink: #f0c75a; --silver: #9fb0c4; --ok: #6cc07a; --bad: #ef7a66;
+    --t-ground: #6f7d52; --t-wall: #2a3322; --t-grass: #4c8233; --t-water: #3a6da6;
+    --t-ledge: #8a6334; --t-door: #e0604a; --t-other: #6a665c;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #17181b; --panel: #202226; --ink: #ece8dc; --muted: #a29d90; --line: #34363c;
+  --gold: #e0b03a; --gold-ink: #f0c75a; --silver: #9fb0c4; --ok: #6cc07a; --bad: #ef7a66;
+  --t-ground: #6f7d52; --t-wall: #2a3322; --t-grass: #4c8233; --t-water: #3a6da6;
+  --t-ledge: #8a6334; --t-door: #e0604a; --t-other: #6a665c;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 16px; line-height: 1.55;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 40px 64px;
+}
+main { max-width: 640px; margin: 0 auto; display: grid; gap: 28px; }
+header { display: grid; gap: 10px; }
+.eyebrow { font-family: var(--font-mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.eyebrow b { color: var(--gold-ink); font-weight: 500; }
+.eyebrow i { color: var(--silver); font-style: normal; }
+h1 { font-family: var(--font-display); font-weight: 800; font-size: clamp(32px, 7vw, 46px); line-height: 1.02; margin: 0; text-wrap: balance; letter-spacing: -.01em; }
+.lede { margin: 0; color: var(--muted); max-width: 60ch; }
+.steps { display: grid; gap: 14px; }
+.step { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 18px 20px; display: grid; gap: 10px; }
+.step h2 { font-family: var(--font-display); font-weight: 600; font-size: 19px; margin: 0; display: flex; gap: 10px; align-items: baseline; }
+.step h2 .n { font-family: var(--font-mono); font-size: 13px; color: var(--gold-ink); }
+.step p { margin: 0; color: var(--muted); }
+.drop {
+  border: 2px dashed var(--line); border-radius: 8px; padding: 22px; text-align: center; cursor: pointer;
+  display: grid; gap: 6px; justify-items: center; transition: border-color .15s, background .15s;
+}
+.drop:hover, .drop.over, .drop:focus-within { border-color: var(--gold); background: color-mix(in srgb, var(--gold) 7%, transparent); }
+.drop strong { font-weight: 600; }
+.drop small { color: var(--muted); font-family: var(--font-mono); font-size: 12px; }
+input[type=file] { position: absolute; width: 1px; height: 1px; opacity: 0; }
+button {
+  font: 600 15px var(--font-body); border-radius: 8px; border: 1px solid var(--gold); background: var(--gold); color: #1d1600;
+  padding: 11px 18px; cursor: pointer; justify-self: start;
+}
+button.ghost { background: transparent; color: var(--ink); border-color: var(--line); }
+button:disabled { opacity: .45; cursor: not-allowed; }
+button:focus-visible, .drop:focus-within { outline: 3px solid color-mix(in srgb, var(--gold) 55%, transparent); outline-offset: 2px; }
+.row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+dl.facts { display: grid; grid-template-columns: max-content 1fr; gap: 4px 16px; margin: 0; font-size: 14px; }
+dl.facts dt { color: var(--muted); }
+dl.facts dd { margin: 0; font-family: var(--font-mono); font-variant-numeric: tabular-nums; min-width: 0; overflow-wrap: anywhere; }
+.status { font-family: var(--font-mono); font-size: 13px; }
+.status.ok { color: var(--ok); } .status.bad { color: var(--bad); }
+.preview { display: grid; grid-template-columns: auto 1fr; gap: 16px; align-items: start; }
+canvas { width: 160px; height: 160px; image-rendering: pixelated; border-radius: 6px; border: 1px solid var(--line); background: var(--t-other); max-width: 100%; }
+.legend { display: grid; gap: 4px; font-size: 13px; color: var(--muted); }
+.legend span { display: inline-flex; gap: 8px; align-items: center; }
+.legend i { width: 12px; height: 12px; border-radius: 2px; display: inline-block; }
+.note { font-size: 14px; color: var(--muted); border-left: 3px solid var(--silver); padding-left: 12px; margin: 0; }
+@media (max-width: 460px) { .preview { grid-template-columns: 1fr; } }
+@media (prefers-reduced-motion: reduce) { .drop { transition: none; } }
+</style>
+
+<main>
+  <header>
+    <div class="eyebrow"><b>HeartGold</b> / <i>SoulSilver</i> · field terrain</div>
+    <h1>Pull the real Johto ground plan out of your HGSS cartridge</h1>
+    <p class="lede">Every HGSS map is built from 32×32-tile pieces. Each piece has a grid saying which tiles are grass, water, ledges, doors or blocked, plus where its buildings stand. This page reads only that from your own ROM, so the Emerald version can match HGSS tile for tile.</p>
+  </header>
+
+  <section class="steps">
+    <div class="step" id="step1">
+      <h2><span class="n">1</span> Pick your HGSS ROM</h2>
+      <label class="drop" id="drop" for="rom">
+        <strong>Choose a HeartGold or SoulSilver .nds file</strong>
+        <span>or drop it here</span>
+        <small>It stays on your device. Nothing is uploaded in this step.</small>
+        <input type="file" id="rom" accept=".nds,application/octet-stream">
+      </label>
+    </div>
+
+    <div class="step" id="step2">
+      <h2><span class="n">2</span> Check what was found</h2>
+      <p id="checkText">Waiting for a ROM. The example below shows what a map piece looks like once it's read.</p>
+      <dl class="facts" id="facts" hidden>
+        <dt>Game</dt><dd id="fGame"></dd>
+        <dt>Map pieces</dt><dd id="fCount"></dd>
+        <dt>Buildings placed</dt><dd id="fProps"></dd>
+        <dt>Data to send</dt><dd id="fSize"></dd>
+      </dl>
+      <div class="preview">
+        <canvas id="cv" width="32" height="32" aria-label="Terrain preview of one map piece"></canvas>
+        <div class="legend">
+          <span><i style="background:var(--t-ground)"></i>Walkable ground</span>
+          <span><i style="background:var(--t-grass)"></i>Tall grass</span>
+          <span><i style="background:var(--t-water)"></i>Water</span>
+          <span><i style="background:var(--t-ledge)"></i>Ledge</span>
+          <span><i style="background:var(--t-door)"></i>Door or warp</span>
+          <span><i style="background:var(--t-wall)"></i>Blocked (trees, walls, rocks)</span>
+          <div class="row" id="pieceNav" hidden>
+            <button class="ghost" id="prev" type="button">Previous piece</button>
+            <button class="ghost" id="next" type="button">Next piece</button>
+          </div>
+          <span class="status" id="pieceLabel">Example piece (made up)</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="step" id="step3">
+      <h2><span class="n">3</span> Send it to Claude</h2>
+      <p>Sends only the map layouts: terrain grids, building positions and ground shapes, about 15 MB. Your ROM's music, text, sprites and the rest of the game are not sent.</p>
+      <div class="row">
+        <button id="send" type="button" disabled>Send terrain to Claude</button>
+        <button id="save" class="ghost" type="button" disabled hidden>Save a copy</button>
+      </div>
+      <span class="status" id="sendStatus"></span>
+    </div>
+  </section>
+
+  <p class="note">When it says <b>Sent</b>, go back to the chat and tell Claude. It reads the data straight from this page.</p>
+</main>
+
+<script>
+// ---------- NDS + NARC parsing (pure functions) ----------
+const HGSS = {
+  u16: (b, o) => b[o] | (b[o + 1] << 8),
+  u32: (b, o) => (b[o] | (b[o + 1] << 8) | (b[o + 2] << 16) | (b[o + 3] << 24)) >>> 0,
+  ascii: (b, o, n) => { let s = ''; for (let i = 0; i < n; i++) s += String.fromCharCode(b[o + i]); return s; },
+
+  // Walk the NitroFS name table to a file id: "a/0/6/5" -> id
+  findFile(rom, path) {
+    const { u16, u32, ascii } = HGSS;
+    const fnt = u32(rom, 0x40);
+    const list = (dirId) => {
+      const base = fnt + (dirId & 0xFFF) * 8;
+      let p = fnt + u32(rom, base), fileId = u16(rom, base + 4);
+      const out = [];
+      for (;;) {
+        const len = rom[p++];
+        if (!len) break;
+        const name = ascii(rom, p, len & 0x7F); p += len & 0x7F;
+        if (len & 0x80) { out.push({ name, dir: u16(rom, p) }); p += 2; }
+        else out.push({ name, file: fileId++ });
+      }
+      return out;
+    };
+    let dir = 0xF000;
+    const parts = path.split('/');
+    for (let i = 0; i < parts.length; i++) {
+      const e = list(dir).find(x => x.name === parts[i]);
+      if (!e) return -1;
+      if (i === parts.length - 1) return e.file ?? -1;
+      if (e.dir === undefined) return -1;
+      dir = e.dir;
+    }
+    return -1;
+  },
+
+  fileBytes(rom, id) {
+    const fat = HGSS.u32(rom, 0x48);
+    return rom.subarray(HGSS.u32(rom, fat + id * 8), HGSS.u32(rom, fat + id * 8 + 4));
+  },
+
+  // NARC: header, then FAT (BTAF), FNT (BTNF), IMG (GMIF) chunks
+  narcMembers(narc) {
+    const { u16, u32, ascii } = HGSS;
+    if (ascii(narc, 0, 4) !== 'NARC') throw new Error('not a NARC');
+    let off = u16(narc, 0x0C);
+    const fatOff = off, fatSize = u32(narc, off + 4), count = u16(narc, off + 8);
+    off += fatSize;
+    off += u32(narc, off + 4);           // skip names chunk
+    const img = off + 8;
+    const out = [];
+    for (let i = 0; i < count; i++) {
+      const s = u32(narc, fatOff + 12 + i * 8), e = u32(narc, fatOff + 16 + i * 8);
+      out.push(narc.subarray(img + s, img + e));
+    }
+    return out;
+  },
+
+  // One land_data member: 0x14-byte header of section sizes (word 4 = 0x1234 | extraSize << 16),
+  // an optional extra block, then the terrain grid, then building props
+  landPiece(m) {
+    const { u32 } = HGSS;
+    const hdr = [0, 4, 8, 12, 16].map(o => u32(m, o));
+    const permSize = hdr[0], propSize = hdr[1], modelSize = hdr[2], extra = hdr[4] >>> 16;
+    const start = 0x14 + extra;
+    const perm = m.subarray(start, start + permSize);
+    const props = m.subarray(start + permSize, start + permSize + propSize);
+    // the ground model: its surfaces say where HGSS draws paths, grass, sand and flowers
+    const model = m.subarray(start + permSize + propSize, start + permSize + propSize + modelSize);
+    return { hdr, perm, props, model };
+  },
+
+  b64(bytes) {
+    let s = '';
+    for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+    return btoa(s);
+  },
+
+  extract(rom) {
+    const code = HGSS.ascii(rom, 0x0C, 4), title = HGSS.ascii(rom, 0, 12).replace(/\0+$/, '');
+    let path = 'a/0/6/5', id = HGSS.findFile(rom, path);
+    if (id < 0) { path = 'fielddata/land_data/land_data.narc'; id = HGSS.findFile(rom, path); }
+    if (id < 0) throw new Error('This ROM has no HGSS map data folder (a/0/6/5). Is it HeartGold or SoulSilver?');
+    const members = HGSS.narcMembers(HGSS.fileBytes(rom, id));
+    const pieces = members.map(HGSS.landPiece);
+    return { code, title, path, pieces };
+  },
+};
+if (typeof module !== 'undefined') module.exports = HGSS;
+
+// ---------- page ----------
+if (typeof document !== 'undefined') (function () {
+  const $ = (id) => document.getElementById(id);
+  let result = null, payload = null, piece = 0;
+
+  const css = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+  // Gen 4 tile behaviours: 0x02 tall grass, 0x10-0x17 water, 0x38-0x3F ledges, 0x5E-0x6F doors/warps
+  function tileColour(v) {
+    const beh = v & 0xFF, blocked = (v & 0x8000) !== 0;
+    if (beh === 0x02 || beh === 0x03) return css('--t-grass');
+    if (beh >= 0x10 && beh <= 0x17) return css('--t-water');
+    if (beh >= 0x38 && beh <= 0x3F) return css('--t-ledge');
+    if (beh >= 0x5E && beh <= 0x6F) return css('--t-door');
+    return blocked ? css('--t-wall') : css('--t-ground');
+  }
+  function draw(grid) {
+    const ctx = $('cv').getContext('2d');
+    for (let i = 0; i < 1024; i++) { ctx.fillStyle = tileColour(grid[i]); ctx.fillRect(i % 32, (i / 32) | 0, 1, 1); }
+  }
+  // Example piece shown before a ROM is picked: a small town square, clearly labelled as made up
+  function exampleGrid() {
+    const g = new Array(1024).fill(0);
+    for (let y = 0; y < 32; y++) for (let x = 0; x < 32; x++) {
+      const i = y * 32 + x;
+      if (x < 3 || y < 3 || y > 28 || (x > 28 && y < 12)) g[i] = 0x8000;
+      else if (x > 26 && y >= 12) g[i] = 0x8010;
+      else if (y > 20 && x > 5 && x < 14) g[i] = 0x02;
+      else if (y === 19 && x > 15 && x < 25) g[i] = 0x38;
+      else if (x >= 8 && x <= 14 && y >= 5 && y <= 9) g[i] = 0x8000;
+      else if (x >= 18 && x <= 22 && y >= 8 && y <= 12) g[i] = 0x8000;
+    }
+    g[9 * 32 + 12] = 0x69; g[12 * 32 + 20] = 0x69;
+    return g;
+  }
+  function gridOf(p) { const g = []; for (let i = 0; i < 1024; i++) g.push(p.perm[i * 2] | (p.perm[i * 2 + 1] << 8)); return g; }
+  function showPiece() {
+    const p = result.pieces[piece];
+    draw(gridOf(p));
+    $('pieceLabel').textContent = `Piece ${piece} of ${result.pieces.length - 1}`;
+  }
+
+  draw(exampleGrid());
+
+  async function load(file) {
+    $('checkText').textContent = `Reading ${file.name}…`;
+    $('sendStatus').textContent = ''; $('sendStatus').className = 'status';
+    try {
+      const rom = new Uint8Array(await file.arrayBuffer());
+      result = HGSS.extract(rom);
+      const bad = result.pieces.filter(p => p.hdr[0] !== 0x800).length;
+      const props = result.pieces.reduce((n, p) => n + p.props.length / 0x30, 0);
+      payload = JSON.stringify({
+        format: 'hgss-land-v3', gamecode: result.code, title: result.title, narc: result.path,
+        count: result.pieces.length,
+        pieces: result.pieces.map((p, i) => ({ i, hdr: p.hdr, perm: HGSS.b64(p.perm), props: HGSS.b64(p.props), model: HGSS.b64(p.model) })),
+      });
+      const game = { IPK: 'HeartGold', IPG: 'SoulSilver' }[result.code.slice(0, 3)] || 'Unknown game';
+      $('fGame').textContent = `${game} (${result.code}, ${result.title})`;
+      $('fCount').textContent = `${result.pieces.length}${bad ? ` (${bad} unusual)` : ''}`;
+      $('fProps').textContent = String(props);
+      $('fSize').textContent = `${(payload.length / 1048576).toFixed(2)} MB`;
+      $('facts').hidden = false; $('pieceNav').hidden = false;
+      $('checkText').textContent = game === 'Unknown game'
+        ? 'Map data found, but the game code is not HGSS. Send it anyway only if you know this is HeartGold or SoulSilver.'
+        : 'Found the map data. Step through a few pieces to see real HGSS terrain.';
+      piece = Math.min(1, result.pieces.length - 1); showPiece();
+      $('send').disabled = false; $('save').disabled = false;
+    } catch (e) {
+      result = payload = null;
+      $('facts').hidden = true; $('send').disabled = true; $('save').disabled = true;
+      $('checkText').textContent = e.message || 'Could not read that file. Pick a HeartGold or SoulSilver .nds ROM.';
+    }
+  }
+
+  $('rom').addEventListener('change', (e) => e.target.files[0] && load(e.target.files[0]));
+  const drop = $('drop');
+  drop.addEventListener('dragover', (e) => { e.preventDefault(); drop.classList.add('over'); });
+  drop.addEventListener('dragleave', () => drop.classList.remove('over'));
+  drop.addEventListener('drop', (e) => { e.preventDefault(); drop.classList.remove('over'); e.dataTransfer.files[0] && load(e.dataTransfer.files[0]); });
+  $('prev').addEventListener('click', () => { if (result) { piece = (piece - 1 + result.pieces.length) % result.pieces.length; showPiece(); } });
+  $('next').addEventListener('click', () => { if (result) { piece = (piece + 1) % result.pieces.length; showPiece(); } });
+
+  let assets = null, downloads = null;
+  (async () => {
+    try { assets = await window.claude?.use?.('assets'); } catch { assets = null; }
+    try { downloads = await window.claude?.use?.('downloads'); } catch { downloads = null; }
+    if (downloads) $('save').hidden = false;
+    if (!assets) $('sendStatus').textContent = 'Sending needs edit access to this page. Use "Save a copy" and send the file another way.';
+  })();
+
+  $('send').addEventListener('click', async () => {
+    if (!payload || !assets) return;
+    $('send').disabled = true; $('sendStatus').className = 'status'; $('sendStatus').textContent = 'Sending…';
+    try {
+      const r = await assets.upload(new Blob([payload], { type: 'application/json' }), { type: 'application/json' });
+      $('sendStatus').className = 'status ok';
+      $('sendStatus').textContent = `Sent (${(r.sizeBytes / 1048576).toFixed(2)} MB). Go back to the chat and tell Claude.`;
+    } catch (e) {
+      $('send').disabled = false; $('sendStatus').className = 'status bad';
+      $('sendStatus').textContent = e && e.code === 'too_large' ? 'Too large to send. Use "Save a copy" instead.' : `Couldn't send (${e && e.code || 'error'}). Try again in a moment.`;
+    }
+  });
+  $('save').addEventListener('click', async () => {
+    if (!payload || !downloads) return;
+    try { await downloads.save({ filename: 'hgss-terrain.json', data: payload }); }
+    catch { $('sendStatus').textContent = 'Save was cancelled.'; }
+  });
+})();
+</script>

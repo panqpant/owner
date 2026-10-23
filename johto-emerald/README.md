@@ -34,17 +34,21 @@ Start a **new game**. Old Emerald saves won't match.
 
 Levels follow Emerald's curve, so the difficulty stays balanced on the current maps.
 
-## Not done yet (phase 2: the real Johto map)
+## Phase 2: the real HGSS world (in progress)
 
-The **towns and routes still have Hoenn's layouts**. They carry Johto names, Pokémon and trainers, but they're Hoenn's maps.
-Rebuilding the actual Johto geography (New Bark → Cherrygrove → Violet … → Mt. Silver) with Emerald's tilesets is the next
-phase, done town by town. Other known gaps:
+A new game now starts in **HGSS's New Bark Town**, and all **75 HGSS outdoor maps** (every Johto and Kanto town,
+route and sea route) are in the game, connected exactly as in HGSS. Each one is rebuilt from HGSS's own data:
 
-- Story dialogue is still Emerald's plot with Johto names. For example, the Cianwood leader is still the player's dad, and Steven
-  still appears in the main story.
-- Leader and Elite Four sprites are still the Hoenn characters' sprites.
-- Legendaries are still Emerald's (Groudon, Kyogre, Rayquaza, the Regis, Lati@s). They become Ho-Oh, Lugia, the beasts and Celebi
-  when their maps are rebuilt.
+- **Layout:** the walkable grid of every map piece (trees, tall grass, water, ledges, doors), pulled from your own HGSS ROM
+  with `extractor/hgss-map-extractor.html` (it runs in your browser; the ROM is never uploaded).
+- **Ground:** HGSS's 3D ground models are read top-down to find paths, sand, flower beds, cliffs and sea rocks.
+- **Buildings:** an Emerald building of the right kind (Pokémon Center, Mart, Gym, house, lab) is placed on every HGSS door.
+- **New art:** trees are composited whole at any position (plus a slim one-tile tree), sea rocks are newly drawn
+  boulders, and shorelines get a foam edge, so nothing appears cut in half.
+
+Still to come, in order: interiors and caves from HGSS data, HGSS NPCs, signs and items, the HGSS story scripts and
+dialogue, HGSS trainers and wild Pokémon, and the HGSS soundtrack ported to GBA. Until then, doors don't lead anywhere yet
+and the map music uses the closest Emerald track.
 
 ## How it's built
 
@@ -58,6 +62,9 @@ There's no ROM in this repo. [pret/pokeemerald](https://github.com/pret/pokeemer
 | `johto_wild.py` | HGSS route rosters for the story-path maps |
 | `johto_text.py` | Renames places, people, teams and badges inside in-game text only |
 | `johto_rewrap.py` | Re-wraps dialogue that no longer fits the text box after renaming (uses the real font widths) |
+
+`maptools/build_world.py` generates the HGSS maps (needs a pokeheartgold checkout in `PHG`, the extractor's
+`hgss-terrain.json` in `HGSS_TERRAIN`, and the pokeemerald tree in `PE`).
 
 `./build.sh` clones pokeemerald at the commit in `UPSTREAM_COMMIT`, runs the scripts, builds, and regenerates the patch.
 It first builds unmodified Emerald and checks that it matches retail byte-for-byte, so the patch works on a real ROM.
