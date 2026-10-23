@@ -46,9 +46,16 @@ route and sea route) are in the game, connected exactly as in HGSS. Each one is 
 - **New art:** trees are composited whole at any position (plus a slim one-tile tree), sea rocks are newly drawn
   boulders, and shorelines get a foam edge, so nothing appears cut in half.
 
-Still to come, in order: interiors and caves from HGSS data, HGSS NPCs, signs and items, the HGSS story scripts and
-dialogue, HGSS trainers and wild Pokémon, and the HGSS soundtrack ported to GBA. Until then, doors don't lead anywhere yet
-and the map music uses the closest Emerald track.
+Also in now:
+
+- **Interiors and caves:** all 326 HGSS buildings and 92 caves, towers and forests, linked by HGSS's own doors and stairs.
+- **People and story:** every HGSS NPC, sign, item ball and hidden item, and the HGSS story scripts and dialogue
+  translated to Emerald's script engine (Mom's Pokégear scene, Lyra and Marill in New Bark, Elm's lab and so on).
+- **Trainers:** HGSS trainers with their HGSS teams and lines.
+
+Still to come: HGSS-exact room shapes for interiors (rooms currently reuse Emerald room layouts, so some cutscenes
+walk people to the wrong spots), menus and shops inside HGSS scripts, the phone, HGSS wild Pokémon on the new maps,
+and the HGSS soundtrack ported to GBA (map music uses the closest Emerald track for now).
 
 ## How it's built
 
@@ -63,7 +70,7 @@ There's no ROM in this repo. [pret/pokeemerald](https://github.com/pret/pokeemer
 | `johto_text.py` | Renames places, people, teams and badges inside in-game text only |
 | `johto_rewrap.py` | Re-wraps dialogue that no longer fits the text box after renaming (uses the real font widths) |
 
-`maptools/build_world.py` generates the HGSS maps (needs a pokeheartgold checkout in `PHG`, the extractor's
+`maptools/build_world.py` generates the HGSS maps, and through `scripttools/` their events, scripts, text and trainers (needs a pokeheartgold checkout in `PHG`, the extractor's
 `hgss-terrain.json` in `HGSS_TERRAIN`, and the pokeemerald tree in `PE`).
 
 `./build.sh` clones pokeemerald at the commit in `UPSTREAM_COMMIT`, runs the scripts, builds, and regenerates the patch.

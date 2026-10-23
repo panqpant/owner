@@ -1,5 +1,5 @@
 """Generate every HGSS overworld map into pokeemerald (layouts, maps, connections, names, music, start)."""
-import sys, json, re, collections
+import sys, os, json, re, collections
 sys.path.insert(0, '.')
 from convert import *
 import emit
@@ -101,8 +101,31 @@ def main():
     for k in range(0, len(inames), 200):
         groups['gMapGroup_HGIndoor%d' % (k // 200)] = inames[k:k + 200]
     emit.install(layouts, groups)
+    # HGSS people, items, signs, triggers and translated scripts
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'scripttools'))
+    import build_events, hgspecials, hgtrainers
+    hgtrainers.write(); hgspecials.install()
+    B = build_events.Builder(H, build_interiors.CODE, emit)
+    def place(c, origin, transform=None):
+        obj, bgs, coords, body = B.build_map(c, origin, transform, generated)
+        p = ROOT + '/data/maps/%s/map.json' % emit.map_name(c)
+        mj = json.load(open(p)); mj['object_events'] = obj; mj['bg_events'] = bgs; mj['coord_events'] = coords
+        json.dump(mj, open(p, 'w'), indent=2)
+        open(ROOT + '/data/maps/%s/scripts.inc' % emit.map_name(c), 'w').write(body)
+    for c, z in zones.items(): place(c, (z.ox, z.oy))
+    for c in caves: place(c, (0, 0))
+    for c, lay in build_interiors.LAYOUT_OF.items(): place(c, (0, 0), build_interiors.room_transform(c, lay))
+    B.alloc.write()
+    build_events.write_common()
+    import hgnewgame
+    print('new-game setup lines', hgnewgame.install(B.alloc))
+    # HGSS starts the player in their bedroom at (6, 6)
+    lay = build_interiors.LAYOUT_OF.get('MAP_NEW_BARK_PLAYER_HOUSE_2F')
+    if lay:
+        x, y = build_interiors.room_transform('MAP_NEW_BARK_PLAYER_HOUSE_2F', lay)(6, 6)
+        emit.set_new_game_start('MAP_HG_NEW_BARK_PLAYER_HOUSE_2F', x, y)
+    print('unsupported HGSS commands:', sum(B.unsupported.values()), B.unsupported.most_common(25))
     emit.register_scripts(names + inames)
-    emit.set_new_game_start('MAP_HG_NEW_BARK', 23, 13)
     json.dump({'map_sections': EM_SECS}, open(ROOT + '/src/data/region_map/region_map_sections.json', 'w'), indent=2)
     print('maps', len(names), 'tiles', ntiles, 'metatiles', nmeta)
     return zones
