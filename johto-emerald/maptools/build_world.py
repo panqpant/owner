@@ -90,8 +90,14 @@ def main():
         }
         emit.write_map(c, mj, '%s_MapScripts::\n\t.byte 0\n' % emit.map_name(c))
         names.append(emit.map_name(c))
-    emit.install(layouts, {emit.GROUP: names})
-    emit.register_scripts(names)
+    import build_interiors
+    inames, generated = build_interiors.main(list(zones))
+    build_interiors.outdoor_warps(zones, generated)
+    groups = {emit.GROUP: names}
+    for k in range(0, len(inames), 200):
+        groups['gMapGroup_HGIndoor%d' % (k // 200)] = inames[k:k + 200]
+    emit.install(layouts, groups)
+    emit.register_scripts(names + inames)
     emit.set_new_game_start('MAP_HG_NEW_BARK', 23, 13)
     json.dump({'map_sections': EM_SECS}, open(ROOT + '/src/data/region_map/region_map_sections.json', 'w'), indent=2)
     print('maps', len(names), 'tiles', ntiles, 'metatiles', nmeta)

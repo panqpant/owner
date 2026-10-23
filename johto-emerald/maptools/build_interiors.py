@@ -1,0 +1,77 @@
+"""Generate HGSS interiors (Emerald templates + HGSS warps) and wire every door both ways."""
+import sys, json, re, glob, collections
+sys.path.insert(0, '.')
+import build_world as bw
+from interiors import *
+from hg import *
+import emit
+
+H = bw.H
+CODE = {k: re.search(r'zone_event_\d+_(\w+)_bin', v['eventsBank']).group(1) for k, v in H.items()
+        if 'zone_event' in v.get('eventsBank', '')}
+
+ZC = zone_consts()
+def zone_ev(const):
+    f = glob.glob(PHG + '/files/fielddata/eventdata/zone_event/*_%s.json' % CODE.get(const, '#'))
+    ev = json.load(open(f[0])) if f else {}
+    for w in ev.get('warps', []):          # some warps name their destination by number
+        if not isinstance(w['header'], str): w['header'] = ZC.get(w['header'], 'MAP_NOTHING')
+    return ev
+
+def stem(const):
+    return re.sub(r'_(B?\d+F|ROOF|ELEVATOR|EXTERIOR|LIGHT_ROOM|ENTRANCE|BACK)$', '', const)
+
+INDOOR_MUSIC = {'SEQ_GS_POKESEN': 'MUS_POKE_CENTER', 'SEQ_GS_FS': 'MUS_POKE_MART', 'SEQ_GS_GYM': 'MUS_GYM',
+                'SEQ_GS_UTSUGI_RABO': 'MUS_BIRCH_LAB', 'SEQ_GS_GAME': 'MUS_GAME_CORNER'}
+
+def interior_consts():
+    return [k for k, v in H.items() if v['mapType'] == 'MAP_TYPE_INTERIOR' and k in CODE]
+
+def main(outdoor_consts):
+    vm = vanilla_maps()
+    lay_ids = {l['id'] for l in json.load(open(ROOT + '/data/layouts/layouts.json'))['layouts'] if 'id' in l}
+    inside = interior_consts()
+    generated = set(outdoor_consts) | set(inside)
+    names = []
+    for c in inside:
+        ev = zone_ev(c)
+        hw = ev.get('warps', [])
+        n_inner = sum(1 for w in hw if stem(w['header']) == stem(c))
+        lay = pick_template(c, n_inner)
+        tmpl = vm.get(lay)
+        if not tmpl or lay not in lay_ids: lay = 'LAYOUT_HOUSE1'; tmpl = vm[lay]
+        exits, inner = template_warps(tmpl)
+        ex_h = sorted([i for i, w in enumerate(hw) if stem(w['header']) != stem(c)], key=lambda i: hw[i]['x'])
+        in_h = [i for i, w in enumerate(hw) if stem(w['header']) == stem(c)]
+        pos = {}
+        for k, i in enumerate(ex_h):
+            src = (exits or inner)[min(k, len(exits or inner) - 1)]; pos[i] = (src['x'], src['y'])
+        for k, i in enumerate(in_h):
+            src = (inner or exits)[min(k, len(inner or exits) - 1)]; pos[i] = (src['x'], src['y'])
+        warps = []
+        for i, w in enumerate(hw):
+            if w['header'] not in generated: continue
+            x, y = pos[i]
+            warps.append({'x': x, 'y': y, 'elevation': 0, 'dest_map': emit.map_const(w['header']), 'dest_warp_id': str(w['anchor'])})
+        hh = H[c]
+        parent_music = INDOOR_MUSIC.get(hh['dayMusicId'], bw.music(hh['dayMusicId'], 'MAP_TYPE_CITY_TOWN'))
+        mj = {'id': emit.map_const(c), 'name': emit.map_name(c), 'layout': lay, 'music': parent_music,
+              'region_map_section': bw.mapsec(hh['mapsec']), 'requires_flash': False, 'weather': 'WEATHER_NONE',
+              'map_type': 'MAP_TYPE_INDOOR', 'allow_cycling': False, 'allow_escaping': False, 'allow_running': False,
+              'show_map_name': False, 'battle_scene': 'MAP_BATTLE_SCENE_NORMAL', 'connections': None,
+              'object_events': [], 'warp_events': warps, 'coord_events': [], 'bg_events': []}
+        emit.write_map(c, mj, '%s_MapScripts::\n\t.byte 0\n' % emit.map_name(c))
+        names.append(emit.map_name(c))
+    return names, generated
+
+def outdoor_warps(zones, generated):
+    """Door warps on the outdoor maps, at HGSS's exact door tiles."""
+    for c, z in zones.items():
+        p = ROOT + '/data/maps/%s/map.json' % emit.map_name(c)
+        mj = json.load(open(p))
+        for w in z.ev.get('warps', []):
+            if not isinstance(w['header'], str): w['header'] = ZC.get(w['header'], 'MAP_NOTHING')
+        mj['warp_events'] = [{'x': w['x'] - z.ox, 'y': w['z'] - z.oy, 'elevation': 0,
+                              'dest_map': emit.map_const(w['header']), 'dest_warp_id': str(w['anchor'])}
+                             for w in z.ev.get('warps', []) if w['header'] in generated]
+        json.dump(mj, open(p, 'w'), indent=2)
