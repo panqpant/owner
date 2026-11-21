@@ -290,7 +290,9 @@ static const char *kComposite =
     "uniform int uGrid[144];\n"     // 36x16 metatile flags, 4 per int (PC_CELL_*)
     "uniform vec4 uSun;\n"          // xy: shadow vector (GBA px), z: shadow strength, w: daylight
     "uniform int uMapType;\n"
-    "uniform float uForest;\n"      // fraction of scenery around: light shafts
+    "uniform float uForest;\n"
+    "uniform vec4 uKey;\n"
+    "uniform float uFlash;\n"       // lightning, 0-1          // key light: direction towards the light (x, y down, z up), strength      // fraction of scenery around: light shafts
     "vec2 gUpSize, gUpFw;\n"
     // Sharp magnification of the upscaled layers: each upscaled pixel stays
     // solid and only the 1-output-pixel seam between neighbours is blended.
@@ -338,6 +340,52 @@ static const char *kComposite =
     "  vec2 suv = vec2((sp.x + uMargin) / uDim.x, sp.y / uDim.y);\n"
     "  float a = texture(uLayer[4], suv).a + texture(uLayer[4], suv + vec2(0.6 / uDim.x, 0.0)).a;\n"
     "  return min(a * 0.5, 1.0) * (1.0 - smoothstep(8.0, 34.0, h) * 0.55);\n"   // softer toward the head
+    "}\n"
+    // Depth inside solid scenery (0 at its edge, 1 three tiles in), smooth.
+    "float Depth(vec2 gp) {\n"
+    "  vec2 q = CellPos(gp) - 0.5; ivec2 i = ivec2(floor(q)); vec2 f = fract(q); f = f * f * (3.0 - 2.0 * f);\n"
+    "  float a = float(Cell(i) >> 6), b = float(Cell(i + ivec2(1, 0)) >> 6);\n"
+    "  float c = float(Cell(i + ivec2(0, 1)) >> 6), d = float(Cell(i + ivec2(1, 1)) >> 6);\n"
+    "  return mix(mix(a, b, f.x), mix(c, d, f.x), f.y) / 3.0;\n"
+    "}\n"
+    "float LumL(int k, vec2 q, float centre) {\n"   // relief height: art luminance for scenery, outline for sprites
+    "  if (k == 4) return texture(uLayer[4], q).a;\n"
+    "  vec4 c = k == 1 ? texture(uLayer[1], q) : k == 2 ? texture(uLayer[2], q) : texture(uLayer[3], q);\n"
+    "  if (c.a < 0.95) return centre;\n"   // a layer edge is not a bump in the surface
+    "  return dot(c.rgb, vec3(0.3, 0.59, 0.11));\n"
+    "}\n"
+    // The scene mirrored about a horizontal line (a shoreline or the base of
+    // a wall): what a reflective surface below that line shows.
+    "vec4 MirrorScene(vec2 m, bool sprites) {\n"
+    "  vec2 muv = vec2((m.x + uMargin) / uDim.x, m.y / uDim.y);\n"
+    "  if (muv.y < 0.0 || muv.y > 1.0) return vec4(0.0);\n"
+    "  ivec2 mnp = clamp(ivec2(floor(vec2(m.x + uMargin, m.y))), ivec2(0), ivec2(uDim) - 1);\n"
+    "  uint mm = texelFetch(uMeta, mnp, 0).r;\n"
+    "  if ((mm & 6u) != 6u || TexS(uLayer[0], muv).a > 0.0) return vec4(0.0);\n"   // hidden by a window or a text box
+    "  vec4 a = TexS(uLayer[1], muv), b = TexS(uLayer[2], muv);\n"
+    "  vec4 c = vec4(a.rgb + b.rgb * (1.0 - a.a), a.a + b.a * (1.0 - a.a));\n"
+    "  c *= Solid(m);\n"   // objects only, never the ground
+    "  if (sprites) { vec4 o = TexS(uLayer[4], muv); c = vec4(o.rgb + c.rgb * (1.0 - o.a), o.a + c.a * (1.0 - o.a)); }\n"
+    "  return c;\n"
+    "}\n"
+    // Characters reflected below their feet.
+    "vec4 MirrorChars(vec2 gp) {\n"
+    "  vec4 acc = vec4(0.0);\n"
+    "  for (int k = 0; k < uNumShadows; k++) {\n"
+    "    vec3 s = uShadows[k];\n"
+    "    float dy = gp.y - s.y;\n"
+    "    if (dy < -2.0 || dy > 34.0 || abs(gp.x - s.x) > s.z) continue;\n"
+    "    vec2 m = vec2(gp.x + sin(gp.y * 0.6 + uTime * 3.0) * 0.5, s.y - dy - 1.0);\n"
+    "    vec2 muv = vec2((m.x + uMargin) / uDim.x, m.y / uDim.y);\n"
+    "    vec4 o = TexS(uLayer[4], muv);\n"
+    "    o *= 1.0 - smoothstep(10.0, 34.0, dy);\n"
+    "    acc = o + acc * (1.0 - o.a);\n"
+    "  }\n"
+    "  return acc;\n"
+    "}\n"
+    "float Puddles(vec2 wp) {\n"   // where rain collects: irregular patches
+    "  float n = Noise(wp * 0.045) * 0.65 + Noise(wp * 0.11 + 9.0) * 0.35;\n"
+    "  return smoothstep(0.48, 0.62, n);\n"
     "}\n"
     "bool Green(vec4 c) { vec3 k = c.rgb / max(c.a, 1e-4); return c.a > 0.5 && k.g > k.r * 1.05 && k.g > k.b * 1.1; }\n"
     "vec3 C555(uint c) { return vec3(float(c & 31u), float((c >> 5) & 31u), float((c >> 10) & 31u)) / 31.0; }\n"
@@ -464,6 +512,27 @@ static const char *kComposite =
     // Thin, mostly transparent fringes of map/sprite layers in front of the
     // top layer: added before lighting so they are lit like what they edge.
     "  for (int k = ti - 1; k >= 0; k--) if (order[k] != 0) { vec4 c = lay[order[k]]; res = res * (1.0 - c.a) + c.rgb; }\n"
+    // Per-pixel surface lighting: a normal for every pixel from the art's
+    // shading (fine relief), sprite outlines (rounded characters) and depth
+    // inside solid scenery (domed trees, roofs, cliffs); lit by the key light.
+    "  vec3 N = vec3(0.0, 0.0, 1.0);\n"
+    "  if (uFieldFx != 0 && top >= 1 && top <= 4 && uKey.w > 0.0) {\n"
+    "    float st = top == 4 ? 2.5 : 1.0;\n"
+    "    vec2 du = vec2(st / uDim.x, 0.0), dv = vec2(0.0, st / uDim.y);\n"
+    "    float hc = top == 4 ? 1.0 : dot(lay[top].rgb / max(lay[top].a, 1e-4), vec3(0.3, 0.59, 0.11));\n"
+    "    float hx = LumL(top, uv + du, hc) - LumL(top, uv - du, hc);\n"
+    "    float hy = LumL(top, uv + dv, hc) - LumL(top, uv - dv, hc);\n"
+    "    float dx = 0.0, dy = 0.0;\n"
+    "    if (top != 4) {\n"   // only shapes the scenery itself, never the open ground beside it
+    "      float w = smoothstep(0.5, 1.0, Solid(gp));\n"
+    "      dx = (Depth(gp + vec2(9.0, 3.0)) + Depth(gp + vec2(9.0, -3.0)) - Depth(gp - vec2(9.0, 3.0)) - Depth(gp - vec2(9.0, -3.0))) * 0.28 * w;\n"
+    "      dy = (Depth(gp + vec2(3.0, 9.0)) + Depth(gp + vec2(-3.0, 9.0)) - Depth(gp - vec2(3.0, 9.0)) - Depth(gp - vec2(-3.0, 9.0))) * 0.07 * w;\n"   // fronts face the viewer and stay lit
+    "    }\n"
+    "    float detail = top == 4 ? 0.8 : 0.55;\n"
+    "    N = normalize(vec3(-(hx * detail + dx * 2.4), -(hy * detail + dy * 2.4), 1.0));\n"
+    "    float d = dot(N.xy, normalize(uKey.xy + 1e-5)) * 1.6;\n"   // facing the light brightens, facing away darkens; 0 on average
+    "    res *= 1.0 + clamp(d, -0.45, 0.45) * uKey.w;\n"
+    "  }\n"
     // Scenery lighting on the ground: ambient occlusion around solid
     // scenery, sun shadows that follow the time of day, drifting cloud shadows.
     "  float recv = (uFieldFx != 0 && top >= 1 && top <= 3) ? 1.0 - Solid(gp) : 0.0;\n"   // how much this is open ground
@@ -487,6 +556,12 @@ static const char *kComposite =
     "    vec2 q = wp * 0.0055 + uTime * vec2(0.018, 0.007);\n"
     "    float cl = Noise(q) * 0.62 + Noise(q * 2.2 + 3.1) * 0.38;\n"
     "    res *= 1.0 - smoothstep(0.56, 0.74, cl) * 0.15 * uSun.w;\n"
+    "  }\n"
+    // Lightning: a blue-white flash with hard shadows straight down.
+    "  if (uFieldFx != 0 && uFlash > 0.0 && top != 0) {\n"
+    "    float occ = 0.0;\n"
+    "    if (recv > 0.0) for (int k = 1; k <= 6; k++) occ = max(occ, Solid(gp - vec2(1.5, 9.0) * (float(k) / 6.0)));\n"
+    "    res *= mix(vec3(1.0), vec3(1.12, 1.14, 1.2), uFlash * (1.0 - occ * recv)) * (1.0 - occ * recv * uFlash * 0.45);\n"
     "  }\n"
     // Soft shadows under characters, cast on the ground (not on sprites or UI).
     "  if (uFieldFx != 0 && top != 4 && top != 0) {\n"
@@ -529,6 +604,39 @@ static const char *kComposite =
     "      if ((mm & 6u) != 6u || TexS(uLayer[0], muv).a > 0.0) ra = 0.0;\n"   // hidden by a window or under a text box
     "      res = mix(res, refl / max(ra, 1e-3) * vec3(0.7, 0.8, 0.9), ra * 0.4);\n"
     "    }\n"
+    "    vec4 ch = MirrorChars(gp);\n"
+    "    res = mix(res, ch.rgb / max(ch.a, 1e-3) * vec3(0.75, 0.85, 0.95), ch.a * 0.45);\n"
+    "    vec3 sky = mix(vec3(0.55, 0.75, 1.0), vec3(1.0, 0.7, 0.45), clamp((uTint.r - uTint.b) * 3.0, 0.0, 1.0)) * (uTint.a > 0.5 ? uTint.rgb : vec3(1.0));\n"
+    "    res = mix(res, sky * max(dot(res, vec3(0.33)), 0.35) * 1.4, 0.12);\n"
+    "  }\n"
+    // Rain: wet ground darkens and puddles reflect buildings, trees,
+    // characters and lights (streaks below lamps and doorways).
+    "  if (uFieldFx != 0 && (uWeather == 1 || uWeather == 2) && recv > 0.5 && (here & 2) == 0 && top >= 1 && top <= 3) {\n"
+    "    float pud = Puddles(wp) * (uWeather == 2 ? 1.0 : 0.75);\n"
+    "    res *= 0.88 - 0.08 * pud;\n"
+    "    if (pud > 0.01) {\n"
+    "      ivec2 c0 = ivec2(floor(CellPos(gp)));\n"
+    "      int up = -1;\n"
+    "      for (int i = 1; i <= 3; i++) { if ((Cell(c0 - ivec2(0, i)) & 1) != 0) { up = i; break; } }\n"
+    "      vec2 rip = vec2(sin(wp.y * 0.8 + uTime * 5.0) * 0.4, 0.0);\n"
+    "      if (up > 0) {\n"
+    "        float base = uGridPos.y + float(c0.y - up + 1) * 16.0;\n"
+    "        vec4 m = MirrorScene(vec2(gp.x, base - (gp.y - base)) + rip, false);\n"
+    "        m *= 1.0 - smoothstep(0.0, 36.0, gp.y - base);\n"
+    "        res = mix(res, m.rgb / max(m.a, 1e-3) * 0.8, m.a * pud * 0.45);\n"
+    "      }\n"
+    "      vec4 ch = MirrorChars(gp + rip);\n"
+    "      res = mix(res, ch.rgb / max(ch.a, 1e-3) * 0.8, ch.a * pud * 0.4);\n"
+    "      if (uNight > 0.0) {\n"
+    "        for (int k = 0; k < uNumLights; k++) {\n"
+    "          vec2 q = gp - uLights[k].xy;\n"
+    "          if (q.y < 4.0 || q.y > 60.0) continue;\n"
+    "          float wdt = 2.5 + q.y * 0.06;\n"
+    "          float st = (1.0 - smoothstep(0.0, wdt, abs(q.x + sin(q.y * 0.5 + uTime * 4.0)))) * (1.0 - q.y / 60.0);\n"
+    "          res += vec3(1.0, 0.8, 0.5) * st * pud * uNight * 0.55;\n"
+    "        }\n"
+    "      }\n"
+    "    }\n"
     "  }\n"
     // Windows light up at night: pale glass on building fronts (solid tiles
     // just above open ground) glows warm.
@@ -553,6 +661,9 @@ static const char *kComposite =
     "      float d = distance(gp, uLights[k].xy) / uLights[k].z;\n"
     "      float f = 1.0 - smoothstep(0.0, 1.0, d);\n"
     "      g += f * f;\n"
+    "      vec2 tl = uLights[k].xy - gp; float dl = length(tl);\n"   // surfaces facing the lamp catch its light
+    "      float fr = 1.0 - smoothstep(0.0, 1.8, dl / uLights[k].z);\n"
+    "      g += max(dot(N.xy, tl / max(dl, 1e-3)), 0.0) * fr * (top == 4 ? 1.6 : 1.0);\n"
     "    }\n"
     "    g = min(g, 1.2) * uNight;\n"
     "    vec3 warm = vec3(1.0, 0.78, 0.48);\n"
@@ -1076,8 +1187,29 @@ static void RenderHd(const uint32_t *frame, int outW, int outH)
             int packed[PC_GRID_W * PC_GRID_H / 4], solid = 0, cells = PC_GRID_W * PC_GRID_H;
             const unsigned char *g = &gPcFieldFx.grid[0][0];
             float sun[4] = { 0, 0, 0, 0 };
+            unsigned char lv[PC_GRID_W * PC_GRID_H];
+            int pass, x, y;
+            // Depth level inside solid scenery: tiles from its edge, 0-3.
+            for (k = 0; k < cells; k++)
+                lv[k] = (g[k] & 1) ? 3 : 0;
+            for (pass = 0; pass < 3; pass++)
+                for (y = 0; y < PC_GRID_H; y++)
+                    for (x = 0; x < PC_GRID_W; x++)
+                    {
+                        int i = y * PC_GRID_W + x, m = 3;
+                        if (!lv[i]) continue;
+                        if (x > 0 && lv[i - 1] < m) m = lv[i - 1];
+                        if (x < PC_GRID_W - 1 && lv[i + 1] < m) m = lv[i + 1];
+                        if (y > 0 && lv[i - PC_GRID_W] < m) m = lv[i - PC_GRID_W];
+                        if (y < PC_GRID_H - 1 && lv[i + PC_GRID_W] < m) m = lv[i + PC_GRID_W];
+                        if (m + 1 < lv[i]) lv[i] = m + 1;
+                    }
             for (k = 0; k < cells / 4; k++)
-                packed[k] = g[k * 4] | (g[k * 4 + 1] << 8) | (g[k * 4 + 2] << 16) | ((unsigned)g[k * 4 + 3] << 24);
+            {
+                unsigned b0 = (g[k * 4] & 63) | (lv[k * 4] << 6), b1 = (g[k * 4 + 1] & 63) | (lv[k * 4 + 1] << 6);
+                unsigned b2 = (g[k * 4 + 2] & 63) | (lv[k * 4 + 2] << 6), b3 = (g[k * 4 + 3] & 63) | (lv[k * 4 + 3] << 6);
+                packed[k] = (int)(b0 | (b1 << 8) | (b2 << 16) | (b3 << 24));
+            }
             for (k = 0; k < cells; k++)
                 solid += g[k] & 1;
             if (!field)
@@ -1087,10 +1219,34 @@ static void RenderHd(const uint32_t *frame, int outW, int outH)
             glUniform1iv(glGetUniformLocation(sProgComp, "uGrid"), cells / 4, packed);
             glUniform1i(glGetUniformLocation(sProgComp, "uMapType"), gPcFieldFx.mapType);
             glUniform1f(glGetUniformLocation(sProgComp, "uForest"), (float)solid / cells);
+            glUniform1f(glGetUniformLocation(sProgComp, "uFlash"), field ? (getenv("EMERALD_FLASH") ? 1.0f : gPcFieldFx.flash / 16.0f) : 0.0f);
             if (on)
                 SunVector(sun, gPcFieldFx.weather);
             sun[3] = on ? 1.0f - night : 0.0f;
             glUniform4f(glGetUniformLocation(sProgComp, "uSun"), sun[0], sun[1], sun[2], sun[3]);
+            {
+                // Key light for surface relief: the sun by day (low sun = long
+                // shadows = grazing light), the moon at night, a ceiling light indoors.
+                float kx, ky, kz, ks, n;
+                if (on && sun[2] > 0)
+                {
+                    kx = -sun[0] * 0.07f; ky = -sun[1] * 0.07f; kz = 1.0f;
+                    ks = 0.6f * sun[2] / 0.30f;
+                }
+                else if (on)
+                {
+                    kx = -0.35f; ky = -0.55f; kz = 1.0f; ks = 0.35f;   // moonlight
+                }
+                else
+                {
+                    kx = -0.3f; ky = -0.6f; kz = 1.0f;
+                    ks = gPcFieldFx.mapType == 4 /* underground */ ? 0.4f : 0.55f;
+                }
+                n = sqrtf(kx * kx + ky * ky + kz * kz);
+                if (getenv("EMERALD_NORELIEF"))
+                    ks = 0;
+                glUniform4f(glGetUniformLocation(sProgComp, "uKey"), kx / n, ky / n, kz / n, field && sLighting ? ks : 0.0f);
+            }
         }
         for (k = 0; field && k < gPcFieldFx.numLights; k++)
         {

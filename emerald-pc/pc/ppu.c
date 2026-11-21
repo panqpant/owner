@@ -7,6 +7,7 @@
 // the map layers are read from a 64-tile-wide buffer (gPcFieldMap) so the
 // margins show real map, and sprites extend into them; the UI layer and
 // everything else stays inside the centre. Other screens are pillarboxed.
+#include <stdio.h>
 #include <string.h>
 #include "port.h"
 #include "hdpack.h"
@@ -39,6 +40,12 @@ static u8  sWinMask[PC_MAX_W];
 
 // HD pack tile references for the current line (see PpuLayers.tref).
 static u16 sRefSlot[5][PC_MAX_W];
+static uint64_t sRefHash[5][PC_MAX_W];
+static char sCapPath[1024];
+static int sCapState;              // 1 = requested, 2 = capturing this frame
+static uint64_t sCapHash[5][GBA_H][PC_MAX_W];
+static u8 sCapInfo[5][GBA_H][PC_MAX_W];
+
 static u8  sRefInfo[5][PC_MAX_W];
 static u16 sRefUnfaded[5][PC_MAX_W];
 static int sDoRefs;
@@ -53,6 +60,38 @@ static u16 sFinal[PC_MAX_W];
 // Per-line geometry. sWide: overworld widescreen; sBattle: battle widescreen
 // (backgrounds extended by repeating their edges, message box stretched).
 static int sW, sMargin, sWide, sBattle, sFieldMaps;
+
+// File: "EMCAP1\0\0", u32 width, u32 height, then per layer (BG0-3, OBJ):
+// RGBA pixels (A = 0 empty), u64 tile hash per pixel (0 = none), u8 info
+// per pixel (tile x | y << 3 | hflip << 6 | vflip << 7).
+static void WriteCapture(void)
+{
+    FILE *f = fopen(sCapPath, "wb");
+    uint32_t hdr[2] = { (uint32_t)sW, GBA_H };
+    int i, y;
+    sCapState = 0;
+    if (!f)
+        return;
+    fwrite("EMCAP1\0\0", 1, 8, f);
+    fwrite(hdr, 4, 2, f);
+    for (i = 0; i < 5; i++)
+    {
+        for (y = 0; y < GBA_H; y++)
+            fwrite(gPpuLayers.layer[i][y], 4, sW, f);
+        for (y = 0; y < GBA_H; y++)
+            fwrite(sCapHash[i][y], 8, sW, f);
+        for (y = 0; y < GBA_H; y++)
+            fwrite(sCapInfo[i][y], 1, sW, f);
+    }
+    fclose(f);
+    fprintf(stderr, "capture: %s\n", sCapPath);
+}
+
+void PpuRequestCapture(const char *path)
+{
+    snprintf(sCapPath, sizeof(sCapPath), "%s", path);
+    sCapState = 1;
+}
 
 // Affine BG internal reference points (BG2, BG3).
 static s32 sRefX[2], sRefY[2];
@@ -72,6 +111,8 @@ void PpuBeginFrame(void)
 {
     int i;
     sBoxTopThisFrame = GBA_H;
+    if (sCapState == 1)
+        sCapState = 2;
     HdPackBeginFrame();
     PcTextBeginFrame();
     for (i = 0; i < 2; i++)
@@ -195,7 +236,7 @@ static void RenderTextBg(int bg, int line)
             else if (gx < 0 || gx >= GBA_W || (inSign && gx < POPUP_W))
             {
                 out[x] = TRANSPARENT;
-                if (sDoRefs) refSlot[x] = 0;
+                if (sDoRefs) { refSlot[x] = 0; sRefHash[bg][x] = 0; }
                 continue;
             }
         }
@@ -219,7 +260,10 @@ static void RenderTextBg(int bg, int line)
         if (entry & 0x800) py = 7 - py;
 
         if (sDoRefs)
+        {
             refSlot[x] = 0;
+            sRefHash[bg][x] = 0;
+        }
         if (is8)
         {
             addr = charBase + tile * 64 + py * 8 + px;
@@ -228,7 +272,7 @@ static void RenderTextBg(int bg, int line)
             out[x] = c ? Pal(c) : TRANSPARENT;
             if (sDoRefs && c)
             {
-                refSlot[x] = HdPackLookup(charBase + tile * 64, 1, 0);
+                refSlot[x] = HdPackLookup(charBase + tile * 64, 1, 0); sRefHash[bg][x] = gHdLastHash;
                 refU[x] = HdPackUnfaded(c);
             }
         }
@@ -251,7 +295,7 @@ static void RenderTextBg(int bg, int line)
                             | (PC_TEXT_TAG_BG(tag) << 8) | ((entry >> 12) << 12);
                     continue;
                 }
-                refSlot[x] = HdPackLookup(charBase + tile * 32, 0, (entry >> 12) * 16);
+                refSlot[x] = HdPackLookup(charBase + tile * 32, 0, (entry >> 12) * 16); sRefHash[bg][x] = gHdLastHash;
                 refU[x] = HdPackUnfaded((entry >> 12) * 16 + c);
             }
         }
@@ -267,13 +311,13 @@ static void RenderTextBg(int bg, int line)
         {
             int src = 2 * sMargin - 1 - x;            // mirror about the left edge
             out[x] = out[src < sMargin + GBA_W ? src : sMargin];
-            if (sDoRefs) refSlot[x] = 0;
+            if (sDoRefs) { refSlot[x] = 0; sRefHash[bg][x] = 0; }
         }
         for (x = sMargin + GBA_W; x < sW; x++)
         {
             int src = 2 * (sMargin + GBA_W) - 1 - x;  // mirror about the right edge
             out[x] = out[src >= sMargin ? src : sMargin + GBA_W - 1];
-            if (sDoRefs) refSlot[x] = 0;
+            if (sDoRefs) { refSlot[x] = 0; sRefHash[bg][x] = 0; }
         }
     }
 }
@@ -476,6 +520,7 @@ static void RenderSprites(int line)
                 {
                     // Rotated/scaled sprites keep the xBR upscale.
                     sRefSlot[4][px] = affine ? 0 : HdPackLookup(tileAddr, is8, palBase);
+                    sRefHash[4][px] = affine ? 0 : gHdLastHash;
                     sRefInfo[4][px] = (tx & 7) | ((ty & 7) << 3)
                                     | ((a1 & 0x1000) ? 64 : 0) | ((a1 & 0x2000) ? 128 : 0);
                     sRefUnfaded[4][px] = HdPackUnfaded(c);
@@ -595,6 +640,20 @@ static void ExportLine(int line, const int *bgOn, const int *bgPrio, int forcedB
     if (forcedBlank)
         return;
 
+    if (sCapState == 2)
+    {
+        for (i = 0; i < 5; i++)
+        {
+            const u16 *col = i < 4 ? sBg[i] : sObjColor;
+            int on = i < 4 ? bgOn[i] : 1;
+            for (x = 0; x < sW; x++)
+            {
+                int ok = on && col[x] != TRANSPARENT && (i == 4 || sRefSlot[i][x] < 0x8000);
+                sCapHash[i][line][x] = ok ? sRefHash[i][x] : 0;
+                sCapInfo[i][line][x] = sRefInfo[i][x];
+            }
+        }
+    }
     if (gHdPackActive || gPcTextHd)
     {
         for (i = 0; i < 5; i++)
@@ -688,7 +747,7 @@ void PpuRenderLine(int line, u32 *out)
     sFieldMaps = PcFieldWideActive(); // the map buffers are 64 tiles wide even at 240 px
     sWide = sMargin > 0 && sFieldMaps;
     sBattle = sMargin > 0 && !sWide && gPcBattleFrame;
-    sDoRefs = gHdPackActive || gHdDumpEnabled || gPcTextHd;
+    sDoRefs = gHdPackActive || gHdDumpEnabled || gPcTextHd || sCapState;
     if (sDoRefs)
         for (i = 0; i < 4; i++)
             memset(sRefSlot[i], 0, sW * sizeof(u16));
@@ -817,4 +876,6 @@ void PpuRenderLine(int line, u32 *out)
 
     if (gPpuExportLayers)
         ExportLine(line, bgOn, bgPrio, 0, bldcnt, eva, evb, evy, effect);
+    if (line == GBA_H - 1 && sCapState == 2)
+        WriteCapture();
 }

@@ -192,7 +192,8 @@ void HdPackSetDump(int on)
 // --- Per-frame tile cache -------------------------------------------------
 
 #define CACHE_SIZE 8192
-struct CacheEnt { uint32_t key, stamp; uint16_t slot; };
+struct CacheEnt { uint32_t key, stamp; uint16_t slot; uint64_t hash; };
+uint64_t gHdLastHash;
 static struct CacheEnt sCache[CACHE_SIZE];
 static uint32_t sStamp = 1;
 
@@ -253,7 +254,10 @@ uint16_t HdPackLookup(uint32_t charAddr, int is8, int palBase)
     int i, n = is8 ? 256 : 16;
 
     if (ce->stamp == sStamp && ce->key == key)
+    {
+        gHdLastHash = ce->hash;
         return ce->slot;
+    }
 
     // Tile pixels...
     for (i = 0; i < (is8 ? 64 : 32); i++)
@@ -281,6 +285,8 @@ uint16_t HdPackLookup(uint32_t charAddr, int is8, int palBase)
     ce->key = key;
     ce->stamp = sStamp;
     ce->slot = slot;
+    ce->hash = h;
+    gHdLastHash = h;
     return slot;
 }
 

@@ -25,6 +25,7 @@ the game's assets.
 | Day/night lighting outdoors, soft side fill for 3:2 screens, colour grade | done |
 | **Lighting engine:** sun shadows that move with the clock, character silhouette shadows (sun and night lights), ambient occlusion, cloud shadows, swaying grass and trees, fireflies, rain splashes, forest light shafts, cave mist, lit windows at night, scenery reflections on water | done |
 | Sharp scaling (pixel-edge sampling plus contrast-adaptive sharpening), highlight roll-off | done |
+| **Relit:** per-pixel surface lighting (sun, moon, indoor key light, lamp rim light), water reflections of characters and sky, wet ground with puddle reflections and light streaks, lightning with shadows | done |
 | Verified: intro, new game, overworld, a full battle turn, all 518 maps load and render | done |
 | Full playthrough (late-game scenes, every menu, link features) | needs playtesting |
 
@@ -92,3 +93,11 @@ quit
 EOF
 ./work/pokeemerald/build/pc/emerald_headless --script demo.txt --save test.sav --wav out.wav
 ```
+
+## Roadmap
+
+- Relit 3: light bounce, light beams from doors/windows, sky colours by hour, cave lantern with shadows (in progress)
+- **Relit 4: battle lighting** (promised): battles use the location's sun direction and time-of-day colour, shadows on platforms, move effects light the scene
+- Phase 5: widescreen menus, settings screen, rebindable keys, 64-bit
+- Phase 1: offline HD art rebuild (pilot tooling in `tools/hdpilot`; needs a decision on AI upscaling)
+- Phase 3: battle overhaul; Phase 4: synthesised soundtrack

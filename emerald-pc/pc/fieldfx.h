@@ -20,6 +20,7 @@ struct PcFieldFx {
     int weather;                         // PC_WEATHER_*: redrawn in HD by the renderer
     int hideTileStart[2], hideTileCount[2]; // OBJ tiles of the original weather sprites
     int mapType;
+    int flash;                           // lightning brightness 0-16 (thunderstorms)
     int gridX, gridY;                    // screen position of the grid's first metatile
     int gridWX, gridWY;                  // its map coordinates (world position = cell * 16)
     unsigned char grid[PC_GRID_H][PC_GRID_W]; // PC_CELL_* flags around the camera

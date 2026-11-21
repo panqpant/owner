@@ -40,6 +40,9 @@ void PcUpdateFieldFx(void)
         fx->weather = gWeatherPtr->sandstormSpritesCreated ? PC_WEATHER_SANDSTORM : PC_WEATHER_NONE;
         break;
     }
+    fx->flash = 0;
+    if (gWeatherPtr->currWeather == WEATHER_RAIN_THUNDERSTORM && gWeatherPtr->colorMapIndex > 3)
+        fx->flash = gWeatherPtr->colorMapIndex - 3;
     if (fx->weather == PC_WEATHER_RAIN || fx->weather == PC_WEATHER_DOWNPOUR)
     {
         u16 t = GetSpriteTileStartByTag(GFXTAG_RAIN);

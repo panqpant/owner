@@ -13,6 +13,10 @@ void HdPackBeginFrame(void);
 // tile's VRAM offset; palBase the first palette index it uses (0-511).
 uint16_t HdPackLookup(uint32_t charAddr, int is8, int palBase);
 uint16_t HdPackUnfaded(int palIndex);
+extern uint64_t gHdLastHash;  // hash of the tile in the last HdPackLookup
+// Capture for building HD packs: the next full frame is written to <path>
+// (every layer's pixels plus each pixel's tile hash, tile-local x/y and flips).
+void PpuRequestCapture(const char *path);
 int HdPackAtlas(const uint32_t **pixels, int *w, int *h, int *scale, int *perRow);
 
 #endif

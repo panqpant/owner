@@ -40,9 +40,16 @@ void TestHookRun(const char *cmd)
         DoWarp();
         ResetInitialPlayerAvatarState();
     }
+    else if (!strcmp(name, "capture"))
+    {
+        char path[512];
+        extern void PpuRequestCapture(const char *path);
+        if (sscanf(cmd, "%*s %511s", path) == 1)
+            PpuRequestCapture(path);
+    }
     else if (!strcmp(name, "weather"))
     {
-        SetWeather(a);
+        SetCurrentAndNextWeatherNoDelay(a);
     }
     else if (!strcmp(name, "warpto"))
     {
