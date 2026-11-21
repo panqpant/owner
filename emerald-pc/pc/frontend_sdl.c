@@ -3,7 +3,8 @@
 // Keyboard: arrows = D-pad, X = A, Z = B, Enter = Start, Backspace = Select,
 //           A = L, S = R, Tab (hold) = fast-forward, F11 / Alt+Enter = fullscreen,
 //           F12 = screenshot, Esc = quit.
-//           F1 = HD / original graphics, F2 = HD internal scale, F3 = colour grade.
+//           F1 = HD / original graphics, F2 = HD internal scale, F3 = colour grade,
+//           F6 = dump tiles for HD packs (hd/dump).
 // Gamepad:  south button = A, east = B, Start, Back = Select, shoulders = L/R,
 //           D-pad or left stick to move.
 #include <stdio.h>
@@ -14,6 +15,7 @@
 #include "port.h"
 #include "render_gl.h"
 #include "script.h"
+#include "hdpack.h"
 
 #define AUDIO_RATE 48000
 #define FRAME_SECONDS (280896.0 / 16777216.0)
@@ -25,7 +27,8 @@ static int sHdMode = 1;
 static int sAutoShotFrame = -1;
 static int sFixedAspect;
 static int sInitW, sInitH;
-static int sStartFullscreen;   // --aspect given: don't follow the window shape
+static int sStartFullscreen;
+static int sDumpAtStart;   // --aspect given: don't follow the window shape
 
 // Match the game's visible width to the window's shape: wider screens show
 // more of the overworld on each side (the height stays 160 GBA lines).
@@ -132,6 +135,8 @@ int FrontendInit(int argc, char **argv)
         }
         else if (!strcmp(argv[i], "--script") && i + 1 < argc)
             ScriptLoad(argv[++i]);
+        else if (!strcmp(argv[i], "--dump-tiles"))
+            sDumpAtStart = 1;
         else if (!strcmp(argv[i], "--fullscreen"))
             sStartFullscreen = 1;
         else if (!strcmp(argv[i], "--autoshot") && i + 2 < argc)
@@ -188,6 +193,9 @@ int FrontendInit(int argc, char **argv)
     if (sWindow)
     {
         sGl = SDL_GL_CreateContext(sWindow);
+        HdPackInit(sBasePath);
+        if (sDumpAtStart)
+            HdPackSetDump(1);
         if (sGl && HdInit() == 0)
         {
             sUseGl = 1;
@@ -266,6 +274,11 @@ static void PumpEvents(void)
                 HdSetScale(HdGetScale() >= 6 ? 2 : HdGetScale() + 1);
             else if (e.key.keysym.sym == SDLK_F3 && sUseGl)
                 HdSetGrade(!HdGetGrade());
+            else if (e.key.keysym.sym == SDLK_F6)
+            {
+                HdPackSetDump(!gHdDumpEnabled);
+                SDL_SetWindowTitle(sWindow, gHdDumpEnabled ? "Pokémon Emerald  [dumping tiles to hd/dump]" : "Pokémon Emerald");
+            }
             else if (e.key.keysym.sym == SDLK_ESCAPE)
                 sQuit = 1;
             break;

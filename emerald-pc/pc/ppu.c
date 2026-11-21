@@ -9,6 +9,7 @@
 // everything else stays inside the centre. Other screens are pillarboxed.
 #include <string.h>
 #include "port.h"
+#include "hdpack.h"
 
 typedef uint8_t u8; typedef uint16_t u16; typedef uint32_t u32;
 typedef int16_t s16; typedef int32_t s32;
@@ -31,6 +32,12 @@ static u8  sObjSemi[PC_MAX_W];
 static u8  sObjWin[PC_MAX_W];
 static u8  sWinMask[PC_MAX_W];
 
+// HD pack tile references for the current line (see PpuLayers.tref).
+static u16 sRefSlot[5][PC_MAX_W];
+static u8  sRefInfo[5][PC_MAX_W];
+static u16 sRefUnfaded[5][PC_MAX_W];
+static int sDoRefs;
+
 // Per-line geometry.
 static int sW, sMargin, sWide;
 
@@ -48,6 +55,7 @@ int PcFieldWideActive(void)
 void PpuBeginFrame(void)
 {
     int i;
+    HdPackBeginFrame();
     for (i = 0; i < 2; i++)
     {
         u32 base = 0x28 + i * 0x10;
@@ -104,6 +112,9 @@ static void RenderTextBg(int bg, int line)
     int w = (size & 1) ? 512 : 256, h = (size & 2) ? 512 : 256;
     int mosH = 1, mosV = 1, x, y;
     u16 *out = sBg[bg];
+    u16 *refSlot = sRefSlot[bg];
+    u8 *refInfo = sRefInfo[bg];
+    u16 *refU = sRefUnfaded[bg];
     const u16 *fieldMap = NULL;
     int x0 = sMargin, x1 = sMargin + GBA_W;
 
@@ -157,12 +168,19 @@ static void RenderTextBg(int bg, int line)
         if (entry & 0x400) px = 7 - px;
         if (entry & 0x800) py = 7 - py;
 
+        if (sDoRefs)
+            refSlot[x] = 0;
         if (is8)
         {
             addr = charBase + tile * 64 + py * 8 + px;
             if (addr >= 0x10000) { out[x] = TRANSPARENT; continue; }
             c = PC_VRAM8[addr];
             out[x] = c ? Pal(c) : TRANSPARENT;
+            if (sDoRefs && c)
+            {
+                refSlot[x] = HdPackLookup(charBase + tile * 64, 1, 0);
+                refU[x] = HdPackUnfaded(c);
+            }
         }
         else
         {
@@ -171,7 +189,14 @@ static void RenderTextBg(int bg, int line)
             c = PC_VRAM8[addr];
             c = (px & 1) ? (c >> 4) : (c & 0xF);
             out[x] = c ? Pal((entry >> 12) * 16 + c) : TRANSPARENT;
+            if (sDoRefs && c)
+            {
+                refSlot[x] = HdPackLookup(charBase + tile * 32, 0, (entry >> 12) * 16);
+                refU[x] = HdPackUnfaded((entry >> 12) * 16 + c);
+            }
         }
+        if (sDoRefs)
+            refInfo[x] = px | (py << 3) | ((entry & 0x400) ? 64 : 0) | ((entry & 0x800) ? 128 : 0);
     }
 }
 
@@ -189,6 +214,7 @@ static void RenderAffineBg(int bg)
     int x;
 
     ClearRow(out);
+    memset(sRefSlot[bg], 0, sizeof(sRefSlot[bg]));
     for (x = sMargin; x < sMargin + GBA_W; x++, rx += pa, ry += pc)
     {
         int tx = rx >> 8, ty = ry >> 8, tile, c;
@@ -213,6 +239,7 @@ static void RenderBitmapBg(int mode, int line)
     int frame = (R16(0x00) >> 4) & 1;
     int gx;
     ClearRow(out);
+    memset(sRefSlot[2], 0, sizeof(sRefSlot[2]));
     for (gx = 0; gx < GBA_W; gx++)
     {
         u16 c;
@@ -247,6 +274,8 @@ static void RenderSprites(int line)
     int i;
 
     memset(sObjPrio, 4, sW);
+    if (sDoRefs)
+        memset(sRefSlot[4], 0, sizeof(sRefSlot[4]));
     memset(sObjSemi, 0, sW);
     memset(sObjWin, 0, sW);
     ClearRow(sObjColor);
@@ -319,22 +348,28 @@ static void RenderSprites(int line)
                 ty = (a1 & 0x2000) ? h - 1 - sy : sy;
             }
 
+            u32 tileAddr;
+            int palBase;
             if (is8)
             {
                 int t = (tile & ~1) + (ty >> 3) * row + (tx >> 3) * 2;
-                addr = 0x10000 + ((t * 32) & 0x7FFF) + (ty & 7) * 8 + (tx & 7);
+                tileAddr = 0x10000 + ((t * 32) & 0x7FFF);
+                addr = tileAddr + (ty & 7) * 8 + (tx & 7);
                 c = PC_VRAM8[addr];
                 if (!c) continue;
+                palBase = 256;
                 c = 256 + c;
             }
             else
             {
                 int t = tile + (ty >> 3) * row + (tx >> 3);
-                addr = 0x10000 + ((t * 32) & 0x7FFF) + (ty & 7) * 4 + ((tx & 7) >> 1);
+                tileAddr = 0x10000 + ((t * 32) & 0x7FFF);
+                addr = tileAddr + (ty & 7) * 4 + ((tx & 7) >> 1);
                 c = PC_VRAM8[addr];
                 c = (tx & 1) ? (c >> 4) : (c & 0xF);
                 if (!c) continue;
-                c = 256 + palBank * 16 + c;
+                palBase = 256 + palBank * 16;
+                c = palBase + c;
             }
 
             if (mode == 2)
@@ -347,6 +382,14 @@ static void RenderSprites(int line)
                 sObjColor[px] = Pal(c);
                 sObjPrio[px] = prio;
                 sObjSemi[px] = mode == 1;
+                if (sDoRefs)
+                {
+                    // Rotated/scaled sprites keep the xBR upscale.
+                    sRefSlot[4][px] = affine ? 0 : HdPackLookup(tileAddr, is8, palBase);
+                    sRefInfo[4][px] = (tx & 7) | ((ty & 7) << 3)
+                                    | ((a1 & 0x1000) ? 64 : 0) | ((a1 & 0x2000) ? 128 : 0);
+                    sRefUnfaded[4][px] = HdPackUnfaded(c);
+                }
             }
         }
     }
@@ -462,6 +505,28 @@ static void ExportLine(int line, const int *bgOn, const int *bgPrio, int forcedB
     if (forcedBlank)
         return;
 
+    if (gHdPackActive)
+    {
+        for (i = 0; i < 5; i++)
+        {
+            u16 (*t)[4] = gPpuLayers.tref[i][line];
+            const u16 *col = i < 4 ? sBg[i] : sObjColor;
+            int on = i < 4 ? bgOn[i] : 1;
+            for (x = 0; x < sW; x++)
+            {
+                if (!on || col[x] == TRANSPARENT || !sRefSlot[i][x])
+                {
+                    t[x][0] = 0;
+                    continue;
+                }
+                t[x][0] = sRefSlot[i][x];
+                t[x][1] = sRefInfo[i][x];
+                t[x][2] = sRefUnfaded[i][x];
+                t[x][3] = col[x];
+            }
+        }
+    }
+
     for (i = 0; i < 4; i++)
     {
         u32 *dst = gPpuLayers.layer[i][line];
@@ -508,6 +573,10 @@ void PpuRenderLine(int line, u32 *out)
     sW = gPcScreenW;
     sMargin = (sW - GBA_W) / 2;
     sWide = sMargin > 0 && PcFieldWideActive();
+    sDoRefs = gHdPackActive || gHdDumpEnabled;
+    if (sDoRefs)
+        for (i = 0; i < 4; i++)
+            memset(sRefSlot[i], 0, sW * sizeof(u16));
     cx0 = sWide ? 0 : sMargin;
     cx1 = sWide ? sW : sMargin + GBA_W;
     gPpuContentX0 = cx0;

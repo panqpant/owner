@@ -13,6 +13,7 @@
 #include <SDL.h>
 #include "port.h"
 #include "render_gl.h"
+#include "hdpack.h"
 
 typedef unsigned int GLenum, GLuint, GLbitfield;
 typedef int GLint, GLsizei;
@@ -32,6 +33,8 @@ typedef unsigned char GLboolean;
 #define GL_RGBA 0x1908
 #define GL_RGBA8 0x8058
 #define GL_RGBA8UI 0x8D7C
+#define GL_RGBA16UI 0x8D76
+#define GL_UNSIGNED_SHORT 0x1403
 #define GL_RGBA_INTEGER 0x8D99
 #define GL_UNSIGNED_BYTE 0x1401
 #define GL_FRAGMENT_SHADER 0x8B30
@@ -251,6 +254,29 @@ static const char *kComposite =
     "uniform usampler2D uLine;\n"
     "uniform vec2 uDim;\n"        // native frame size (W, 160)
     "uniform vec2 uContent;\n"    // visible content columns [x0, x1); outside is pillarbox
+    "uniform usampler2D uTref[5];\n"
+    "uniform sampler2D uAtlas;\n"
+    "uniform int uHasPack;\n"
+    "uniform float uPackScale;\n"
+    "uniform int uPerRow;\n"
+    "vec3 C555(uint c) { return vec3(float(c & 31u), float((c >> 5) & 31u), float((c >> 10) & 31u)) / 31.0; }\n"
+    // Hand-made replacement tile, with the GBA's palette fade re-applied.
+    "vec4 Pack(usampler2D tr, vec4 base, ivec2 np, vec2 sub) {\n"
+    "  uvec4 t = texelFetch(tr, np, 0);\n"
+    "  if (t.r == 0u) return base;\n"
+    "  uint slot = t.r - 1u;\n"
+    "  int tile = int(8.0 * uPackScale + 0.5);\n"
+    "  float fx = (t.g & 64u) != 0u ? 1.0 - sub.x : sub.x;\n"
+    "  float fy = (t.g & 128u) != 0u ? 1.0 - sub.y : sub.y;\n"
+    "  vec2 local = (vec2(float(t.g & 7u), float((t.g >> 3) & 7u)) + vec2(fx, fy)) * uPackScale;\n"
+    "  ivec2 origin = ivec2(int(slot % uint(uPerRow)), int(slot / uint(uPerRow))) * tile;\n"
+    "  vec4 h = texelFetch(uAtlas, origin + clamp(ivec2(floor(local)), ivec2(0), ivec2(tile - 1)), 0);\n"
+    "  vec3 U = C555(t.b), F = C555(t.a), c = h.rgb;\n"
+    "  vec3 dn = c * F / max(U, vec3(1.0 / 62.0));\n"
+    "  vec3 up = c + (1.0 - c) * (F - U) / max(1.0 - U, vec3(1.0 / 62.0));\n"
+    "  c = clamp(mix(up, dn, vec3(lessThanEqual(F, U))), 0.0, 1.0);\n"
+    "  return vec4(c * h.a, h.a);\n"
+    "}\n"
     "vec3 blend(vec3 a, vec3 b, float ea, float eb) { return min(a * ea + b * eb, vec3(1.0)); }\n"
     "void main() {\n"
     "  ivec2 np = ivec2(min(floor(vUv * uDim), uDim - 1.0));\n"
@@ -272,6 +298,12 @@ static const char *kComposite =
     "  lay[0] = texture(uLayer[0], uv); lay[1] = texture(uLayer[1], uv);\n"
     "  lay[2] = texture(uLayer[2], uv); lay[3] = texture(uLayer[3], uv);\n"
     "  lay[4] = texture(uLayer[4], uv);\n"
+    "  if (uHasPack != 0) {\n"
+    "    vec2 sub = vec2(fract(vUv.x * uDim.x), 1.0 - fract(vUv.y * uDim.y));\n"
+    "    lay[0] = Pack(uTref[0], lay[0], np, sub); lay[1] = Pack(uTref[1], lay[1], np, sub);\n"
+    "    lay[2] = Pack(uTref[2], lay[2], np, sub); lay[3] = Pack(uTref[3], lay[3], np, sub);\n"
+    "    lay[4] = Pack(uTref[4], lay[4], np, sub);\n"
+    "  }\n"
     // Order visible layers front to back (OBJ before BGs of equal priority).
     "  int order[6]; int n = 0;\n"
     "  for (uint p = 0u; p < 4u; p++) {\n"
@@ -347,6 +379,8 @@ static GLuint sProgXbr, sProgComp, sProgPresent;
 static GLuint sLayerTex[5], sUpTex[5], sUpFbo[5];
 static GLuint sMetaTex, sLineTex, sFrameTex;
 static GLuint sCompTex, sCompFbo;
+static GLuint sTrefTex[5], sAtlasTex;
+static int sPackScale, sPackPerRow;
 static int sScale = 4;
 static int sW = GBA_W;
 static int sCompW, sCompH; // composite size = on-screen size of the game image
@@ -492,6 +526,30 @@ int HdInit(void)
         (void)loc;
         glUniform1i(glGetUniformLocation(sProgComp, "uMeta"), 5);
         glUniform1i(glGetUniformLocation(sProgComp, "uLine"), 6);
+        for (i = 0; i < 5; i++)
+        {
+            char name[32];
+            snprintf(name, sizeof(name), "uTref[%d]", i);
+            glUniform1i(glGetUniformLocation(sProgComp, name), 7 + i);
+        }
+        glUniform1i(glGetUniformLocation(sProgComp, "uAtlas"), 12);
+    }
+    {
+        const uint32_t *px;
+        int aw, ah;
+        if (HdPackAtlas(&px, &aw, &ah, &sPackScale, &sPackPerRow))
+        {
+            for (i = 0; i < 5; i++)
+            {
+                glGenTextures(1, &sTrefTex[i]);
+                glBindTexture(GL_TEXTURE_2D, sTrefTex[i]);
+                glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16UI, PC_MAX_W, GBA_H, 0, GL_RGBA_INTEGER, GL_UNSIGNED_SHORT, NULL);
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+            }
+            sAtlasTex = MakeTex(aw, ah, GL_RGBA8, GL_RGBA, GL_NEAREST);
+            glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, aw, ah, GL_RGBA, GL_UNSIGNED_BYTE, px);
+        }
     }
     gPpuExportLayers = 1;
     sReady = 1;
@@ -539,6 +597,16 @@ static void RenderHd(int outW, int outH)
     }
     glBindTexture(GL_TEXTURE_2D, sMetaTex);
     glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, sW, GBA_H, GL_RGBA_INTEGER, GL_UNSIGNED_BYTE, gPpuLayers.meta);
+    if (sAtlasTex)
+    {
+        glPixelStorei(GL_UNPACK_ALIGNMENT, 2);
+        for (i = 0; i < 5; i++)
+        {
+            glBindTexture(GL_TEXTURE_2D, sTrefTex[i]);
+            glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, sW, GBA_H, GL_RGBA_INTEGER, GL_UNSIGNED_SHORT, gPpuLayers.tref[i]);
+        }
+        glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+    }
     glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
     glBindTexture(GL_TEXTURE_2D, sLineTex);
     glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 4, GBA_H, GL_RGBA_INTEGER, GL_UNSIGNED_BYTE, gPpuLayers.line);
@@ -565,6 +633,19 @@ static void RenderHd(int outW, int outH)
     glUseProgram(sProgComp);
     glUniform2f(glGetUniformLocation(sProgComp, "uDim"), sW, GBA_H);
     glUniform2f(glGetUniformLocation(sProgComp, "uContent"), gPpuContentX0, gPpuContentX1);
+    glUniform1i(glGetUniformLocation(sProgComp, "uHasPack"), sAtlasTex ? 1 : 0);
+    glUniform1f(glGetUniformLocation(sProgComp, "uPackScale"), (float)sPackScale);
+    glUniform1i(glGetUniformLocation(sProgComp, "uPerRow"), sPackPerRow > 0 ? sPackPerRow : 1);
+    if (sAtlasTex)
+    {
+        for (i = 0; i < 5; i++)
+        {
+            glActiveTexture(GL_TEXTURE0 + 7 + i);
+            glBindTexture(GL_TEXTURE_2D, sTrefTex[i]);
+        }
+        glActiveTexture(GL_TEXTURE0 + 12);
+        glBindTexture(GL_TEXTURE_2D, sAtlasTex);
+    }
     for (i = 0; i < 5; i++)
     {
         glActiveTexture(GL_TEXTURE0 + i);

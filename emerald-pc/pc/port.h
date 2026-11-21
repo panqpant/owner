@@ -58,6 +58,10 @@ struct PpuLayers {
     uint32_t layer[5][GBA_H][PC_MAX_W]; // BG0-3, OBJ: 0xAABBGGRR, A = 255 opaque / 0 empty
     uint32_t meta[GBA_H][PC_MAX_W];     // R: window mask (bits 0-5)  G: OBJ priority (0-1), semi-transparent (2)
     uint32_t line[GBA_H][4];         // see ppu.c: backdrop, enables/priorities, blend state
+    // HD pack tile references per layer pixel (only filled when a pack is loaded):
+    // [0] replacement slot + 1 (0 = none), [1] tile-local x | y << 3 | hflip << 6 | vflip << 7,
+    // [2] unfaded colour (BGR555), [3] actual (faded) colour (BGR555)
+    uint16_t tref[5][GBA_H][PC_MAX_W][4];
 };
 extern struct PpuLayers gPpuLayers;
 extern int gPpuExportLayers;
