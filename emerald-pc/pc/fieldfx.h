@@ -31,6 +31,18 @@ struct PcFieldFx {
     struct { short x, y, w; } shadows[PC_MAX_SHADOWS];      // feet position, width
 };
 extern struct PcFieldFx gPcFieldFx;
+
+enum { PC_BSCENE_ROUTE, PC_BSCENE_TOWN, PC_BSCENE_SEA, PC_BSCENE_POND, PC_BSCENE_SAND,
+       PC_BSCENE_MOUNTAIN, PC_BSCENE_CAVE, PC_BSCENE_INDOOR, PC_BSCENE_UNDERWATER, PC_BSCENE_TALLGRASS };
+// Battle scene data for the renderer (fieldfx.c, filled each battle frame).
+struct PcBattleFx {
+    int outdoors;
+    int scene;   // new backdrop: -1 keep the game's, else PC_BSCENE_*
+    int count;
+    struct { short x, y, w, h; unsigned short tile; unsigned char side, visible; } mon[4]; // sprite rects (GBA screen coords), first OBJ tile
+};
+extern struct PcBattleFx gPcBattleFx;
+void PcUpdateBattleFx(void);
 extern int gPcHdEffects; // renderer is drawing HD weather (hide the original sprites in HD layers)
 void PcUpdateFieldFx(void);
 #endif

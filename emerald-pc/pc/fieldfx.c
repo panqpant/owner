@@ -1,6 +1,7 @@
 // Overworld lighting data for the renderer: light sources (building doors)
 // and character positions (for soft shadows), in GBA screen coordinates.
 // Called once per overworld frame. Compiled with the game's headers.
+#include <stdlib.h>
 #include "global.h"
 #include "event_object_movement.h"
 #include "field_camera.h"
@@ -11,9 +12,19 @@
 #include "metatile_behavior.h"
 #include "constants/weather.h"
 #include "field_player_avatar.h"
+#include "battle.h"
+#include "battle_util.h"
+#include "battle_main.h"
+#include "battle_anim.h"
+#include "data.h"
+#include "battle_setup.h"
+#include "constants/trainers.h"
+#include "constants/battle.h"
+#include "constants/map_types.h"
 #include "fieldfx.h"
 
 struct PcFieldFx gPcFieldFx;
+struct PcBattleFx gPcBattleFx;
 int gPcHdEffects;
 
 void PcUpdateFieldFx(void)
@@ -143,5 +154,72 @@ void PcUpdateFieldFx(void)
         fx->shadows[fx->numShadows].y = cy;
         fx->shadows[fx->numShadows].w = -sp->centerToCornerVecX * 2 >= 32 ? 22 : 12;
         fx->numShadows++;
+    }
+}
+
+// Where each battler's sprite is, for battle lighting, shadows and idle motion.
+void PcUpdateBattleFx(void)
+{
+    static const u8 sDim[3][4][2] = {
+        { { 8, 8 }, { 16, 16 }, { 32, 32 }, { 64, 64 } },     // square
+        { { 16, 8 }, { 32, 8 }, { 32, 16 }, { 64, 32 } },     // horizontal
+        { { 8, 16 }, { 8, 32 }, { 16, 32 }, { 32, 64 } },     // vertical
+    };
+    struct PcBattleFx *b = &gPcBattleFx;
+    int i;
+    b->outdoors = IsMapTypeOutdoors(gMapHeader.mapType);
+    // Which new backdrop to draw; special battles keep their own art.
+    b->scene = -1;
+    if (!(gBattleTypeFlags & (BATTLE_TYPE_LINK | BATTLE_TYPE_FRONTIER | BATTLE_TYPE_EREADER_TRAINER | BATTLE_TYPE_RECORDED_LINK
+                              | BATTLE_TYPE_GROUDON | BATTLE_TYPE_KYOGRE | BATTLE_TYPE_RAYQUAZA))
+        && GetCurrentMapBattleScene() == MAP_BATTLE_SCENE_NORMAL
+        && !((gBattleTypeFlags & BATTLE_TYPE_TRAINER)
+             && (gTrainers[gTrainerBattleOpponent_A].trainerClass == TRAINER_CLASS_LEADER
+                 || gTrainers[gTrainerBattleOpponent_A].trainerClass == TRAINER_CLASS_CHAMPION)))
+    {
+        switch (gBattleEnvironment)
+        {
+        case BATTLE_ENVIRONMENT_GRASS:
+        case BATTLE_ENVIRONMENT_PLAIN:
+            b->scene = (gMapHeader.mapType == MAP_TYPE_TOWN || gMapHeader.mapType == MAP_TYPE_CITY) ? PC_BSCENE_TOWN : PC_BSCENE_ROUTE;
+            break;
+        case BATTLE_ENVIRONMENT_LONG_GRASS: b->scene = PC_BSCENE_TALLGRASS; break;
+        case BATTLE_ENVIRONMENT_SAND:       b->scene = PC_BSCENE_SAND; break;
+        case BATTLE_ENVIRONMENT_UNDERWATER: b->scene = PC_BSCENE_UNDERWATER; break;
+        case BATTLE_ENVIRONMENT_WATER:      b->scene = PC_BSCENE_SEA; break;
+        case BATTLE_ENVIRONMENT_POND:       b->scene = PC_BSCENE_POND; break;
+        case BATTLE_ENVIRONMENT_MOUNTAIN:   b->scene = PC_BSCENE_MOUNTAIN; break;
+        case BATTLE_ENVIRONMENT_CAVE:       b->scene = PC_BSCENE_CAVE; break;
+        case BATTLE_ENVIRONMENT_BUILDING:   b->scene = PC_BSCENE_INDOOR; break;
+        }
+        if (getenv("EMERALD_BSCENE"))   // testing: force a backdrop
+            b->scene = atoi(getenv("EMERALD_BSCENE"));
+    }
+    b->count = gBattlersCount < 4 ? gBattlersCount : 4;
+    for (i = 0; i < b->count; i++)
+    {
+        u8 id = gBattlerSpriteIds[i];
+        struct Sprite *sp;
+        int w, h;
+        b->mon[i].visible = 0;
+        if (id >= MAX_SPRITES)
+            continue;
+        sp = &gSprites[id];
+        if (!sp->inUse || sp->invisible || sp->oam.shape > 2)
+            continue;
+        w = sDim[sp->oam.shape][sp->oam.size][0];
+        h = sDim[sp->oam.shape][sp->oam.size][1];
+        if (sp->oam.affineMode == ST_OAM_AFFINE_DOUBLE)
+        {
+            w *= 2;
+            h *= 2;
+        }
+        b->mon[i].x = sp->x + sp->x2 - w / 2;
+        b->mon[i].y = sp->y + sp->y2 - h / 2;
+        b->mon[i].w = w;
+        b->mon[i].h = h;
+        b->mon[i].side = GetBattlerSide(i);
+        b->mon[i].tile = sp->oam.tileNum;
+        b->mon[i].visible = 1;
     }
 }

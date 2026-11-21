@@ -293,7 +293,19 @@ static const char *kComposite =
     "uniform float uForest;\n"
     "uniform vec4 uKey;\n"
     "uniform float uFlash;\n"
-    "uniform vec2 uPlayer;\n"       // player's feet (GBA screen coords)       // lightning, 0-1          // key light: direction towards the light (x, y down, z up), strength      // fraction of scenery around: light shafts
+    "uniform vec2 uPlayer;\n"
+    "uniform int uBattle;\n"        // battle scene lighting on
+    "uniform vec4 uMon[4];\n"       // battler sprite rects x, y, w, h (w = 0: none)
+    "uniform vec3 uMonFeet[4];\n"   // feet x, y; half width
+    "uniform vec4 uBTint;\n"        // time-of-day colour, a = 1 outdoors
+    "uniform vec3 uBShadow;\n"      // shadow direction per px of height (x, y), strength
+    "uniform vec4 uMoveLight;\n"    // move effects as a light: x, y, strength, radius
+    "uniform vec3 uMoveColor;\n"
+    "uniform int uScene;\n"         // procedural battle backdrop (-1 = the game's art)
+    "uniform vec3 uSkyTop, uSkyHor;\n"
+    "uniform vec3 uSunPos;\n"       // sun (z = 1) or moon (z = 0) position, GBA px; z = -1 none
+    "uniform float uNightB;\n"
+    "uniform vec3 uBLight;\n"       // colour of the light at this hour       // player's feet (GBA screen coords)       // lightning, 0-1          // key light: direction towards the light (x, y down, z up), strength      // fraction of scenery around: light shafts
     "vec2 gUpSize, gUpFw;\n"
     // Sharp magnification of the upscaled layers: each upscaled pixel stays
     // solid and only the 1-output-pixel seam between neighbours is blended.
@@ -388,6 +400,244 @@ static const char *kComposite =
     "  float n = Noise(wp * 0.045) * 0.65 + Noise(wp * 0.11 + 9.0) * 0.35;\n"
     "  return smoothstep(0.48, 0.62, n);\n"
     "}\n"
+    "float SilH(vec2 g, vec3 s, vec2 k, float hmax) {\n"
+    "  if (abs(k.y) < 0.15) k.y = k.y < 0.0 ? -0.15 : 0.15;\n"
+    "  float h = (g.y - s.y) / k.y;\n"
+    "  if (h < 0.0 || h > hmax) return 0.0;\n"
+    "  vec2 sp = vec2(g.x - h * k.x, s.y - h);\n"
+    "  if (abs(sp.x - s.x) > s.z) return 0.0;\n"
+    "  return texture(uLayer[4], vec2((sp.x + uMargin) / uDim.x, sp.y / uDim.y)).a * (1.0 - smoothstep(hmax * 0.3, hmax, h) * 0.6);\n"
+    "}\n"
+    "int MonAt(vec2 gp) {\n"
+    "  if ((gp.y >= 74.0 && gp.y < 114.0 && gp.x >= 118.0) || (gp.y < 46.0 && gp.x < 120.0)) return -1;\n"   // health boxes
+    "  for (int k = 0; k < 4; k++) { vec4 m = uMon[k]; if (m.z > 0.0 && gp.x >= m.x && gp.x < m.x + m.z && gp.y >= m.y && gp.y < m.y + m.w) return k; }\n"
+    "  return -1;\n"
+    "}\n"
+    "#define BD_H 46.0\n"
+    // ---- Procedural battle backdrops (sky, scenery, ground, platforms) ----
+    "float Fbm(vec2 p) { float a = 0.5, s = 0.0; for (int i = 0; i < 4; i++) { s += a * Noise(p); p = p * 2.03 + 7.1; a *= 0.5; } return s; }\n"
+    "float Ell(vec2 p, vec4 e) { vec2 d = (p - e.xy) / e.zw; return length(d); }\n"
+    "vec3 Fog(vec3 c, float y, float amt) { return mix(c, uSkyHor, amt); }\n"
+    // Sky with sun or moon, stars and clouds.
+    "vec3 Sky(vec2 p) {\n"
+    "  float t = clamp(p.y / BD_H, 0.0, 1.0);\n"
+    "  vec3 c = mix(uSkyTop, uSkyHor, pow(t, 1.4));\n"
+    // stars
+    "  vec2 sc = floor(p * 0.9);\n"
+    "  float st = step(0.985, Hash(sc)) * (0.6 + 0.4 * sin(uTime * (1.0 + Hash(sc + 3.0) * 3.0) + Hash(sc) * 40.0));\n"
+    "  c += vec3(0.9, 0.95, 1.0) * st * uNightB * (1.0 - t * 0.7);\n"
+    // sun / moon
+    "  float d = distance(p, uSunPos.xy);\n"
+    "  if (uSunPos.z > 0.5) {\n"
+    "    vec3 sunc = mix(vec3(1.0, 0.75, 0.45), vec3(1.0, 0.97, 0.88), clamp((BD_H - uSunPos.y) / 30.0, 0.0, 1.0));\n"
+    "    c = mix(c, sunc * 1.15, 1.0 - smoothstep(5.0, 6.0, d));\n"
+    "    c += sunc * 0.35 * exp(-d * 0.06) + sunc * 0.15 * exp(-d * 0.015);\n"
+    "  } else if (uSunPos.z > -0.5 && uNightB > 0.3) {\n"
+    "    vec3 moonc = vec3(0.92, 0.94, 1.0);\n"
+    "    float m = 1.0 - smoothstep(4.0, 4.8, d);\n"
+    "    float cres = 1.0 - smoothstep(3.6, 4.4, distance(p, uSunPos.xy + vec2(1.8, -1.0)));\n"
+    "    c = mix(c, moonc, m * (1.0 - cres * 0.85));\n"
+    "    c += moonc * 0.12 * exp(-d * 0.05) * uNightB;\n"
+    "  }\n"
+    // clouds drifting
+    "  vec2 q = vec2(p.x * 0.018 + uTime * 0.01, p.y * 0.05);\n"
+    "  float cl = smoothstep(0.52, 0.75, Fbm(q)) * (1.0 - t * 0.5);\n"
+    "  vec3 cloudc = mix(vec3(1.0), uSkyHor * 1.1, 0.35) * mix(1.0, 0.35, uNightB);\n"
+    "  c = mix(c, cloudc, cl * 0.85);\n"
+    "  return c;\n"
+    "}\n"
+    // Ground plane in perspective: z grows toward the horizon.
+    "vec2 GroundUv(vec2 p) {\n"
+    "  float dy = max(p.y - BD_H, 0.5);\n"
+    "  float z = 40.0 / dy;\n"
+    "  return vec2((p.x - 120.0) * z * 0.05, z);\n"
+    "}\n"
+    "vec3 GroundCol(vec2 p, int sc) {\n"
+    "  vec2 g = GroundUv(p);\n"
+    "  vec2 gr = mat2(0.88, 0.48, -0.48, 0.88) * g + vec2(3.7, 1.3);\n"   // rotated: no noise-grid lines toward the vanishing point
+    "  float n = Fbm(gr * vec2(1.0, 1.6));\n"
+    "  vec3 c;\n"
+    "  if (sc == 4) {            // sand with ripples\n"
+    "    c = mix(vec3(0.86, 0.74, 0.50), vec3(0.95, 0.84, 0.60), n);\n"
+    "    c *= 0.93 + 0.07 * sin(g.y * 7.0 + sin(g.x * 1.3) * 1.5 + n * 4.0);\n"
+    "  } else if (sc == 5) {     // rocky\n"
+    "    c = mix(vec3(0.48, 0.42, 0.36), vec3(0.62, 0.55, 0.46), n);\n"
+    "    c *= 0.85 + 0.15 * step(0.6, Noise(g * 6.0));\n"
+    "  } else if (sc == 6) {     // cave floor\n"
+    "    c = mix(vec3(0.22, 0.19, 0.17), vec3(0.34, 0.29, 0.24), n);\n"
+    "  } else if (sc == 7) {     // wooden floor\n"
+    "    float plank = fract(g.x * 1.6);\n"
+    "    c = mix(vec3(0.55, 0.38, 0.24), vec3(0.66, 0.47, 0.30), Noise(vec2(floor(g.x * 1.6), g.y * 3.0)));\n"
+    "    c *= 0.9 + 0.1 * smoothstep(0.0, 0.06, plank) * smoothstep(1.0, 0.94, plank);\n"
+    "  } else if (sc == 8) {     // seabed\n"
+    "    c = mix(vec3(0.55, 0.62, 0.55), vec3(0.70, 0.72, 0.60), n);\n"
+    "  } else if (sc == 2 || sc == 3) { // water\n"
+    "    float w = sin(g.x * 5.0 + uTime * 1.3 + n * 5.0) * 0.5 + sin(g.y * 7.0 - uTime * 0.9) * 0.5;\n"
+    "    c = mix(vec3(0.16, 0.38, 0.62), vec3(0.28, 0.56, 0.80), n) * (0.95 + 0.06 * w);\n"
+    "    c = mix(c, uSkyHor, 0.25);\n"
+    "  } else {                  // grass with mowing stripes\n"
+    "    c = mix(vec3(0.36, 0.62, 0.30), vec3(0.50, 0.76, 0.38), n);\n"
+    "    c *= 0.95 + 0.05 * smoothstep(-0.2, 0.2, sin(g.y * 2.2));\n"   // mowing bands across the field
+    "    c *= 0.93 + 0.07 * Noise(vec2(p.x * 0.9, p.y * 1.7));\n"
+    "    if (sc == 9) c *= 0.85 + 0.15 * Noise(g * 9.0);\n"
+    "  }\n"
+    "  return c;\n"
+    "}\n"
+    // Scenery standing on the horizon (towns, hills, dunes, peaks).
+    "vec4 Scenery(vec2 p, int sc) {\n"
+    "  float H = BD_H;\n"
+    "  if (sc == 1) {            // town: two rows of houses\n"
+    "    vec4 o = vec4(0.0);\n"
+    "    for (int row = 1; row >= 0; row--) {\n"
+    "      float scale = row == 1 ? 0.65 : 1.0;\n"
+    "      float base = H + float(row) * -3.0;\n"
+    "      float x = p.x / scale + float(row) * 37.0;\n"
+    "      float cw = 22.0;\n"
+    "      float ci = floor(x / cw); float h1 = Hash(vec2(ci, float(row)));\n"
+    "      float lx = x - ci * cw;\n"
+    "      float bw = 14.0 + h1 * 6.0, x0 = (cw - bw) * 0.5;\n"
+    "      float hh = (10.0 + h1 * 12.0) * scale;\n"
+    "      float py = base - p.y;\n"
+    "      if (lx < x0 || lx > x0 + bw) continue;\n"
+    "      float u = (lx - x0) / bw;\n"
+    "      float roof = hh + (0.5 - abs(u - 0.5)) * 8.0 * scale;\n"
+    "      if (py < 0.0 || py > roof) continue;\n"
+    "      vec3 wall = mix(vec3(0.85, 0.78, 0.62), vec3(0.75, 0.55, 0.45), Hash(vec2(ci, 9.0 + float(row))));\n"
+    "      vec3 roofc = mix(vec3(0.70, 0.30, 0.25), vec3(0.30, 0.40, 0.70), step(0.5, Hash(vec2(ci, 4.0))));\n"
+    "      vec3 col = py > hh ? roofc : wall;\n"
+    // windows
+    "      if (py < hh - 2.0 * scale && py > 2.0 * scale) {\n"
+    "        vec2 wcell = floor(vec2((lx - x0) / (4.0 * scale), py / (5.0 * scale)));\n"
+    "        vec2 wf = fract(vec2((lx - x0) / (4.0 * scale), py / (5.0 * scale)));\n"
+    "        if (wf.x > 0.3 && wf.x < 0.8 && wf.y > 0.3 && wf.y < 0.8 && (lx - x0) > 2.0 && (lx - x0) < bw - 2.0) {\n"
+    "          float lit = step(0.45, Hash(wcell + ci * 13.0 + float(row) * 5.0));\n"
+    "          vec3 day = mix(uSkyHor, vec3(0.3, 0.4, 0.5), 0.5);\n"
+    "          vec3 night = vec3(1.0, 0.78, 0.42) * (0.9 + 0.1 * sin(uTime * 2.0 + ci));\n"
+    "          col = mix(day, mix(col * 0.3, night * 1.4, lit), uNightB);\n"
+    "        }\n"
+    "      }\n"
+    "      col *= mix(1.0, 0.35, uNightB);\n"
+    "      if (row == 1) col = mix(col, uSkyHor, 0.35);\n"
+    "      o = vec4(col, 1.0);\n"
+    "    }\n"
+    // lamp posts with glow at night
+    "    float lpx = mod(p.x + 10.0, 48.0) - 24.0;\n"
+    "    if (abs(lpx) < 0.7 && p.y > H - 14.0 && p.y < H) o = vec4(vec3(0.15), 1.0);\n"
+    "    float lg = exp(-dot(vec2(lpx, p.y - (H - 15.0)), vec2(lpx, p.y - (H - 15.0))) / 10.0);\n"
+    "    if (lg > 0.02) o = vec4(mix(o.a > 0.0 ? o.rgb : Sky(p), vec3(1.0, 0.85, 0.5) * 1.5, lg * uNightB), max(o.a, lg * uNightB));\n"
+    "    return o;\n"
+    "  }\n"
+    "  if (sc == 0 || sc == 9 || sc == 3) {  // routes: far hills and a tree line\n"
+    "    float far = H - 9.0 - 10.0 * Fbm(vec2(p.x * 0.015, 1.0));\n"
+    "    float trees = H - 3.0 - 7.0 * (0.6 * Noise(vec2(p.x * 0.12, 2.0)) + 0.4 * abs(sin(p.x * 0.35)));\n"
+    "    if (p.y > trees) {\n"
+    "      vec3 c = mix(vec3(0.16, 0.36, 0.20), vec3(0.24, 0.48, 0.26), Noise(p * 0.4));\n"
+    "      return vec4(c * mix(1.0, 0.3, uNightB), 1.0);\n"
+    "    }\n"
+    "    if (p.y > far) return vec4(mix(mix(vec3(0.35, 0.55, 0.45), uSkyHor, 0.45) * mix(1.0, 0.35, uNightB), uSkyHor, 0.2), 1.0);\n"
+    "    return vec4(0.0);\n"
+    "  }\n"
+    "  if (sc == 4) {            // dunes\n"
+    "    float d1 = H - 6.0 - 9.0 * (0.5 + 0.5 * sin(p.x * 0.03 + 1.0)) * Fbm(vec2(p.x * 0.01, 3.0));\n"
+    "    if (p.y > d1) return vec4(mix(vec3(0.90, 0.75, 0.52), uSkyHor, 0.3) * mix(1.0, 0.35, uNightB), 1.0);\n"
+    "    return vec4(0.0);\n"
+    "  }\n"
+    "  if (sc == 5) {            // mountain peaks with snow\n"
+    "    float r = Fbm(vec2(p.x * 0.012, 5.0));\n"
+    "    r = r * 0.75 + 0.25 * (1.0 - abs(Noise(vec2(p.x * 0.05, 8.0)) * 2.0 - 1.0)) * r;\n"
+    "    float pk = H - 2.0 - 40.0 * smoothstep(0.25, 0.8, r);\n"
+    "    if (p.y > pk) {\n"
+    "      vec3 c = mix(vec3(0.45, 0.45, 0.55), uSkyHor, 0.35);\n"
+    "      float snowline = H - 26.0 + Noise(vec2(p.x * 0.2, 3.0)) * 4.0;\n"
+    "      if (p.y < snowline) c = mix(vec3(0.95, 0.97, 1.0), uSkyHor, 0.15);\n"
+    "      c *= 0.9 + 0.15 * Noise(vec2(p.x * 0.3, p.y * 0.1));\n"
+    "      return vec4(c * mix(1.0, 0.35, uNightB), 1.0);\n"
+    "    }\n"
+    "    return vec4(0.0);\n"
+    "  }\n"
+    "  return vec4(0.0);\n"
+    "}\n"
+    "vec3 Backdrop(vec2 p, int sc) {\n"
+    "  vec3 c;\n"
+    "  float H = BD_H;\n"
+    "  if (sc == 6) {            // cave: rock walls, stalactites, glowing crystals\n"
+    "    if (p.y < H + 4.0) {\n"
+    "      float n = Fbm(p * vec2(0.05, 0.08));\n"
+    "      c = mix(vec3(0.12, 0.10, 0.10), vec3(0.26, 0.22, 0.20), n);\n"
+    "      float stal = 6.0 + 14.0 * pow(Noise(vec2(p.x * 0.2, 1.0)), 3.0);\n"
+    "      if (p.y < stal) c *= 0.55;\n"
+    "      vec2 cc = floor(p / vec2(18.0, 10.0));\n"
+    "      vec2 cp = (cc + 0.5) * vec2(18.0, 10.0) + (vec2(Hash(cc), Hash(cc + 2.0)) - 0.5) * 8.0;\n"
+    "      if (Hash(cc + 5.0) > 0.7) c += vec3(0.3, 0.8, 1.0) * exp(-distance(p, cp) * 0.6) * (0.7 + 0.3 * sin(uTime * 1.5 + Hash(cc) * 9.0));\n"
+    "      return c;\n"
+    "    }\n"
+    "    c = GroundCol(p, sc);\n"
+    "  } else if (sc == 7) {     // indoors: papered wall with windows onto the sky, wood floor\n"
+    "    if (p.y < H + 2.0) {\n"
+    "      c = mix(vec3(0.86, 0.80, 0.68), vec3(0.80, 0.72, 0.60), step(0.5, fract(p.x / 6.0)));\n"
+    "      if (p.y > H - 8.0) c = vec3(0.55, 0.40, 0.28);          // wainscot\n"
+    "      vec2 wl = vec2(mod(p.x + 20.0, 70.0) - 35.0, p.y - 18.0);\n"
+    "      if (abs(wl.x) < 12.0 && abs(wl.y) < 10.0) {\n"
+    "        c = abs(wl.x) > 11.0 || abs(wl.y) > 9.0 || abs(wl.x) < 0.6 ? vec3(0.45, 0.33, 0.24) : Sky(vec2(p.x, wl.y * 2.0 + 20.0));\n"
+    "      }\n"
+    "      vec2 lmp = vec2(mod(p.x - 15.0, 70.0) - 35.0, p.y - 6.0);\n"
+    "      c += vec3(1.0, 0.85, 0.6) * exp(-dot(lmp, lmp) / 60.0) * 0.5;\n"
+    "      return c * mix(1.0, 0.85, uNightB);\n"
+    "    }\n"
+    "    c = GroundCol(p, sc);\n"
+    "  } else if (sc == 8) {     // underwater: depth gradient, light rays, bubbles\n"
+    "    if (p.y < H + 6.0) {\n"
+    "      c = mix(vec3(0.05, 0.20, 0.40), vec3(0.15, 0.45, 0.65), p.y / (H + 6.0));\n"
+    "      float ray = smoothstep(0.6, 0.9, Noise(vec2(p.x * 0.05 + p.y * 0.02 + uTime * 0.05, 1.0)));\n"
+    "      c += vec3(0.4, 0.7, 0.8) * ray * 0.25;\n"
+    "      return c;\n"
+    "    }\n"
+    "    c = GroundCol(p, sc);\n"
+    "  } else {\n"
+    "    if (p.y < H) {\n"
+    "      c = Sky(p);\n"
+    "      vec4 s = Scenery(p, sc);\n"
+    "      c = mix(c, s.rgb, s.a);\n"
+    "      if (sc == 2) c = mix(c, uSkyHor, 0.0);\n"
+    "      return c;\n"
+    "    }\n"
+    "    vec4 s = Scenery(p, sc);\n"
+    "    if (s.a > 0.0 && sc == 1) return mix(GroundCol(p, sc), s.rgb, s.a);\n"
+    "    c = GroundCol(p, sc);\n"
+    "    if (sc == 2) {          // sun / moon glitter path on the sea\n"
+    "      float gx = abs(p.x - uSunPos.x) / (2.0 + (p.y - H) * 0.6);\n"
+    "      float gl = step(0.7, Noise(vec2(p.x * 0.6, p.y * 1.5 + uTime * 2.0))) * (1.0 - smoothstep(0.0, 1.0, gx));\n"
+    "      c += (uSunPos.z > 0.5 ? vec3(1.0, 0.85, 0.6) : vec3(0.8, 0.85, 1.0) * uNightB) * gl * 0.6;\n"
+    "    }\n"
+    "  }\n"
+    // haze toward the horizon, then the light of the hour
+    "  float haze = exp(-max(p.y - H, 0.0) * 0.07);\n"
+    "  c = mix(c, uSkyHor, haze * (sc == 6 || sc == 7 || sc == 8 ? 0.0 : 0.35));\n"
+    "  c *= sc == 6 ? vec3(1.0) : mix(uBLight, vec3(1.0), 0.0);\n"
+    // platforms: the battle spots, with a rim and soft contact shading
+    "  vec4 E[2]; E[0] = vec4(175.5, 62.0, 64.0, 12.5); E[1] = vec4(62.0, 113.0, 64.0, 13.5);\n"
+    "  for (int k = 0; k < 2; k++) {\n"
+    "    float e = Ell(p, E[k]);\n"
+    "    float sh = 1.0 - smoothstep(0.95, 1.25, Ell(p - vec2(0.0, 2.5), E[k]));\n"
+    "    c *= 1.0 - sh * 0.18;\n"
+    "    if (e < 1.0) {\n"
+    "      vec3 top;\n"
+    "      if (sc == 2 || sc == 3) top = mix(c, vec3(0.75, 0.9, 1.0), 0.35 * (0.6 + 0.4 * sin(e * 18.0 - uTime * 2.5)));\n"
+    "      else if (sc == 4) top = vec3(0.93, 0.82, 0.60);\n"
+    "      else if (sc == 5 || sc == 6) top = vec3(0.55, 0.50, 0.44) * (sc == 6 ? 0.6 : 1.0);\n"
+    "      else if (sc == 7) top = vec3(0.70, 0.30, 0.28);               // rug\n"
+    "      else if (sc == 8) top = vec3(0.70, 0.72, 0.62);\n"
+    "      else top = vec3(0.55, 0.80, 0.40);\n"
+    "      float n = Fbm((p - E[k].xy) * 0.15);\n"
+    "      top *= 0.92 + 0.12 * n;\n"
+    "      top *= 1.0 + 0.10 * (1.0 - e) - 0.10 * smoothstep(0.75, 1.0, e);   // domed light, darker rim\n"
+    "      top *= sc == 6 || sc == 7 ? vec3(1.0) : uBLight;\n"
+    "      c = mix(c, top, 1.0 - smoothstep(0.92, 1.0, e));\n"
+    "      c *= 1.0 - 0.25 * smoothstep(0.86, 0.98, e) * (1.0 - smoothstep(0.98, 1.02, e));  // rim line\n"
+    "    }\n"
+    "  }\n"
+    "  return c;\n"
+    "}\n"
     "bool Green(vec4 c) { vec3 k = c.rgb / max(c.a, 1e-4); return c.a > 0.5 && k.g > k.r * 1.05 && k.g > k.b * 1.1; }\n"
     "vec3 C555(uint c) { return vec3(float(c & 31u), float((c >> 5) & 31u), float((c >> 10) & 31u)) / 31.0; }\n"
     "vec3 PalC(uint i) { return C555(texelFetch(uPal, ivec2(int(i), 0), 0).r); }\n"
@@ -456,6 +706,15 @@ static const char *kComposite =
     "    if (Green(lay[1])) { s2 = TexS(uLayer[1], uv + o); if (Green(s2)) lay[1] = s2; }\n"
     "    if (Green(lay[2])) { s2 = TexS(uLayer[2], uv + o); if (Green(s2)) lay[2] = s2; }\n"
     "    if (Green(lay[3])) { s2 = TexS(uLayer[3], uv + o); if (Green(s2)) lay[3] = s2; }\n"
+    "  }\n"
+    "  if (uBattle != 0) {\n"   // Pokémon breathe: a gentle squash and stretch about their feet
+    "    int mk = MonAt(gp);\n"
+    "    if (mk >= 0) {\n"
+    "      vec2 f = uMonFeet[mk].xy;\n"
+    "      float a = 0.016 * sin(uTime * 2.3 + float(mk) * 1.9);\n"
+    "      vec2 q = vec2(f.x + (gp.x - f.x) / (1.0 - a * 0.5), f.y + (gp.y - f.y) / (1.0 + a));\n"
+    "      lay[4] = TexS(uLayer[4], vec2((q.x + uMargin) / uDim.x, q.y / uDim.y));\n"
+    "    }\n"
     "  }\n"
     "  if (uHasPack != 0) {\n"
     "    vec2 sub = vec2(fract(vUv.x * uDim.x), 1.0 - fract(vUv.y * uDim.y));\n"
@@ -773,6 +1032,48 @@ static const char *kComposite =
     "    }\n"
     "  }\n"
     // Thin, mostly transparent fringes of layers in front of the top layer.
+    // Battle lighting: the location's light and time of day on the scene and
+    // the Pokémon, their shadows on the platforms, and move effects lighting
+    // everything around them. Text box, health boxes and effects stay as drawn.
+    "  if (uBattle != 0 && top != 0 && top != 5) {\n"
+    "    bool isMon = top == 4 && (M.a & 1u) != 0u;\n"   // drawn from a Pokémon's own tiles
+    "    int mk = isMon ? 0 : -1;\n"
+    "    bool scene = top <= 3 || isMon;\n"
+    "    if (scene) {\n"
+    "      if (uScene >= 0 && top == 3) res = Backdrop(gp, uScene);\n"
+    "      vec3 N = vec3(0.0, 0.0, 1.0);\n"
+    "      if (mk >= 0) {\n"
+    "        vec2 du = vec2(2.0 / uDim.x, 0.0), dv = vec2(0.0, 2.0 / uDim.y);\n"
+    "        float hx = texture(uLayer[4], uv + du).a - texture(uLayer[4], uv - du).a;\n"
+    "        float hy = texture(uLayer[4], uv + dv).a - texture(uLayer[4], uv - dv).a;\n"
+    "        N = normalize(vec3(-hx * 0.8, -hy * 0.8, 1.0));\n"
+    "        vec2 kd = normalize(vec2(-uBShadow.x, -max(uBShadow.y, 0.3)));\n"
+    "        res *= 1.0 + dot(N.xy, kd) * 0.35;\n"
+    "      }\n"
+    "      if (top >= 2 && top <= 3) {\n"
+    "        float sh = 0.0;\n"
+    "        for (int k = 0; k < 4; k++) {\n"
+    "          if (uMon[k].z <= 0.0) continue;\n"
+    "          vec3 s = uMonFeet[k];\n"
+    "          vec2 e = (gp - s.xy) / vec2(s.z * 0.9, s.z * 0.22);\n"
+    "          sh = max(sh, (1.0 - smoothstep(0.4, 1.0, length(e))) * 0.32);\n"
+    "          sh = max(sh, SilH(gp, s, uBShadow.xy, uMon[k].w) * uBShadow.z);\n"
+    "        }\n"
+    "        res *= 1.0 - sh;\n"
+    "      }\n"
+    "      if (uBTint.a > 0.5 && (uScene < 0 || isMon)) {\n"
+    "        float l = dot(res, vec3(0.2126, 0.7152, 0.0722));\n"
+    "        float night = clamp(uBTint.b > uBTint.r ? (uBTint.b - uBTint.r) * 2.0 : 0.0, 0.0, 1.0);\n"
+    "        res = mix(res, vec3(l), night * 0.3) * mix(vec3(1.0), uBTint.rgb, 0.85);\n"
+    "      }\n"
+    "      if (uMoveLight.z > 0.0) {\n"
+    "        vec2 to = uMoveLight.xy - gp; float d = length(to);\n"
+    "        float f = exp(-d * d / (2.0 * uMoveLight.w * uMoveLight.w));\n"
+    "        float facing = mk >= 0 ? 0.6 + max(dot(N.xy, to / max(d, 1e-3)), 0.0) * 2.0 : 1.0;\n"
+    "        res += uMoveColor * f * uMoveLight.z * facing * (0.45 + 0.55 * res);\n"
+    "      }\n"
+    "    }\n"
+    "  }\n"
     "  for (int k = ti - 1; k >= 0; k--) if (order[k] == 0) { vec4 c = lay[0]; res = res * (1.0 - c.a) + c.rgb; }\n"
     "  oColor = vec4(res, 1.0);\n"
     "}\n";
@@ -1100,10 +1401,145 @@ static void SunVector(float *sun, int weather)
         sun[2] *= 0.5f;
 }
 
+static void TimeOfDayTint(float *rgb);
+
+// Battle scene lighting inputs: battler rects and feet (found from the
+// sprite layer's pixels), light direction and colour, and move effects
+// measured as a light source.
+static void SetBattleUniforms(void)
+{
+    char name[32];
+    int on = gPcBattleFrame && sLighting && gPcScreenW >= GBA_W;
+    int k, x, y, m = (gPcScreenW - GBA_W) / 2;
+    float tint[3] = { 1, 1, 1 }, sun[4] = { 0, 0, 0, 0 };
+    double sw = 0, sx = 0, sy = 0, cr = 0, cg = 0, cb = 0;
+
+    glUniform1i(glGetUniformLocation(sProgComp, "uBattle"), on);
+    glUniform1i(glGetUniformLocation(sProgComp, "uScene"), -1);
+    if (getenv("EMERALD_DEBUG_BATTLE"))
+    {
+        static int n;
+        if (n++ % 120 == 0)
+            fprintf(stderr, "battle fx: frame=%d light=%d w=%d count=%d out=%d m0=%d,%d %dx%d v%d\n", gPcBattleFrame, sLighting, gPcScreenW,
+                    gPcBattleFx.count, gPcBattleFx.outdoors, gPcBattleFx.mon[0].x, gPcBattleFx.mon[0].y, gPcBattleFx.mon[0].w, gPcBattleFx.mon[0].h, gPcBattleFx.mon[0].visible);
+    }
+    if (!on)
+        return;
+    if (gPcBattleFx.outdoors && sLighting)
+    {
+        TimeOfDayTint(tint);
+        SunVector(sun, PC_WEATHER_NONE);
+    }
+    glUniform4f(glGetUniformLocation(sProgComp, "uBTint"), tint[0], tint[1], tint[2], gPcBattleFx.outdoors ? 1.0f : 0.0f);
+    {
+        // Sky for the hour: night, dawn, day, golden hour, sunset, dusk.
+        static const float k[][7] = {
+            { 0.0f, 0.02f, 0.03f, 0.10f, 0.08f, 0.10f, 0.22f }, { 4.8f, 0.02f, 0.03f, 0.10f, 0.08f, 0.10f, 0.22f },
+            { 6.0f, 0.25f, 0.30f, 0.55f, 1.00f, 0.62f, 0.45f }, { 7.5f, 0.28f, 0.48f, 0.85f, 0.95f, 0.85f, 0.80f },
+            { 9.0f, 0.25f, 0.50f, 0.92f, 0.70f, 0.85f, 1.00f }, { 16.0f, 0.25f, 0.50f, 0.92f, 0.70f, 0.85f, 1.00f },
+            { 17.5f, 0.30f, 0.45f, 0.80f, 1.00f, 0.80f, 0.50f }, { 18.5f, 0.20f, 0.20f, 0.45f, 1.00f, 0.45f, 0.30f },
+            { 19.3f, 0.06f, 0.06f, 0.20f, 0.35f, 0.25f, 0.45f }, { 20.5f, 0.02f, 0.03f, 0.10f, 0.08f, 0.10f, 0.22f },
+            { 24.0f, 0.02f, 0.03f, 0.10f, 0.08f, 0.10f, 0.22f },
+        };
+        float h = LocalHour(), f, sky[6], nightB, a;
+        int i, j;
+        for (i = 0; i < 9 && h >= k[i + 1][0]; i++)
+            ;
+        f = (h - k[i][0]) / (k[i + 1][0] - k[i][0]);
+        for (j = 0; j < 6; j++)
+            sky[j] = k[i][j + 1] + (k[i + 1][j + 1] - k[i][j + 1]) * f;
+        nightB = 1.0f - (0.2126f * tint[0] + 0.7152f * tint[1] + 0.0722f * tint[2] - 0.55f) / 0.45f;
+        nightB = nightB < 0 ? 0 : nightB > 1 ? 1 : nightB;
+        glUniform1i(glGetUniformLocation(sProgComp, "uScene"), gPcBattleFx.scene);
+        glUniform3f(glGetUniformLocation(sProgComp, "uSkyTop"), sky[0], sky[1], sky[2]);
+        glUniform3f(glGetUniformLocation(sProgComp, "uSkyHor"), sky[3], sky[4], sky[5]);
+        glUniform1f(glGetUniformLocation(sProgComp, "uNightB"), gPcBattleFx.scene == PC_BSCENE_INDOOR || gPcBattleFx.scene == PC_BSCENE_CAVE ? 0.0f : nightB);
+        glUniform3f(glGetUniformLocation(sProgComp, "uBLight"), tint[0], tint[1], tint[2]);
+        // The sun crosses the sky from left to right; the moon by night.
+        a = (h - 6.0f) / 13.0f;
+        if (a > 0 && a < 1)
+            glUniform3f(glGetUniformLocation(sProgComp, "uSunPos"), -20.0f + a * 280.0f, 46.0f - sinf(a * 3.14159f) * 38.0f, 1.0f);
+        else
+        {
+            float mh = h < 6 ? h + 24 : h, ma = (mh - 19.0f) / 11.0f;
+            glUniform3f(glGetUniformLocation(sProgComp, "uSunPos"), -10.0f + ma * 260.0f, 42.0f - sinf(ma * 3.14159f) * 30.0f, 0.0f);
+        }
+    }
+    // Shadows fall across the platform, away from the light: to the side the
+    // sun's shadows point (from the upper left indoors and at night).
+    {
+        float dx = sun[2] > 0 ? sun[0] / 14.0f : 0.45f, strength = sun[2] > 0 ? 0.25f + sun[2] : 0.3f;
+        glUniform3f(glGetUniformLocation(sProgComp, "uBShadow"), dx, 0.28f, strength);
+    }
+    for (k = 0; k < 4; k++)
+    {
+        int vis = k < gPcBattleFx.count && gPcBattleFx.mon[k].visible;
+        int rx = gPcBattleFx.mon[k].x, ry = gPcBattleFx.mon[k].y, rw = gPcBattleFx.mon[k].w, rh = gPcBattleFx.mon[k].h;
+        int feetY = ry + rh - 1, minX = rx + rw, maxX = rx;
+        if (vis)
+        {
+            // Lowest row with a few opaque pixels = the feet.
+            for (y = ry + rh - 1; y >= ry; y--)
+            {
+                int cnt = 0;
+                if (y < 0 || y >= GBA_H) continue;
+                for (x = rx; x < rx + rw; x++)
+                {
+                    int px = x + m;
+                    if (px < 0 || px >= gPcScreenW) continue;
+                    if (gPpuObjBattler[y][px] == 1) { cnt++; if (x < minX) minX = x; if (x > maxX) maxX = x; }
+                }
+                if (cnt >= 3) { feetY = y; break; }
+            }
+        }
+        snprintf(name, sizeof(name), "uMon[%d]", k);
+        glUniform4f(glGetUniformLocation(sProgComp, name), rx, ry, vis ? rw : 0, rh);
+        snprintf(name, sizeof(name), "uMonFeet[%d]", k);
+        glUniform3f(glGetUniformLocation(sProgComp, name), maxX >= minX ? (minX + maxX) / 2.0f : rx + rw / 2.0f, feetY,
+                    maxX >= minX ? (maxX - minX) / 2.0f + 6 : rw * 0.35f);
+    }
+    // Move effects: bright sprite pixels that are not a Pokémon or a health
+    // box, plus the effects background layer (BG1).
+    for (y = 0; y < GBA_H; y++)
+        for (x = 0; x < GBA_W; x++)
+        {
+            int px = x + m, l;
+            for (l = 0; l < 2; l++)
+            {
+                uint32_t c = gPpuLayers.layer[l ? 1 : 4][y][px];
+                float r, g, b, mx, mn, w;
+                if (!(c >> 24)) continue;
+                if (!l)
+                {
+                    if (gPpuObjBattler[y][px] != 2) continue;      // Pokémon, not an effect
+                    if ((y < 46 && x < 120) || (y >= 70 && y < 114 && x >= 118)) continue; // health boxes
+                }
+                r = (c & 255) / 255.0f; g = ((c >> 8) & 255) / 255.0f; b = ((c >> 16) & 255) / 255.0f;
+                mx = r > g ? (r > b ? r : b) : (g > b ? g : b);
+                mn = r < g ? (r < b ? r : b) : (g < b ? g : b);
+                w = mx * mx * (mx - mn + 0.25f) * (l ? 0.15f : 1.0f);
+                sw += w; sx += w * x; sy += w * y; cr += w * r; cg += w * g; cb += w * b;
+            }
+        }
+    if (sw > 1e-3)
+    {
+        float str = (float)sqrt(sw / 120.0);
+        float mxc;
+        cr /= sw; cg /= sw; cb /= sw;
+        mxc = (float)(cr > cg ? (cr > cb ? cr : cb) : (cg > cb ? cg : cb));
+        if (str > 1) str = 1;
+        glUniform4f(glGetUniformLocation(sProgComp, "uMoveLight"), (float)(sx / sw), (float)(sy / sw), str * 0.9f, 75.0f);
+        glUniform3f(glGetUniformLocation(sProgComp, "uMoveColor"), (float)cr / mxc, (float)cg / mxc, (float)cb / mxc);
+    }
+    else
+        glUniform4f(glGetUniformLocation(sProgComp, "uMoveLight"), 0, 0, 0, 70.0f);
+}
+
 // Outdoor lighting colour for the local time: neutral by day, warm at dawn
 // and dusk, cool and dim at night, blended smoothly between.
 static void TimeOfDayTint(float *rgb)
 {
+    // (defined after use by the battle lighting)
     // Night, pre-dawn blue, pink sunrise, warm morning, neutral day,
     // golden hour, orange sunset, blue hour, night.
     static const float k[][4] = {
@@ -1270,6 +1706,7 @@ static void RenderHd(const uint32_t *frame, int outW, int outH)
             glUniform1i(glGetUniformLocation(sProgComp, "uMapType"), gPcFieldFx.mapType);
             glUniform1f(glGetUniformLocation(sProgComp, "uForest"), (float)solid / cells);
             glUniform2f(glGetUniformLocation(sProgComp, "uPlayer"), (float)gPcFieldFx.playerX, (float)gPcFieldFx.playerY);
+            SetBattleUniforms();
             glUniform1f(glGetUniformLocation(sProgComp, "uFlash"), field ? (getenv("EMERALD_FLASH") ? 1.0f : gPcFieldFx.flash / 16.0f) : 0.0f);
             if (on)
                 SunVector(sun, gPcFieldFx.weather);
@@ -1405,7 +1842,7 @@ static void DrawPresent(int hdMode, int winW, int winH)
                     (float)gPpuContentX0 / gPcScreenW, (float)gPpuContentX1 / gPcScreenW);
         {
             float m = (float)(gPcScreenW - GBA_W) / 2 / gPcScreenW;
-            int battle = gPcBattleFrame && gPcScreenW > GBA_W;
+            int battle = gPcBattleFrame && gPcScreenW > GBA_W && !(gPcBattleFx.scene >= 0 && sLighting);
             glUniform3f(glGetUniformLocation(sProgPresent, "uSoftSides"), m, 1.0f - m,
                         battle ? (float)gPpuBattleBoxTop / GBA_H : 0.0f);
         }

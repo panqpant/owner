@@ -40,6 +40,8 @@ static u8  sWinMask[PC_MAX_W];
 
 // HD pack tile references for the current line (see PpuLayers.tref).
 static u16 sRefSlot[5][PC_MAX_W];
+static u16 sObjTile[PC_MAX_W];
+unsigned char gPpuObjBattler[GBA_H][PC_MAX_W];
 static uint64_t sRefHash[5][PC_MAX_W];
 static char sCapPath[1024];
 static int sCapState;              // 1 = requested, 2 = capturing this frame
@@ -515,6 +517,7 @@ static void RenderSprites(int line)
                 sObjHidden[px] = sHideThis;
                 sObjColor[px] = Pal(c);
                 sObjPrio[px] = prio;
+                sObjTile[px] = tile;
                 sObjSemi[px] = mode == 1;
                 if (sDoRefs)
                 {
@@ -698,6 +701,22 @@ static void ExportLine(int line, const int *bgOn, const int *bgPrio, int forcedB
     {
         u32 *dst = gPpuLayers.layer[4][line];
         u32 *meta = gPpuLayers.meta[line];
+        {
+            // Battles: tag sprite pixels drawn from a Pokémon's tiles.
+            int k;
+            for (x = 0; x < sW; x++)
+            {
+                u8 v = 0;
+                if (sBattle && sObjColor[x] != TRANSPARENT)
+                {
+                    v = 2;
+                    for (k = 0; k < gPcBattleFx.count && k < 4; k++)
+                        if (gPcBattleFx.mon[k].visible && sObjTile[x] >= gPcBattleFx.mon[k].tile && sObjTile[x] < gPcBattleFx.mon[k].tile + 64)
+                            v = 1;
+                }
+                gPpuObjBattler[line][x] = v;
+            }
+        }
         for (x = 0; x < sW; x++)
         {
             if (sObjColor[x] == TRANSPARENT || sObjHidden[x])
@@ -716,7 +735,8 @@ static void ExportLine(int line, const int *bgOn, const int *bgPrio, int forcedB
                     opaque |= 1u << b;
             if (sObjColor[x] != TRANSPARENT && !sObjHidden[x])
                 opaque |= 16;
-            meta[x] = sWinMask[x] | ((u32)((sObjPrio[x] & 3) | (sObjSemi[x] ? 4 : 0)) << 8) | (opaque << 16);
+            meta[x] = sWinMask[x] | ((u32)((sObjPrio[x] & 3) | (sObjSemi[x] ? 4 : 0)) << 8) | (opaque << 16)
+                    | ((u32)(gPpuObjBattler[line][x] == 1) << 24);
         }
     }
 }

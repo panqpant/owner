@@ -23,10 +23,10 @@ index 8566762..097e815 100644
  #if MODERN
  // NOTE: Assumes 16-bit DMAs.
 diff --git a/include/global.h b/include/global.h
-index f624850..44ca0df 100644
+index f624850..578207d 100644
 --- a/include/global.h
 +++ b/include/global.h
-@@ -17,6 +17,29 @@
+@@ -17,6 +17,30 @@
  #include "constants/easy_chat.h"
  #include "constants/trainer_hill.h"
  
@@ -41,6 +41,7 @@ index f624850..44ca0df 100644
 +void PcSetOutdoors(int outdoors); // enables time-of-day lighting on the overworld
 +void PcUpdateFieldFx(void);       // lights and character shadows (pc/fieldfx.c)
 +void PcMarkBattleFrame(void);     // this frame is a battle: render it widescreen
++void PcUpdateBattleFx(void);      // battler positions for battle lighting (pc/fieldfx.c)
 +void PcSetMapPopup(int shown);    // map-name sign: drawn at the widescreen corner
 +// High-resolution text (pc/texthd.c): keep per-pixel glyph tags in step with windows.
 +struct TextPrinter;
@@ -57,10 +58,10 @@ index f624850..44ca0df 100644
  #define BLOCK_CROSS_JUMP asm("");
  
 diff --git a/src/battle_main.c b/src/battle_main.c
-index 11fc168..47db27b 100644
+index 11fc168..083e191 100644
 --- a/src/battle_main.c
 +++ b/src/battle_main.c
-@@ -1862,6 +1862,9 @@ static void CB2_HandleStartMultiBattle(void)
+@@ -1862,8 +1862,14 @@ static void CB2_HandleStartMultiBattle(void)
  
  void BattleMainCB2(void)
  {
@@ -69,7 +70,12 @@ index 11fc168..47db27b 100644
 +#endif
      AnimateSprites();
      BuildOamBuffer();
++#ifdef PLATFORM_PC
++    PcUpdateBattleFx();
++#endif
      RunTextPrinters();
+     UpdatePaletteFade();
+     RunTasks();
 diff --git a/src/bg.c b/src/bg.c
 index 2c82a42..fbc3a87 100644
 --- a/src/bg.c

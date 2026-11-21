@@ -25,6 +25,7 @@ the game's assets.
 | Day/night lighting outdoors, soft side fill for 3:2 screens, colour grade | done |
 | **Lighting engine:** sun shadows that move with the clock, character silhouette shadows (sun and night lights), ambient occlusion, cloud shadows, swaying grass and trees, fireflies, rain splashes, forest light shafts, cave mist, lit windows at night, scenery reflections on water | done |
 | **HD audio:** Lanczos resampling, smooth volume ramps, band-limited PSG with a stereo double, stereo hall reverb, mastering EQ and soft limiter | done |
+| **Battles:** new backdrops drawn live for every terrain (town with lit windows and street lamps at night, routes, sea with sun/moon glitter, desert, mountains, cave crystals, indoor, underwater), real sky by the hour with sun, moon, stars and clouds, Pokémon shadows and breathing, move effects light the scene | done |
 | Sharp scaling (pixel-edge sampling plus contrast-adaptive sharpening), highlight roll-off | done |
 | **Relit:** per-pixel surface lighting (sun, moon, indoor key light, lamp rim light), water reflections of characters and sky, wet ground with puddle reflections and light streaks, lightning with shadows | done |
 | Verified: intro, new game, overworld, a full battle turn, all 518 maps load and render | done |
@@ -99,7 +100,7 @@ EOF
 ## Roadmap
 
 - ~~Relit 3~~ done: light bounce, door light beams, golden-hour rays, sky colours by hour, cave lantern with shadows
-- **Relit 4: battle lighting** (promised): battles use the location's sun direction and time-of-day colour, shadows on platforms, move effects light the scene
+- ~~Relit 4~~ done: battle lighting, shadows, move-effect light, breathing Pokémon, new time-of-day battle backdrops
 - Phase 5: widescreen menus, settings screen, rebindable keys, 64-bit
 - Phase 1: offline HD art rebuild (pilot tooling in `tools/hdpilot`; needs a decision on AI upscaling)
 - Phase 3: battle overhaul; Phase 4: synthesised soundtrack
