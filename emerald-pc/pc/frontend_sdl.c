@@ -23,6 +23,28 @@ static SDL_GLContext sGl;
 static int sUseGl;
 static int sHdMode = 1;
 static int sAutoShotFrame = -1;
+static int sFixedAspect;
+static int sInitW, sInitH;
+static int sStartFullscreen;   // --aspect given: don't follow the window shape
+
+// Match the game's visible width to the window's shape: wider screens show
+// more of the overworld on each side (the height stays 160 GBA lines).
+static void FitWidthToWindow(void)
+{
+    int w, h, gw;
+    if (sFixedAspect || !sWindow)
+        return;
+    if (sUseGl)
+        SDL_GL_GetDrawableSize(sWindow, &w, &h);
+    else
+        SDL_GetWindowSize(sWindow, &w, &h);
+    if (h <= 0)
+        return;
+    gw = (int)((long long)w * GBA_H / h) & ~1;
+    if (gw < GBA_W) gw = GBA_W;
+    if (gw > PC_MAX_W) gw = PC_MAX_W;
+    gPcScreenW = gw;
+}
 static char sAutoShotPath[1024];
 static SDL_Renderer *sRenderer;
 static SDL_Texture *sTexture;
@@ -32,7 +54,7 @@ static int sQuit;
 static int sFastForward;
 static uint64_t sNextFrame;
 static char sBasePath[1024];
-static uint32_t sLastFrame[GBA_W * GBA_H];
+static uint32_t sLastFrame[PC_MAX_W * GBA_H];
 
 static void OpenPad(void)
 {
@@ -53,13 +75,13 @@ static void OpenPad(void)
 static void SaveScreenshot(const char *path)
 {
     SDL_Surface *s;
-    static uint32_t hd[GBA_W * 8 * GBA_H * 8];
+    static uint32_t hd[3840 * 2400]; // up to 4K-class displays
     int w, h;
 
     if (sUseGl && sHdMode && HdReadComposite(hd, &w, &h) == 0)
         s = SDL_CreateRGBSurfaceWithFormatFrom(hd, w, h, 32, w * 4, SDL_PIXELFORMAT_ABGR8888);
     else
-        s = SDL_CreateRGBSurfaceWithFormatFrom(sLastFrame, GBA_W, GBA_H, 32, GBA_W * 4,
+        s = SDL_CreateRGBSurfaceWithFormatFrom(sLastFrame, gPcScreenW, GBA_H, 32, gPcScreenW * 4,
                                                SDL_PIXELFORMAT_ARGB8888);
     if (!s)
         return;
@@ -88,16 +110,30 @@ int FrontendInit(int argc, char **argv)
     SDL_AudioSpec want, have;
     char *base;
     char savePath[1100];
-    int i, scale = 4;
+    int i, scale = 4, scaleGiven = 0;
 
     for (i = 1; i < argc; i++)
     {
         if (!strcmp(argv[i], "--scale") && i + 1 < argc)
+        {
             scale = atoi(argv[++i]);
+            scaleGiven = 1;
+        }
         else if (!strcmp(argv[i], "--original"))
             sHdMode = 0;
+        else if (!strcmp(argv[i], "--aspect") && i + 1 < argc)
+        {
+            // e.g. 16:9, 21:9, 3:2 (original). Height stays 160 lines.
+            int aw = 16, ah = 9, w;
+            sscanf(argv[++i], "%d:%d", &aw, &ah);
+            sFixedAspect = 1;
+            w = ah > 0 ? (GBA_H * aw / ah + 1) & ~1 : GBA_W;
+            gPcScreenW = w < GBA_W ? GBA_W : w > PC_MAX_W ? PC_MAX_W : w;
+        }
         else if (!strcmp(argv[i], "--script") && i + 1 < argc)
             ScriptLoad(argv[++i]);
+        else if (!strcmp(argv[i], "--fullscreen"))
+            sStartFullscreen = 1;
         else if (!strcmp(argv[i], "--autoshot") && i + 2 < argc)
         {
             sAutoShotFrame = atoi(argv[++i]);
@@ -127,13 +163,27 @@ int FrontendInit(int argc, char **argv)
     FlashPcSetPath(savePath);
 
     SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "0");
+    // Default window: 16:9-ish and as large as comfortably fits the desktop.
+    {
+        SDL_DisplayMode dm;
+        int winW = 0, winH = 0;
+        if (SDL_GetDesktopDisplayMode(0, &dm) == 0 && !scaleGiven)
+        {
+            winH = dm.h * 3 / 4;
+            winW = sFixedAspect ? winH * gPcScreenW / GBA_H : winH * 16 / 9;
+            if (winW > dm.w * 9 / 10) { winW = dm.w * 9 / 10; winH = winW * 9 / 16; }
+        }
+        if (winW <= 0) { winW = gPcScreenW * scale; winH = GBA_H * scale; }
+        sInitW = winW;
+        sInitH = winH;
+    }
     // Prefer OpenGL 3.3 for the HD renderer; fall back to SDL's renderer.
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
     SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
     sWindow = SDL_CreateWindow("Pokémon Emerald", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
-                               GBA_W * scale, GBA_H * scale,
+                               sInitW, sInitH,
                                SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI | SDL_WINDOW_OPENGL);
     if (sWindow)
     {
@@ -155,7 +205,7 @@ int FrontendInit(int argc, char **argv)
     }
     if (!sWindow)
         sWindow = SDL_CreateWindow("Pokémon Emerald", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
-                                   GBA_W * scale, GBA_H * scale, SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI);
+                                   sInitW, sInitH, SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI);
     if (!sWindow)
     {
         fprintf(stderr, "SDL_CreateWindow failed: %s\n", SDL_GetError());
@@ -163,11 +213,12 @@ int FrontendInit(int argc, char **argv)
     }
     if (!sUseGl)
     {
+        sFixedAspect = 1; // the basic renderer keeps one texture size
         sRenderer = SDL_CreateRenderer(sWindow, -1, SDL_RENDERER_ACCELERATED);
         if (!sRenderer)
             sRenderer = SDL_CreateRenderer(sWindow, -1, SDL_RENDERER_SOFTWARE);
-        SDL_RenderSetLogicalSize(sRenderer, GBA_W, GBA_H);
-        sTexture = SDL_CreateTexture(sRenderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, GBA_W, GBA_H);
+        SDL_RenderSetLogicalSize(sRenderer, gPcScreenW, GBA_H);
+        sTexture = SDL_CreateTexture(sRenderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, gPcScreenW, GBA_H);
     }
 
     SDL_zero(want);
@@ -179,6 +230,9 @@ int FrontendInit(int argc, char **argv)
     if (sAudio)
         SDL_PauseAudioDevice(sAudio, 0);
 
+    if (sStartFullscreen)
+        SDL_SetWindowFullscreen(sWindow, SDL_WINDOW_FULLSCREEN_DESKTOP);
+    FitWidthToWindow();
     OpenPad();
     sNextFrame = SDL_GetPerformanceCounter();
     return 0;
@@ -215,6 +269,10 @@ static void PumpEvents(void)
             else if (e.key.keysym.sym == SDLK_ESCAPE)
                 sQuit = 1;
             break;
+        case SDL_WINDOWEVENT:
+            if (e.window.event == SDL_WINDOWEVENT_SIZE_CHANGED)
+                FitWidthToWindow();
+            break;
         case SDL_CONTROLLERDEVICEADDED:
             OpenPad();
             break;
@@ -235,7 +293,7 @@ void FrontendPresent(const uint32_t *fb)
     uint64_t freq = SDL_GetPerformanceFrequency();
     uint64_t now;
 
-    memcpy(sLastFrame, fb, sizeof(sLastFrame));
+    memcpy(sLastFrame, fb, (size_t)gPcScreenW * GBA_H * 4);
     PumpEvents();
 
     // Fast-forward renders every 4th frame and skips pacing.
@@ -250,7 +308,7 @@ void FrontendPresent(const uint32_t *fb)
         }
         else
         {
-            SDL_UpdateTexture(sTexture, NULL, fb, GBA_W * 4);
+            SDL_UpdateTexture(sTexture, NULL, fb, gPcScreenW * 4);
             SDL_SetRenderDrawColor(sRenderer, 0, 0, 0, 255);
             SDL_RenderClear(sRenderer);
             SDL_RenderCopy(sRenderer, sTexture, NULL, NULL);

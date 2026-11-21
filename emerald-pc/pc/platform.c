@@ -185,7 +185,7 @@ void PortDmaRunTiming(int timing)
 // Frame loop. The game spends its frame in logic, then calls VBlankIntrWait;
 // we then run the scanlines up to the next VBlank, rendering as we go.
 
-static uint32_t sFrameBuffer[GBA_H * GBA_W];
+static uint32_t sFrameBuffer[GBA_H * PC_MAX_W];
 static int sLine = 161;
 static uint32_t sFrameCount;
 
@@ -212,7 +212,7 @@ static void StepLine(int line)
 
     if (line < 160)
     {
-        PpuRenderLine(line, &sFrameBuffer[line * GBA_W]);
+        PpuRenderLine(line, &sFrameBuffer[line * gPcScreenW]);
     }
     else if (line == 160)
     {
@@ -256,6 +256,24 @@ void PortRunFrame(void)
     // Game logic resumes at the start of VBlank, as on hardware.
     sLine = 161;
     IO16(REG_VCOUNT_OFF) = 161;
+}
+
+// ---------------------------------------------------------------------------
+// Widescreen hooks called from game code (PLATFORM_PC).
+
+void PcSetFieldMaps(uint16_t *bg1, uint16_t *bg2, uint16_t *bg3, int base1, int base2, int base3)
+{
+    gPcFieldMap[1] = bg1; gPcFieldMapBase[1] = base1;
+    gPcFieldMap[2] = bg2; gPcFieldMapBase[2] = base2;
+    gPcFieldMap[3] = bg3; gPcFieldMapBase[3] = base3;
+}
+
+// Extra pixels visible on each side of the GBA screen on the overworld.
+int PcFieldMargin(void)
+{
+    if (gPcScreenW <= GBA_W || !PcFieldWideActive())
+        return 0;
+    return (gPcScreenW - GBA_W) / 2;
 }
 
 // ---------------------------------------------------------------------------

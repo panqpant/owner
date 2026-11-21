@@ -22,6 +22,27 @@ index 8566762..097e815 100644
  
  #if MODERN
  // NOTE: Assumes 16-bit DMAs.
+diff --git a/include/global.h b/include/global.h
+index f624850..808d2fc 100644
+--- a/include/global.h
++++ b/include/global.h
+@@ -17,6 +17,16 @@
+ #include "constants/easy_chat.h"
+ #include "constants/trainer_hill.h"
+ 
++#ifdef PLATFORM_PC
++// Widescreen support (pc/platform.c). The overworld's map tilemaps are 64
++// tiles wide on PC so the extra columns either side of the GBA screen can
++// be drawn; PC_FIELD_MARGIN_MT is how many metatiles are kept on each side.
++#define PC_FIELD_MAP_W 64
++#define PC_FIELD_MARGIN_MT 8
++int PcFieldMargin(void);
++void PcSetFieldMaps(u16 *bg1, u16 *bg2, u16 *bg3, int base1, int base2, int base3);
++#endif
++
+ // Prevent cross-jump optimization.
+ #define BLOCK_CROSS_JUMP asm("");
+ 
 diff --git a/src/bg.c b/src/bg.c
 index 2c82a42..fbc3a87 100644
 --- a/src/bg.c
@@ -59,6 +80,246 @@ index d774efe..4afb132 100644
      if (index == -1)  // check if all requests are free
      {
          while (i < MAX_DMA_REQUESTS)
+diff --git a/src/event_object_movement.c b/src/event_object_movement.c
+index 02e1fce..ea94a2b 100644
+--- a/src/event_object_movement.c
++++ b/src/event_object_movement.c
+@@ -1651,6 +1651,10 @@ void TrySpawnObjectEvents(s16 cameraX, s16 cameraY)
+     {
+         s16 left = gSaveBlock1Ptr->pos.x - 2;
+         s16 right = gSaveBlock1Ptr->pos.x + MAP_OFFSET_W + 2;
++#ifdef PLATFORM_PC
++        left -= (PcFieldMargin() + 15) / 16;
++        right += (PcFieldMargin() + 15) / 16;
++#endif
+         s16 top = gSaveBlock1Ptr->pos.y;
+         s16 bottom = gSaveBlock1Ptr->pos.y + MAP_OFFSET_H + 2;
+ 
+@@ -1700,6 +1704,10 @@ static void RemoveObjectEventIfOutsideView(struct ObjectEvent *objectEvent)
+ {
+     s16 left =   gSaveBlock1Ptr->pos.x - 2;
+     s16 right =  gSaveBlock1Ptr->pos.x + 17;
++#ifdef PLATFORM_PC
++    left -= (PcFieldMargin() + 15) / 16;
++    right += (PcFieldMargin() + 15) / 16;
++#endif
+     s16 top =    gSaveBlock1Ptr->pos.y;
+     s16 bottom = gSaveBlock1Ptr->pos.y + 16;
+ 
+@@ -7343,7 +7351,11 @@ static void UpdateObjectEventOffscreen(struct ObjectEvent *objectEvent, struct S
+     x2 = (u16)x + (u16)graphicsInfo->width;
+     y2 = (u16)y + (u16)graphicsInfo->height;
+ 
++#ifdef PLATFORM_PC
++    if (x >= DISPLAY_WIDTH + 16 + PcFieldMargin() || x2 < -16 - PcFieldMargin())
++#else
+     if (x >= DISPLAY_WIDTH + 16 || x2 < -16)
++#endif
+         objectEvent->offScreen = TRUE;
+ 
+     if (y >= DISPLAY_HEIGHT + 16 || y2 < -16)
+@@ -8547,7 +8559,11 @@ void UpdateObjectEventSpriteInvisibility(struct Sprite *sprite, bool8 invisible)
+     x2 = (u16)x - (u16)(sprite->centerToCornerVecX >> 1);
+     y2 = (u16)y - (u16)(sprite->centerToCornerVecY >> 1);
+ 
++#ifdef PLATFORM_PC
++    if (x >= DISPLAY_WIDTH + 16 + PcFieldMargin() || x2 < -16 - PcFieldMargin())
++#else
+     if (x >= DISPLAY_WIDTH + 16 || x2 < -16)
++#endif
+         sprite->invisible = TRUE;
+     if (y >= DISPLAY_HEIGHT + 16 || y2 < -16)
+         sprite->invisible = TRUE;
+diff --git a/src/field_camera.c b/src/field_camera.c
+index e76ba3d..e50dac0 100644
+--- a/src/field_camera.c
++++ b/src/field_camera.c
+@@ -16,7 +16,11 @@ EWRAM_DATA bool8 gUnusedBikeCameraAheadPanback = FALSE;
+ 
+ struct FieldCameraOffset
+ {
++#ifdef PLATFORM_PC
++    u16 xPixelOffset; // wraps at 512 to match the 64-tile-wide map buffer
++#else
+     u8 xPixelOffset;
++#endif
+     u8 yPixelOffset;
+     u8 xTileOffset;
+     u8 yTileOffset;
+@@ -55,7 +59,11 @@ static void ResetCameraOffset(struct FieldCameraOffset *cameraOffset)
+ static void AddCameraTileOffset(struct FieldCameraOffset *cameraOffset, u32 xOffset, u32 yOffset)
+ {
+     cameraOffset->xTileOffset += xOffset;
++#ifdef PLATFORM_PC
++    cameraOffset->xTileOffset %= PC_FIELD_MAP_W;
++#else
+     cameraOffset->xTileOffset %= 32;
++#endif
+     cameraOffset->yTileOffset += yOffset;
+     cameraOffset->yTileOffset %= 32;
+ }
+@@ -63,6 +71,9 @@ static void AddCameraTileOffset(struct FieldCameraOffset *cameraOffset, u32 xOff
+ static void AddCameraPixelOffset(struct FieldCameraOffset *cameraOffset, u32 xOffset, u32 yOffset)
+ {
+     cameraOffset->xPixelOffset += xOffset;
++#ifdef PLATFORM_PC
++    cameraOffset->xPixelOffset &= 0x1FF;
++#endif
+     cameraOffset->yPixelOffset += yOffset;
+ }
+ 
+@@ -97,6 +108,23 @@ void DrawWholeMapView(void)
+     sFieldCameraOffset.copyBGToVRAM = TRUE;
+ }
+ 
++#ifdef PLATFORM_PC
++// The buffer holds metatiles pos.x - PC_FIELD_MARGIN_MT ... pos.x + 31 - PC_FIELD_MARGIN_MT;
++// the column of pos.x is xTileOffset, so the GBA's scroll registers still line up.
++static void DrawWholeMapViewInternal(int x, int y, const struct MapLayout *mapLayout)
++{
++    int i, j;
++    for (i = 0; i < 16; i++)
++    {
++        u32 row = ((sFieldCameraOffset.yTileOffset + i * 2) % 32) * PC_FIELD_MAP_W;
++        for (j = -PC_FIELD_MARGIN_MT; j < 32 - PC_FIELD_MARGIN_MT; j++)
++        {
++            u32 col = (sFieldCameraOffset.xTileOffset + j * 2 + PC_FIELD_MAP_W * 2) % PC_FIELD_MAP_W;
++            DrawMetatileAt(mapLayout, row + col, x + j, y + i);
++        }
++    }
++}
++#else
+ static void DrawWholeMapViewInternal(int x, int y, const struct MapLayout *mapLayout)
+ {
+     u8 i;
+@@ -119,11 +147,19 @@ static void DrawWholeMapViewInternal(int x, int y, const struct MapLayout *mapLa
+         }
+     }
+ }
++#endif
+ 
+ static void RedrawMapSlicesForCameraUpdate(struct FieldCameraOffset *cameraOffset, int x, int y)
+ {
+     const struct MapLayout *mapLayout = gMapHeader.mapLayout;
+ 
++#ifdef PLATFORM_PC
++    // The wide buffer is cheap to redraw whole, and it keeps every column
++    // (including the widescreen margins) correct after the camera moves.
++    DrawWholeMapViewInternal(gSaveBlock1Ptr->pos.x, gSaveBlock1Ptr->pos.y, mapLayout);
++    cameraOffset->copyBGToVRAM = TRUE;
++    return;
++#endif
+     if (x > 0)
+         RedrawMapSliceWest(cameraOffset, mapLayout);
+     if (x < 0)
+@@ -242,6 +278,12 @@ static void DrawMetatileAt(const struct MapLayout *mapLayout, u16 offset, int x,
+     DrawMetatile(MapGridGetMetatileLayerTypeAt(x, y), metatiles + metatileId * NUM_TILES_PER_METATILE, offset);
+ }
+ 
++#ifdef PLATFORM_PC
++#define FIELD_ROW PC_FIELD_MAP_W
++#else
++#define FIELD_ROW 0x20
++#endif
++
+ static void DrawMetatile(s32 metatileLayerType, const u16 *tiles, u16 offset)
+ {
+     switch (metatileLayerType)
+@@ -250,58 +292,58 @@ static void DrawMetatile(s32 metatileLayerType, const u16 *tiles, u16 offset)
+         // Draw metatile's bottom layer to the bottom background layer.
+         gOverworldTilemapBuffer_Bg3[offset] = tiles[0];
+         gOverworldTilemapBuffer_Bg3[offset + 1] = tiles[1];
+-        gOverworldTilemapBuffer_Bg3[offset + 0x20] = tiles[2];
+-        gOverworldTilemapBuffer_Bg3[offset + 0x21] = tiles[3];
++        gOverworldTilemapBuffer_Bg3[offset + FIELD_ROW] = tiles[2];
++        gOverworldTilemapBuffer_Bg3[offset + FIELD_ROW + 1] = tiles[3];
+ 
+         // Draw transparent tiles to the middle background layer.
+         gOverworldTilemapBuffer_Bg2[offset] = 0;
+         gOverworldTilemapBuffer_Bg2[offset + 1] = 0;
+-        gOverworldTilemapBuffer_Bg2[offset + 0x20] = 0;
+-        gOverworldTilemapBuffer_Bg2[offset + 0x21] = 0;
++        gOverworldTilemapBuffer_Bg2[offset + FIELD_ROW] = 0;
++        gOverworldTilemapBuffer_Bg2[offset + FIELD_ROW + 1] = 0;
+ 
+         // Draw metatile's top layer to the top background layer.
+         gOverworldTilemapBuffer_Bg1[offset] = tiles[4];
+         gOverworldTilemapBuffer_Bg1[offset + 1] = tiles[5];
+-        gOverworldTilemapBuffer_Bg1[offset + 0x20] = tiles[6];
+-        gOverworldTilemapBuffer_Bg1[offset + 0x21] = tiles[7];
++        gOverworldTilemapBuffer_Bg1[offset + FIELD_ROW] = tiles[6];
++        gOverworldTilemapBuffer_Bg1[offset + FIELD_ROW + 1] = tiles[7];
+         break;
+     case METATILE_LAYER_TYPE_COVERED:
+         // Draw metatile's bottom layer to the bottom background layer.
+         gOverworldTilemapBuffer_Bg3[offset] = tiles[0];
+         gOverworldTilemapBuffer_Bg3[offset + 1] = tiles[1];
+-        gOverworldTilemapBuffer_Bg3[offset + 0x20] = tiles[2];
+-        gOverworldTilemapBuffer_Bg3[offset + 0x21] = tiles[3];
++        gOverworldTilemapBuffer_Bg3[offset + FIELD_ROW] = tiles[2];
++        gOverworldTilemapBuffer_Bg3[offset + FIELD_ROW + 1] = tiles[3];
+ 
+         // Draw metatile's top layer to the middle background layer.
+         gOverworldTilemapBuffer_Bg2[offset] = tiles[4];
+         gOverworldTilemapBuffer_Bg2[offset + 1] = tiles[5];
+-        gOverworldTilemapBuffer_Bg2[offset + 0x20] = tiles[6];
+-        gOverworldTilemapBuffer_Bg2[offset + 0x21] = tiles[7];
++        gOverworldTilemapBuffer_Bg2[offset + FIELD_ROW] = tiles[6];
++        gOverworldTilemapBuffer_Bg2[offset + FIELD_ROW + 1] = tiles[7];
+ 
+         // Draw transparent tiles to the top background layer.
+         gOverworldTilemapBuffer_Bg1[offset] = 0;
+         gOverworldTilemapBuffer_Bg1[offset + 1] = 0;
+-        gOverworldTilemapBuffer_Bg1[offset + 0x20] = 0;
+-        gOverworldTilemapBuffer_Bg1[offset + 0x21] = 0;
++        gOverworldTilemapBuffer_Bg1[offset + FIELD_ROW] = 0;
++        gOverworldTilemapBuffer_Bg1[offset + FIELD_ROW + 1] = 0;
+         break;
+     case METATILE_LAYER_TYPE_NORMAL:
+         // Draw garbage to the bottom background layer.
+         gOverworldTilemapBuffer_Bg3[offset] = 0x3014;
+         gOverworldTilemapBuffer_Bg3[offset + 1] = 0x3014;
+-        gOverworldTilemapBuffer_Bg3[offset + 0x20] = 0x3014;
+-        gOverworldTilemapBuffer_Bg3[offset + 0x21] = 0x3014;
++        gOverworldTilemapBuffer_Bg3[offset + FIELD_ROW] = 0x3014;
++        gOverworldTilemapBuffer_Bg3[offset + FIELD_ROW + 1] = 0x3014;
+ 
+         // Draw metatile's bottom layer to the middle background layer.
+         gOverworldTilemapBuffer_Bg2[offset] = tiles[0];
+         gOverworldTilemapBuffer_Bg2[offset + 1] = tiles[1];
+-        gOverworldTilemapBuffer_Bg2[offset + 0x20] = tiles[2];
+-        gOverworldTilemapBuffer_Bg2[offset + 0x21] = tiles[3];
++        gOverworldTilemapBuffer_Bg2[offset + FIELD_ROW] = tiles[2];
++        gOverworldTilemapBuffer_Bg2[offset + FIELD_ROW + 1] = tiles[3];
+ 
+         // Draw metatile's top layer to the top background layer, which covers object event sprites.
+         gOverworldTilemapBuffer_Bg1[offset] = tiles[4];
+         gOverworldTilemapBuffer_Bg1[offset + 1] = tiles[5];
+-        gOverworldTilemapBuffer_Bg1[offset + 0x20] = tiles[6];
+-        gOverworldTilemapBuffer_Bg1[offset + 0x21] = tiles[7];
++        gOverworldTilemapBuffer_Bg1[offset + FIELD_ROW] = tiles[6];
++        gOverworldTilemapBuffer_Bg1[offset + FIELD_ROW + 1] = tiles[7];
+         break;
+     }
+     ScheduleBgCopyTilemapToVram(1);
+@@ -311,6 +353,17 @@ static void DrawMetatile(s32 metatileLayerType, const u16 *tiles, u16 offset)
+ 
+ static s32 MapPosToBgTilemapOffset(struct FieldCameraOffset *cameraOffset, s32 x, s32 y)
+ {
++#ifdef PLATFORM_PC
++    x -= gSaveBlock1Ptr->pos.x;
++    if (x < -PC_FIELD_MARGIN_MT || x >= 32 - PC_FIELD_MARGIN_MT)
++        return -1;
++    x = (cameraOffset->xTileOffset + x * 2 + PC_FIELD_MAP_W * 2) % PC_FIELD_MAP_W;
++    y = (y - gSaveBlock1Ptr->pos.y) * 2;
++    if (y >= 32 || y < 0)
++        return -1;
++    y = (y + cameraOffset->yTileOffset) % 32;
++    return y * PC_FIELD_MAP_W + x;
++#endif
+     x -= gSaveBlock1Ptr->pos.x;
+     x *= 2;
+     if (x >= 32 || x < 0)
 diff --git a/src/librfu_intr.c b/src/librfu_intr.c
 index 5ae53ab..36b7e5d 100644
 --- a/src/librfu_intr.c
@@ -199,3 +460,37 @@ index ca3be25..0cd0de9 100644
      AnimateSprites();
      BuildOamBuffer();
      UpdatePaletteFade();
+diff --git a/src/overworld.c b/src/overworld.c
+index 1d6b81c..c352560 100644
+--- a/src/overworld.c
++++ b/src/overworld.c
+@@ -1404,9 +1404,19 @@ static void InitOverworldBgs(void)
+     SetBgAttribute(1, BG_ATTR_MOSAIC, 1);
+     SetBgAttribute(2, BG_ATTR_MOSAIC, 1);
+     SetBgAttribute(3, BG_ATTR_MOSAIC, 1);
++#ifdef PLATFORM_PC
++    // 64x32-tile maps; the PC renderer reads them directly (see field_camera.c).
++    gOverworldTilemapBuffer_Bg1 = AllocZeroed(BG_SCREEN_SIZE * 2);
++    gOverworldTilemapBuffer_Bg2 = AllocZeroed(BG_SCREEN_SIZE * 2);
++    gOverworldTilemapBuffer_Bg3 = AllocZeroed(BG_SCREEN_SIZE * 2);
++    PcSetFieldMaps(gOverworldTilemapBuffer_Bg1, gOverworldTilemapBuffer_Bg2, gOverworldTilemapBuffer_Bg3,
++                   sOverworldBgTemplates[1].mapBaseIndex, sOverworldBgTemplates[2].mapBaseIndex,
++                   sOverworldBgTemplates[3].mapBaseIndex);
++#else
+     gOverworldTilemapBuffer_Bg1 = AllocZeroed(BG_SCREEN_SIZE);
+     gOverworldTilemapBuffer_Bg2 = AllocZeroed(BG_SCREEN_SIZE);
+     gOverworldTilemapBuffer_Bg3 = AllocZeroed(BG_SCREEN_SIZE);
++#endif
+     SetBgTilemapBuffer(1, gOverworldTilemapBuffer_Bg1);
+     SetBgTilemapBuffer(2, gOverworldTilemapBuffer_Bg2);
+     SetBgTilemapBuffer(3, gOverworldTilemapBuffer_Bg3);
+@@ -1417,6 +1427,9 @@ void CleanupOverworldWindowsAndTilemaps(void)
+ {
+     ClearMirageTowerPulseBlendEffect();
+     FreeAllOverworldWindowBuffers();
++#ifdef PLATFORM_PC
++    PcSetFieldMaps(NULL, NULL, NULL, 0, 0, 0);
++#endif
+     TRY_FREE_AND_SET_NULL(gOverworldTilemapBuffer_Bg3);
+     TRY_FREE_AND_SET_NULL(gOverworldTilemapBuffer_Bg2);
+     TRY_FREE_AND_SET_NULL(gOverworldTilemapBuffer_Bg1);

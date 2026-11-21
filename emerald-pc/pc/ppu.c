@@ -1,6 +1,12 @@
 // Scanline renderer for the GBA picture processor. Reads the game's VRAM,
 // palette RAM, OAM and display registers exactly as the hardware would, so
 // mid-frame (HBlank) effects work unchanged.
+//
+// Widescreen: the output can be wider than 240 px. The GBA's 240-pixel
+// screen sits in the centre (GBA x = output x - margin). On the overworld,
+// the map layers are read from a 64-tile-wide buffer (gPcFieldMap) so the
+// margins show real map, and sprites extend into them; the UI layer and
+// everything else stays inside the centre. Other screens are pillarboxed.
 #include <string.h>
 #include "port.h"
 
@@ -13,19 +19,31 @@ enum { L_BG0, L_BG1, L_BG2, L_BG3, L_OBJ, L_BD };
 
 #define TRANSPARENT 0x8000
 
-// Per-line layer buffers: 15-bit colour, or TRANSPARENT.
-static u16 sBg[4][GBA_W];
-static u16 sObjColor[GBA_W];
-static u8  sObjPrio[GBA_W];
-static u8  sObjSemi[GBA_W];
-static u8  sObjWin[GBA_W];
-static u8  sWinMask[GBA_W];
+int gPcScreenW = GBA_W;
+uint16_t *gPcFieldMap[4];
+uint8_t gPcFieldMapBase[4];
+
+// Per-line layer buffers: 15-bit colour, or TRANSPARENT. Index = output x.
+static u16 sBg[4][PC_MAX_W];
+static u16 sObjColor[PC_MAX_W];
+static u8  sObjPrio[PC_MAX_W];
+static u8  sObjSemi[PC_MAX_W];
+static u8  sObjWin[PC_MAX_W];
+static u8  sWinMask[PC_MAX_W];
+
+// Per-line geometry.
+static int sW, sMargin, sWide;
 
 // Affine BG internal reference points (BG2, BG3).
 static s32 sRefX[2], sRefY[2];
 static u32 sLastRegX[2], sLastRegY[2];
 
 static s32 Sext28(u32 v) { return (s32)(v << 4) >> 4; }
+
+int PcFieldWideActive(void)
+{
+    return gPcFieldMap[1] || gPcFieldMap[2] || gPcFieldMap[3];
+}
 
 void PpuBeginFrame(void)
 {
@@ -67,6 +85,13 @@ void PpuEndHBlank(int line)
 
 static inline u16 Pal(int idx) { return PC_PAL16[idx] & 0x7FFF; }
 
+static void ClearRow(u16 *row)
+{
+    int x;
+    for (x = 0; x < sW; x++)
+        row[x] = TRANSPARENT;
+}
+
 static void RenderTextBg(int bg, int line)
 {
     u16 cnt = R16(0x08 + bg * 2);
@@ -79,6 +104,18 @@ static void RenderTextBg(int bg, int line)
     int w = (size & 1) ? 512 : 256, h = (size & 2) ? 512 : 256;
     int mosH = 1, mosV = 1, x, y;
     u16 *out = sBg[bg];
+    const u16 *fieldMap = NULL;
+    int x0 = sMargin, x1 = sMargin + GBA_W;
+
+    // Overworld map layers: read the wide map buffer and fill the margins.
+    if (sWide && gPcFieldMap[bg] && ((cnt >> 8) & 0x1F) == gPcFieldMapBase[bg])
+    {
+        fieldMap = gPcFieldMap[bg];
+        w = 512;
+        h = 256;
+        x0 = 0;
+        x1 = sW;
+    }
 
     if (cnt & 0x40)
     {
@@ -89,17 +126,33 @@ static void RenderTextBg(int bg, int line)
 
     y = ((line - line % mosV) + vofs) & (h - 1);
 
-    for (x = 0; x < GBA_W; x++)
+    for (x = 0; x < sW; x++)
     {
-        int sx = x - x % mosH;
-        int tx = (sx + hofs) & (w - 1);
-        int block = (tx >> 8) + (y >> 8) * (w >> 8);
-        u32 mapAddr = screenBase + block * 0x800 + ((y & 255) >> 3) * 64 + ((tx & 255) >> 3) * 2;
-        u16 entry = *(volatile u16 *)(PC_VRAM + (mapAddr & 0xFFFF));
-        int tile = entry & 0x3FF;
-        int px = tx & 7, py = y & 7;
+        int gx, sx, tx, tile, px, py, c;
+        u16 entry;
         u32 addr;
-        int c;
+
+        if (x < x0 || x >= x1)
+        {
+            out[x] = TRANSPARENT;
+            continue;
+        }
+        gx = x - sMargin;
+        sx = gx - ((gx % mosH) + mosH) % mosH;
+        tx = (sx + hofs) & (w - 1);
+        if (fieldMap)
+        {
+            entry = fieldMap[(y >> 3) * 64 + (tx >> 3)];
+        }
+        else
+        {
+            int block = (tx >> 8) + (y >> 8) * (w >> 8);
+            u32 mapAddr = screenBase + block * 0x800 + ((y & 255) >> 3) * 64 + ((tx & 255) >> 3) * 2;
+            entry = *(volatile u16 *)(PC_VRAM + (mapAddr & 0xFFFF));
+        }
+        tile = entry & 0x3FF;
+        px = tx & 7;
+        py = y & 7;
 
         if (entry & 0x400) px = 7 - px;
         if (entry & 0x800) py = 7 - py;
@@ -135,7 +188,8 @@ static void RenderAffineBg(int bg)
     u16 *out = sBg[bg];
     int x;
 
-    for (x = 0; x < GBA_W; x++, rx += pa, ry += pc)
+    ClearRow(out);
+    for (x = sMargin; x < sMargin + GBA_W; x++, rx += pa, ry += pc)
     {
         int tx = rx >> 8, ty = ry >> 8, tile, c;
         if (wrap)
@@ -145,7 +199,6 @@ static void RenderAffineBg(int bg)
         }
         else if (tx < 0 || ty < 0 || tx >= size || ty >= size)
         {
-            out[x] = TRANSPARENT;
             continue;
         }
         tile = PC_VRAM8[(screenBase + (ty >> 3) * (size >> 3) + (tx >> 3)) & 0xFFFF];
@@ -158,18 +211,21 @@ static void RenderBitmapBg(int mode, int line)
 {
     u16 *out = sBg[2];
     int frame = (R16(0x00) >> 4) & 1;
-    int x;
-    for (x = 0; x < GBA_W; x++)
+    int gx;
+    ClearRow(out);
+    for (gx = 0; gx < GBA_W; gx++)
     {
+        u16 c;
         if (mode == 3)
-            out[x] = PC_VRAM16[line * 240 + x] & 0x7FFF;
+            c = PC_VRAM16[line * 240 + gx] & 0x7FFF;
         else if (mode == 4)
         {
-            int c = PC_VRAM8[frame * 0xA000 + line * 240 + x];
-            out[x] = c ? Pal(c) : TRANSPARENT;
+            int i = PC_VRAM8[frame * 0xA000 + line * 240 + gx];
+            c = i ? Pal(i) : TRANSPARENT;
         }
         else
-            out[x] = (x < 160 && line < 128) ? (PC_VRAM16[(frame * 0xA000) / 2 + line * 160 + x] & 0x7FFF) : TRANSPARENT;
+            c = (gx < 160 && line < 128) ? (PC_VRAM16[(frame * 0xA000) / 2 + line * 160 + gx] & 0x7FFF) : TRANSPARENT;
+        out[gx + sMargin] = c;
     }
 }
 
@@ -184,13 +240,16 @@ static void RenderSprites(int line)
     u16 dispcnt = R16(0x00);
     int oneD = (dispcnt >> 6) & 1;
     int bitmapMode = (dispcnt & 7) >= 3;
+    // Sprites may extend into the margins only on the wide overworld.
+    int xmin = sWide ? 0 : sMargin, xmax = sWide ? sW : sMargin + GBA_W;
+    // A 9-bit X decodes as negative past the right edge of the visible area.
+    int xWrap = GBA_W + (sWide ? sMargin : 0);
     int i;
 
-    memset(sObjPrio, 4, sizeof(sObjPrio));
-    memset(sObjSemi, 0, sizeof(sObjSemi));
-    memset(sObjWin, 0, sizeof(sObjWin));
-    for (i = 0; i < GBA_W; i++)
-        sObjColor[i] = TRANSPARENT;
+    memset(sObjPrio, 4, sW);
+    memset(sObjSemi, 0, sW);
+    memset(sObjWin, 0, sW);
+    ClearRow(sObjColor);
 
     if (!(dispcnt & 0x1000))
         return;
@@ -202,7 +261,7 @@ static void RenderSprites(int line)
         int shape = (a0 >> 14) & 3, size = (a1 >> 14) & 3;
         int mode = (a0 >> 10) & 3;
         int is8 = (a0 >> 13) & 1;
-        int w, h, bw, bh, y, x, sy, cx, cy, row;
+        int w, h, bw, bh, y, x, sy, cx, row;
         int tile = a2 & 0x3FF, prio = (a2 >> 10) & 3, palBank = a2 >> 12;
         s32 pa = 0x100, pb = 0, pc = 0, pd = 0x100;
 
@@ -223,7 +282,7 @@ static void RenderSprites(int line)
             continue;
 
         x = a1 & 0x1FF;
-        if (x >= 240) x -= 512;
+        if (x >= xWrap) x -= 512;
 
         if (bitmapMode && tile < 512)
             continue;
@@ -241,9 +300,9 @@ static void RenderSprites(int line)
 
         for (cx = 0; cx < bw; cx++)
         {
-            int px = x + cx, tx, ty, c;
+            int px = x + cx + sMargin, tx, ty, c;
             u32 addr;
-            if (px < 0 || px >= GBA_W)
+            if (px < xmin || px >= xmax)
                 continue;
 
             if (affine)
@@ -309,7 +368,7 @@ static void BuildWindowMask(int line)
 
     if (!win0 && !win1 && !winObj)
     {
-        memset(sWinMask, 0x3F, sizeof(sWinMask));
+        memset(sWinMask, 0x3F, sW);
         return;
     }
     if (x0b > 240) x0b = 240;
@@ -317,11 +376,16 @@ static void BuildWindowMask(int line)
     if (win0) in0 = InRange(line, R16(0x44) >> 8, R16(0x44) & 0xFF);
     if (win1) in1 = InRange(line, R16(0x46) >> 8, R16(0x46) & 0xFF);
 
-    for (x = 0; x < GBA_W; x++)
+    for (x = 0; x < sW; x++)
     {
-        if (in0 && InRange(x, x0a, x0b))
+        // Widescreen margins take the window state of the nearest edge
+        // column, so full-width windows extend to the edges of the output.
+        int gx = x - sMargin;
+        if (gx < 0) gx = 0;
+        if (gx >= GBA_W) gx = GBA_W - 1;
+        if (in0 && InRange(gx, x0a, x0b))
             sWinMask[x] = winin & 0x3F;
-        else if (in1 && InRange(x, x1a, x1b))
+        else if (in1 && InRange(gx, x1a, x1b))
             sWinMask[x] = (winin >> 8) & 0x3F;
         else if (winObj && sObjWin[x])
             sWinMask[x] = (winout >> 8) & 0x3F;
@@ -361,6 +425,7 @@ static u16 Darken(u16 c, int evy)
 
 struct PpuLayers gPpuLayers;
 int gPpuExportLayers;
+int gPpuContentX0, gPpuContentX1; // visible content range for the HD compositor
 
 static inline u32 ToRgba(u16 c)
 {
@@ -402,16 +467,16 @@ static void ExportLine(int line, const int *bgOn, const int *bgPrio, int forcedB
         u32 *dst = gPpuLayers.layer[i][line];
         if (!bgOn[i])
         {
-            memset(dst, 0, GBA_W * 4);
+            memset(dst, 0, sW * 4);
             continue;
         }
-        for (x = 0; x < GBA_W; x++)
+        for (x = 0; x < sW; x++)
             dst[x] = sBg[i][x] == TRANSPARENT ? 0 : ToRgba(sBg[i][x]);
     }
     {
         u32 *dst = gPpuLayers.layer[4][line];
         u32 *meta = gPpuLayers.meta[line];
-        for (x = 0; x < GBA_W; x++)
+        for (x = 0; x < sW; x++)
         {
             dst[x] = sObjColor[x] == TRANSPARENT ? 0 : ToRgba(sObjColor[x]);
             meta[x] = sWinMask[x] | ((u32)((sObjPrio[x] & 3) | (sObjSemi[x] ? 4 : 0)) << 8);
@@ -438,7 +503,15 @@ void PpuRenderLine(int line, u32 *out)
     int effect = (bldcnt >> 6) & 3;
     int eva = bldalpha & 0x1F, evb = (bldalpha >> 8) & 0x1F, evy = R16(0x54) & 0x1F;
     u16 backdrop = Pal(0);
-    int i, x;
+    int i, x, cx0, cx1;
+
+    sW = gPcScreenW;
+    sMargin = (sW - GBA_W) / 2;
+    sWide = sMargin > 0 && PcFieldWideActive();
+    cx0 = sWide ? 0 : sMargin;
+    cx1 = sWide ? sW : sMargin + GBA_W;
+    gPpuContentX0 = cx0;
+    gPpuContentX1 = cx1;
 
     if (eva > 16) eva = 16;
     if (evb > 16) evb = 16;
@@ -446,19 +519,19 @@ void PpuRenderLine(int line, u32 *out)
 
     CheckAffineReload();
 
-    if (dispcnt & 0x80)
-    {
-        for (x = 0; x < GBA_W; x++)
-            out[x] = 0xFFFFFFFFu;
-        if (gPpuExportLayers)
-            ExportLine(line, bgOn, bgOn, 1, 0, 0, 0, 0, 0);
-        return;
-    }
-
     for (i = 0; i < 4; i++)
     {
         bgOn[i] = (dispcnt >> (8 + i)) & 1;
         bgPrio[i] = R16(0x08 + i * 2) & 3;
+    }
+
+    if (dispcnt & 0x80)
+    {
+        for (x = 0; x < sW; x++)
+            out[x] = (x >= cx0 && x < cx1) ? 0xFFFFFFFFu : 0xFF000000u;
+        if (gPpuExportLayers)
+            ExportLine(line, bgOn, bgOn, 1, 0, 0, 0, 0, 0);
+        return;
     }
 
     switch (mode)
@@ -488,12 +561,18 @@ void PpuRenderLine(int line, u32 *out)
     if (gPpuExportLayers)
         ExportLine(line, bgOn, bgPrio, 0, bldcnt, eva, evb, evy, effect);
 
-    for (x = 0; x < GBA_W; x++)
+    for (x = 0; x < sW; x++)
     {
         int mask = sWinMask[x];
         int topL = L_BD, botL = L_BD, p, found = 0;
         u16 top = backdrop, bot = backdrop;
         u16 c;
+
+        if (x < cx0 || x >= cx1)
+        {
+            out[x] = 0xFF000000u; // pillarbox
+            continue;
+        }
 
         // Walk priorities front to back; take the first two opaque layers.
         for (p = 0; p < 4 && found < 2; p++)

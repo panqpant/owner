@@ -44,6 +44,7 @@ typedef unsigned char GLboolean;
 #define GL_COLOR_BUFFER_BIT 0x4000
 #define GL_TRIANGLES 0x0004
 #define GL_UNPACK_ALIGNMENT 0x0CF5
+#define GL_UNPACK_ROW_LENGTH 0x0CF2
 #define GL_PACK_ALIGNMENT 0x0D05
 #define GL_BGRA 0x80E1
 
@@ -248,10 +249,13 @@ static const char *kComposite =
     "uniform sampler2D uLayer[5];\n"   // premultiplied, upscaled (or native, nearest)
     "uniform usampler2D uMeta;\n"
     "uniform usampler2D uLine;\n"
+    "uniform vec2 uDim;\n"        // native frame size (W, 160)
+    "uniform vec2 uContent;\n"    // visible content columns [x0, x1); outside is pillarbox
     "vec3 blend(vec3 a, vec3 b, float ea, float eb) { return min(a * ea + b * eb, vec3(1.0)); }\n"
     "void main() {\n"
-    "  ivec2 np = ivec2(min(floor(vUv * vec2(240.0, 160.0)), vec2(239.0, 159.0)));\n"
+    "  ivec2 np = ivec2(min(floor(vUv * uDim), uDim - 1.0));\n"
     "  np.y = 159 - np.y;\n"
+    "  if (float(np.x) < uContent.x || float(np.x) >= uContent.y) { oColor = vec4(0.0, 0.0, 0.0, 1.0); return; }\n"
     "  vec2 uv = vec2(vUv.x, 1.0 - vUv.y);\n"
     "  uvec4 L0 = texelFetch(uLine, ivec2(0, np.y), 0);\n"
     "  uvec4 L1 = texelFetch(uLine, ivec2(1, np.y), 0);\n"
@@ -322,8 +326,9 @@ static const char *kPresent =
     "uniform sampler2D uTex;\n"
     "uniform float uGrade;\n"
     "uniform float uFlip;\n"
+    "uniform float uUScale;\n"
     "void main() {\n"
-    "  vec2 uv = vec2(vUv.x, uFlip > 0.5 ? 1.0 - vUv.y : vUv.y);\n"
+    "  vec2 uv = vec2(vUv.x * uUScale, uFlip > 0.5 ? 1.0 - vUv.y : vUv.y);\n"
     "  vec3 c = texture(uTex, uv).rgb;\n"
     "  if (uGrade > 0.0) {\n"
     "    float l = dot(c, vec3(0.2126, 0.7152, 0.0722));\n"
@@ -343,6 +348,8 @@ static GLuint sLayerTex[5], sUpTex[5], sUpFbo[5];
 static GLuint sMetaTex, sLineTex, sFrameTex;
 static GLuint sCompTex, sCompFbo;
 static int sScale = 4;
+static int sW = GBA_W;
+static int sCompW, sCompH; // composite size = on-screen size of the game image
 static int sGrade = 1;
 
 static int LoadGl(void)
@@ -422,7 +429,7 @@ static GLuint MakeFbo(GLuint tex)
 
 static void AllocScaled(void)
 {
-    int i, w = GBA_W * sScale, h = GBA_H * sScale;
+    int i, w = sW * sScale, h = GBA_H * sScale;
     for (i = 0; i < 5; i++)
     {
         if (sUpTex[i])
@@ -430,10 +437,22 @@ static void AllocScaled(void)
         sUpTex[i] = MakeTex(w, h, GL_RGBA8, GL_RGBA, GL_LINEAR);
         sUpFbo[i] = MakeFbo(sUpTex[i]);
     }
+}
+
+// The composite is rendered at the size the game image occupies on screen,
+// so the final image is native-resolution rather than a stretched texture.
+static void EnsureComposite(int w, int h)
+{
+    if (w < 1) w = 1;
+    if (h < 1) h = 1;
+    if (sCompTex && w == sCompW && h == sCompH)
+        return;
     if (sCompTex)
         glDeleteTextures(1, &sCompTex);
     sCompTex = MakeTex(w, h, GL_RGBA8, GL_RGBA, GL_LINEAR);
     sCompFbo = MakeFbo(sCompTex);
+    sCompW = w;
+    sCompH = h;
 }
 
 int HdInit(void)
@@ -453,10 +472,11 @@ int HdInit(void)
     glPixelStorei(GL_PACK_ALIGNMENT, 4);
 
     for (i = 0; i < 5; i++)
-        sLayerTex[i] = MakeTex(GBA_W, GBA_H, GL_RGBA8, GL_RGBA, GL_NEAREST);
-    sMetaTex = MakeTex(GBA_W, GBA_H, GL_RGBA8UI, GL_RGBA_INTEGER, GL_NEAREST);
+        sLayerTex[i] = MakeTex(PC_MAX_W, GBA_H, GL_RGBA8, GL_RGBA, GL_NEAREST);
+    sMetaTex = MakeTex(PC_MAX_W, GBA_H, GL_RGBA8UI, GL_RGBA_INTEGER, GL_NEAREST);
     sLineTex = MakeTex(4, GBA_H, GL_RGBA8UI, GL_RGBA_INTEGER, GL_NEAREST);
-    sFrameTex = MakeTex(GBA_W, GBA_H, GL_RGBA8, GL_BGRA, GL_NEAREST);
+    sFrameTex = MakeTex(PC_MAX_W, GBA_H, GL_RGBA8, GL_BGRA, GL_NEAREST);
+    sW = gPcScreenW;
     AllocScaled();
 
     glUseProgram(sProgComp);
@@ -499,17 +519,27 @@ static void DrawQuad(void)
 }
 
 // Render the HD composite into sCompFbo.
-static void RenderHd(void)
+static void RenderHd(int outW, int outH)
 {
-    int i, w = GBA_W * sScale, h = GBA_H * sScale;
+    int i, w, h;
 
+    if (sW != gPcScreenW)
+    {
+        sW = gPcScreenW;
+        AllocScaled();
+    }
+    w = sW * sScale;
+    h = GBA_H * sScale;
+
+    glPixelStorei(GL_UNPACK_ROW_LENGTH, PC_MAX_W);
     for (i = 0; i < 5; i++)
     {
         glBindTexture(GL_TEXTURE_2D, sLayerTex[i]);
-        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, GBA_W, GBA_H, GL_RGBA, GL_UNSIGNED_BYTE, gPpuLayers.layer[i]);
+        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, sW, GBA_H, GL_RGBA, GL_UNSIGNED_BYTE, gPpuLayers.layer[i]);
     }
     glBindTexture(GL_TEXTURE_2D, sMetaTex);
-    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, GBA_W, GBA_H, GL_RGBA_INTEGER, GL_UNSIGNED_BYTE, gPpuLayers.meta);
+    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, sW, GBA_H, GL_RGBA_INTEGER, GL_UNSIGNED_BYTE, gPpuLayers.meta);
+    glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
     glBindTexture(GL_TEXTURE_2D, sLineTex);
     glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 4, GBA_H, GL_RGBA_INTEGER, GL_UNSIGNED_BYTE, gPpuLayers.line);
 
@@ -517,7 +547,7 @@ static void RenderHd(void)
     // vUv.y = 0 at the bottom of the target, so flip when sampling.
     glUseProgram(sProgXbr);
     glUniform1i(glGetUniformLocation(sProgXbr, "uTex"), 0);
-    glUniform2f(glGetUniformLocation(sProgXbr, "uSize"), GBA_W, GBA_H);
+    glUniform2f(glGetUniformLocation(sProgXbr, "uSize"), sW, GBA_H);
     glUniform1f(glGetUniformLocation(sProgXbr, "uScale"), (float)sScale);
     glViewport(0, 0, w, h);
     for (i = 0; i < 5; i++)
@@ -528,9 +558,13 @@ static void RenderHd(void)
         DrawQuad();
     }
 
-    // Pass 2: composite.
+    // Pass 2: composite at output resolution.
+    EnsureComposite(outW, outH);
+    glViewport(0, 0, sCompW, sCompH);
     glBindFramebuffer(GL_FRAMEBUFFER, sCompFbo);
     glUseProgram(sProgComp);
+    glUniform2f(glGetUniformLocation(sProgComp, "uDim"), sW, GBA_H);
+    glUniform2f(glGetUniformLocation(sProgComp, "uContent"), gPpuContentX0, gPpuContentX1);
     for (i = 0; i < 5; i++)
     {
         glActiveTexture(GL_TEXTURE0 + i);
@@ -547,16 +581,17 @@ static void RenderHd(void)
 
 static void Letterbox(int winW, int winH, int *x, int *y, int *w, int *h)
 {
-    // Largest 3:2 rectangle that fits.
-    if (winW * GBA_H > winH * GBA_W)
+    // Largest rectangle with the frame's aspect ratio that fits.
+    int fw = gPcScreenW;
+    if (winW * GBA_H > winH * fw)
     {
         *h = winH;
-        *w = winH * GBA_W / GBA_H;
+        *w = winH * fw / GBA_H;
     }
     else
     {
         *w = winW;
-        *h = winW * GBA_H / GBA_W;
+        *h = winW * GBA_H / fw;
     }
     *x = (winW - *w) / 2;
     *y = (winH - *h) / 2;
@@ -569,19 +604,19 @@ void HdPresent(const uint32_t *frame, int hdMode, int winW, int winH)
     if (!sReady)
         return;
 
+    Letterbox(winW, winH, &x, &y, &w, &h);
     if (hdMode)
-        RenderHd();
+        RenderHd(w, h);
     else
     {
         glBindTexture(GL_TEXTURE_2D, sFrameTex);
-        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, GBA_W, GBA_H, GL_BGRA, GL_UNSIGNED_BYTE, frame);
+        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, gPcScreenW, GBA_H, GL_BGRA, GL_UNSIGNED_BYTE, frame);
     }
 
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
     glViewport(0, 0, winW, winH);
     glClearColor(0, 0, 0, 1);
     glClear(GL_COLOR_BUFFER_BIT);
-    Letterbox(winW, winH, &x, &y, &w, &h);
     glViewport(x, y, w, h);
     glUseProgram(sProgPresent);
     glUniform1i(glGetUniformLocation(sProgPresent, "uTex"), 0);
@@ -591,12 +626,14 @@ void HdPresent(const uint32_t *frame, int hdMode, int winW, int winH)
         glBindTexture(GL_TEXTURE_2D, sCompTex);
         glUniform1f(glGetUniformLocation(sProgPresent, "uGrade"), sGrade ? 1.0f : 0.0f);
         glUniform1f(glGetUniformLocation(sProgPresent, "uFlip"), 0.0f);
+        glUniform1f(glGetUniformLocation(sProgPresent, "uUScale"), 1.0f);
     }
     else
     {
         glBindTexture(GL_TEXTURE_2D, sFrameTex);
         glUniform1f(glGetUniformLocation(sProgPresent, "uGrade"), 0.0f);
         glUniform1f(glGetUniformLocation(sProgPresent, "uFlip"), 1.0f);
+        glUniform1f(glGetUniformLocation(sProgPresent, "uUScale"), (float)gPcScreenW / PC_MAX_W);
     }
     DrawQuad();
 }
@@ -604,7 +641,7 @@ void HdPresent(const uint32_t *frame, int hdMode, int winW, int winH)
 // Read back the HD composite (top row first) for screenshots/tests.
 int HdReadComposite(uint32_t *out, int *w, int *h)
 {
-    int y, W = GBA_W * sScale, H = GBA_H * sScale;
+    int y, W = sCompW, H = sCompH;
     uint32_t *tmp;
     if (!sReady)
         return -1;

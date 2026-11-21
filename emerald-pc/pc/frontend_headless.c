@@ -10,7 +10,7 @@
 void TestHookRun(const char *cmd);
 
 static int sQuit;
-static uint32_t sLast[GBA_W * GBA_H];
+static uint32_t sLast[PC_MAX_W * GBA_H];
 static FILE *sWav;
 static uint32_t sWavFrames;
 
@@ -42,8 +42,8 @@ static void WritePpm(const char *path)
     int i;
     if (!f)
         return;
-    fprintf(f, "P6\n%d %d\n255\n", GBA_W, GBA_H);
-    for (i = 0; i < GBA_W * GBA_H; i++)
+    fprintf(f, "P6\n%d %d\n255\n", gPcScreenW, GBA_H);
+    for (i = 0; i < gPcScreenW * GBA_H; i++)
     {
         unsigned char px[3] = { (sLast[i] >> 16) & 0xFF, (sLast[i] >> 8) & 0xFF, sLast[i] & 0xFF };
         fwrite(px, 1, 3, f);
@@ -59,6 +59,11 @@ int FrontendInit(int argc, char **argv)
     {
         if (!strcmp(argv[i], "--script") && i + 1 < argc)
             script = argv[++i];
+        else if (!strcmp(argv[i], "--width") && i + 1 < argc)
+        {
+            int w = atoi(argv[++i]) & ~1;
+            gPcScreenW = w < GBA_W ? GBA_W : w > PC_MAX_W ? PC_MAX_W : w;
+        }
         else if (!strcmp(argv[i], "--save") && i + 1 < argc)
             FlashPcSetPath(argv[++i]);
         else if (!strcmp(argv[i], "--wav") && i + 1 < argc)
@@ -81,7 +86,7 @@ int FrontendInit(int argc, char **argv)
 
 void FrontendPresent(const uint32_t *fb)
 {
-    memcpy(sLast, fb, sizeof(sLast));
+    memcpy(sLast, fb, (size_t)gPcScreenW * GBA_H * 4);
 }
 
 uint16_t FrontendPollKeys(void)

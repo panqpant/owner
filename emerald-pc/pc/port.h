@@ -8,6 +8,16 @@
 
 #define GBA_W 240
 #define GBA_H 160
+#define PC_MAX_W 448 // widest supported output (wider breaks 9-bit sprite X decoding)
+
+// Output frame width (240 = original; wider = widescreen, GBA screen centred).
+extern int gPcScreenW;
+// Overworld map layers in the PC's 64x32-tile layout (NULL when not on the
+// overworld), and the BGCNT screen base each one is configured with.
+extern uint16_t *gPcFieldMap[4];
+extern uint8_t gPcFieldMapBase[4];
+int PcFieldWideActive(void);
+extern int gPpuContentX0, gPpuContentX1;
 
 // GBA memory regions are mapped at their real addresses inside the
 // 32-bit process, so the game's hard-coded addresses keep working.
@@ -45,20 +55,20 @@ uint32_t PortFrameCount(void);
 // are kept separate so they can be upscaled independently, together with the
 // per-pixel and per-scanline state needed to composite them like the GBA.
 struct PpuLayers {
-    uint32_t layer[5][GBA_H][GBA_W]; // BG0-3, OBJ: 0xAABBGGRR, A = 255 opaque / 0 empty
-    uint32_t meta[GBA_H][GBA_W];     // R: window mask (bits 0-5)  G: OBJ priority (0-1), semi-transparent (2)
+    uint32_t layer[5][GBA_H][PC_MAX_W]; // BG0-3, OBJ: 0xAABBGGRR, A = 255 opaque / 0 empty
+    uint32_t meta[GBA_H][PC_MAX_W];     // R: window mask (bits 0-5)  G: OBJ priority (0-1), semi-transparent (2)
     uint32_t line[GBA_H][4];         // see ppu.c: backdrop, enables/priorities, blend state
 };
 extern struct PpuLayers gPpuLayers;
 extern int gPpuExportLayers;
 
 void PpuBeginFrame(void);
-void PpuRenderLine(int line, uint32_t *out);  // out: GBA_W pixels, 0xAARRGGBB
+void PpuRenderLine(int line, uint32_t *out);  // out: gPcScreenW pixels, 0xAARRGGBB
 void PpuEndHBlank(int line);                 // advance affine reference points
 
 // frontend (headless or SDL)
 int  FrontendInit(int argc, char **argv);
-void FrontendPresent(const uint32_t *fb);    // GBA_W * GBA_H pixels
+void FrontendPresent(const uint32_t *fb);    // gPcScreenW * GBA_H pixels
 uint16_t FrontendPollKeys(void);             // pressed-key mask
 int  FrontendShouldQuit(void);
 void FrontendAudio(const int16_t *samples, int frames); // interleaved stereo
