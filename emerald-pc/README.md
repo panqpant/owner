@@ -62,8 +62,8 @@ Gamepads use the Xbox layout (bottom = A, right = B). Command-line options:
 - **Open bus.** Some original code reads through NULL pointers after freeing
   screen state. On a GBA that harmlessly reads the BIOS. `pc/nullguard.c` catches
   those reads, emulates them as returning 0, and logs each one.
-- **Changes to the decomp** are in `patches/pokeemerald-pc.patch` (about 50
-  lines, all under `#ifdef PLATFORM_PC` or `UBFIX`). The GBA build still matches
+- **Changes to the decomp** are in `patches/pokeemerald-pc.patch` (about 175
+  changed lines in 14 files, all under `#ifdef PLATFORM_PC` or `UBFIX`). The GBA build still matches
   the retail ROM.
 
 ## Building
