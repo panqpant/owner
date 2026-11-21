@@ -48,8 +48,9 @@ static u8  sTopLayer[PC_MAX_W];   // L_BG0..L_BD
 static u8  sBlended[PC_MAX_W];    // pixel used a two-layer colour effect
 static u16 sFinal[PC_MAX_W];
 
-// Per-line geometry.
-static int sW, sMargin, sWide;
+// Per-line geometry. sWide: overworld widescreen; sBattle: battle widescreen
+// (backgrounds extended by repeating their edges, message box stretched).
+static int sW, sMargin, sWide, sBattle;
 
 // Affine BG internal reference points (BG2, BG3).
 static s32 sRefX[2], sRefY[2];
@@ -129,6 +130,11 @@ static void RenderTextBg(int bg, int line)
     const u16 *fieldMap = NULL;
     int x0 = sMargin, x1 = sMargin + GBA_W;
 
+    if (sBattle)
+    {
+        x0 = 0;
+        x1 = sW;
+    }
     // Overworld map layers: read the wide map buffer and fill the margins.
     if (sWide && gPcFieldMap[bg] && ((cnt >> 8) & 0x1F) == gPcFieldMapBase[bg])
     {
@@ -160,6 +166,23 @@ static void RenderTextBg(int bg, int line)
             continue;
         }
         gx = x - sMargin;
+        if (sBattle && bg == 0)
+        {
+            // Message box: its 8-pixel frame moves to the screen edges and
+            // the interior widens to fill the space in between.
+            if (x < 8)
+                gx = x;
+            else if (x < sMargin + 8)
+                gx = 8;
+            else if (x >= sW - 8)
+                gx = GBA_W - (sW - x);
+            else if (x >= sMargin + GBA_W - 8)
+                gx = GBA_W - 9;
+        }
+        else if (sBattle && (gx < 0 || gx >= GBA_W))
+        {
+            gx = gx < 0 ? 0 : GBA_W - 1; // backgrounds: repeat the edge column
+        }
         sx = gx - ((gx % mosH) + mosH) % mosH;
         tx = (sx + hofs) & (w - 1);
         if (fieldMap)
@@ -288,10 +311,11 @@ static void RenderSprites(int line)
     u16 dispcnt = R16(0x00);
     int oneD = (dispcnt >> 6) & 1;
     int bitmapMode = (dispcnt & 7) >= 3;
-    // Sprites may extend into the margins only on the wide overworld.
-    int xmin = sWide ? 0 : sMargin, xmax = sWide ? sW : sMargin + GBA_W;
+    // Sprites may extend into the margins on the wide overworld and in battle.
+    int wideNow = sWide || sBattle;
+    int xmin = wideNow ? 0 : sMargin, xmax = wideNow ? sW : sMargin + GBA_W;
     // A 9-bit X decodes as negative past the right edge of the visible area.
-    int xWrap = GBA_W + (sWide ? sMargin : 0);
+    int xWrap = GBA_W + (wideNow ? sMargin : 0);
     int i;
 
     memset(sObjPrio, 4, sW);
@@ -628,12 +652,13 @@ void PpuRenderLine(int line, u32 *out)
     sW = gPcScreenW;
     sMargin = (sW - GBA_W) / 2;
     sWide = sMargin > 0 && PcFieldWideActive();
+    sBattle = sMargin > 0 && !sWide && gPcBattleFrame;
     sDoRefs = gHdPackActive || gHdDumpEnabled || gPcTextHd;
     if (sDoRefs)
         for (i = 0; i < 4; i++)
             memset(sRefSlot[i], 0, sW * sizeof(u16));
-    cx0 = sWide ? 0 : sMargin;
-    cx1 = sWide ? sW : sMargin + GBA_W;
+    cx0 = (sWide || sBattle) ? 0 : sMargin;
+    cx1 = (sWide || sBattle) ? sW : sMargin + GBA_W;
     gPpuContentX0 = cx0;
     gPpuContentX1 = cx1;
 

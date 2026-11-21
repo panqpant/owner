@@ -67,6 +67,8 @@ enum {
 #define REG_TM1CNT_H_OFF 0x106
 
 static int sInIrq;
+int gPcBattleFrame;   // the frame being drawn belongs to a battle
+static int sBattleSeen; // the battle loop ran during the current frame
 
 static void RaiseIrq(uint16_t flag)
 {
@@ -230,6 +232,9 @@ static void StepLine(int line)
         PortDmaRunTiming(1);
         if (IO16(REG_DISPSTAT_OFF) & 0x08)
             RaiseIrq(IRQ_VBLANK);
+        // The frame just shown was a battle if the battle loop ran during it.
+        gPcBattleFrame = sBattleSeen;
+        sBattleSeen = 0;
     }
 
     if (line < 160)
@@ -269,6 +274,7 @@ void PcSetFieldMaps(uint16_t *bg1, uint16_t *bg2, uint16_t *bg3, int base1, int 
 }
 
 int gPcOutdoors;
+void PcMarkBattleFrame(void) { sBattleSeen = 1; }
 void PcSetOutdoors(int outdoors) { gPcOutdoors = outdoors; }
 
 // Extra pixels visible on each side of the GBA screen on the overworld.
