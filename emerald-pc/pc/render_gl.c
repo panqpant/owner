@@ -17,6 +17,7 @@
 #include "render_gl.h"
 #include "hdpack.h"
 #include "texthd.h"
+#include "fieldfx.h"
 
 typedef unsigned int GLenum, GLuint, GLbitfield;
 typedef int GLint, GLsizei;
@@ -89,6 +90,7 @@ typedef unsigned char GLboolean;
     X(void, glUniform1f, (GLint, GLfloat)) \
     X(void, glUniform2f, (GLint, GLfloat, GLfloat)) \
     X(void, glUniform4f, (GLint, GLfloat, GLfloat, GLfloat, GLfloat)) \
+    X(void, glUniform3f, (GLint, GLfloat, GLfloat, GLfloat)) \
     X(void, glGenVertexArrays, (GLsizei, GLuint *)) \
     X(void, glBindVertexArray, (GLuint)) \
     X(void, glGenFramebuffers, (GLsizei, GLuint *)) \
@@ -137,6 +139,7 @@ GLFUNCS
 #define glUniform1f p_glUniform1f
 #define glUniform2f p_glUniform2f
 #define glUniform4f p_glUniform4f
+#define glUniform3f p_glUniform3f
 #define glGenVertexArrays p_glGenVertexArrays
 #define glBindVertexArray p_glBindVertexArray
 #define glGenFramebuffers p_glGenFramebuffers
@@ -270,6 +273,12 @@ static const char *kComposite =
     "uniform usampler2D uPal;\n"     // live palette (BGR555), 512 entries
     "uniform float uGlyphScale;\n"
     "uniform vec4 uTint;\n"   // rgb multiplier, a = 1 to apply (outdoor overworld)
+    "uniform int uFieldFx;\n"
+    "uniform float uNight;\n"
+    "uniform float uMargin;\n"
+    "uniform int uNumLights, uNumShadows;\n"
+    "uniform vec3 uLights[24];\n"   // x, y (GBA screen coords), radius
+    "uniform vec3 uShadows[32];\n"  // feet x, y, width
     "vec3 C555(uint c) { return vec3(float(c & 31u), float((c >> 5) & 31u), float((c >> 10) & 31u)) / 31.0; }\n"
     "vec3 PalC(uint i) { return C555(texelFetch(uPal, ivec2(int(i), 0), 0).r); }\n"
     // Hand-made replacement tile, with the GBA's palette fade re-applied.
@@ -370,11 +379,33 @@ static const char *kComposite =
     "      else if (effect == 3u) res = res - res * evy;\n"
     "    }\n"
     "  }\n"
+    // Soft shadows under characters, cast on the ground (not on sprites or UI).
+    "  vec2 gp = vec2(vUv.x * uDim.x - uMargin, (1.0 - vUv.y) * uDim.y);\n"
+    "  if (uFieldFx != 0 && top != 4 && top != 0) {\n"
+    "    float sh = 0.0;\n"
+    "    for (int k = 0; k < uNumShadows; k++) {\n"
+    "      vec3 s = uShadows[k];\n"
+    "      vec2 e = (gp - s.xy) / vec2(s.z * 0.5, s.z * 0.2);\n"
+    "      sh = max(sh, (1.0 - smoothstep(0.45, 1.0, length(e))) * 0.30);\n"
+    "    }\n"
+    "    res *= 1.0 - sh;\n"
+    "  }\n"
     // Time-of-day lighting on the overworld, not on text boxes/menus (BG0).
     "  if (uTint.a > 0.5 && top != 0) {\n"
     "    float l = dot(res, vec3(0.2126, 0.7152, 0.0722));\n"
     "    float night = clamp((1.0 - uTint.b) * 0.0 + (uTint.b > uTint.r ? (uTint.b - uTint.r) * 2.0 : 0.0), 0.0, 1.0);\n"
     "    res = mix(res, vec3(l), night * 0.35) * uTint.rgb;\n"
+    "  }\n"
+    // Warm light around doors at night.
+    "  if (uFieldFx != 0 && uNight > 0.0 && top != 0) {\n"
+    "    float g = 0.0;\n"
+    "    for (int k = 0; k < uNumLights; k++) {\n"
+    "      float d = distance(gp, uLights[k].xy) / uLights[k].z;\n"
+    "      float f = 1.0 - smoothstep(0.0, 1.0, d);\n"
+    "      g += f * f;\n"
+    "    }\n"
+    "    g = min(g, 1.2) * uNight;\n"
+    "    res += vec3(1.0, 0.78, 0.48) * g * (0.35 + res * 0.6);\n"
     "  }\n"
     // Thin, mostly transparent fringes of layers in front of the top layer.
     "  for (int k = ti - 1; k >= 0; k--) { vec4 c = lay[order[k]]; res = res * (1.0 - c.a) + c.rgb; }\n"
@@ -390,6 +421,8 @@ static const char *kPresent =
     "uniform float uFlip;\n"
     "uniform float uUScale;\n"
     "uniform vec2 uContentUv;\n" // content columns as u range; outside gets an ambient fill
+    "uniform float uBloom;\n"
+    "uniform vec2 uTexel;\n"
     "void main() {\n"
     "  vec2 uv = vec2(vUv.x * uUScale, uFlip > 0.5 ? 1.0 - vUv.y : vUv.y);\n"
     "  vec3 c = texture(uTex, uv).rgb;\n"
@@ -405,6 +438,17 @@ static const char *kPresent =
     "    }\n"
     "    float fade = 1.0 - clamp(abs(uv.x - edge) / max(span * 1.5, 1e-4), 0.0, 1.0) * 0.35;\n"
     "    c = acc / n * 0.38 * fade;\n"
+    "  }\n"
+    "  if (uBloom > 0.0) {\n"   // soft glow around bright areas
+    "    vec3 b = vec3(0.0);\n"
+    "    for (int i = 0; i < 12; i++) {\n"
+    "      float a = float(i) * 0.5236;\n"
+    "      for (int r = 1; r <= 2; r++) {\n"
+    "        vec3 t = texture(uTex, uv + vec2(cos(a), sin(a)) * uTexel * float(r) * 6.0).rgb;\n"
+    "        b += max(t - vec3(0.72), vec3(0.0));\n"
+    "      }\n"
+    "    }\n"
+    "    c += b / 24.0 * uBloom;\n"
     "  }\n"
     "  if (uGrade > 0.0) {\n"
     "    float l = dot(c, vec3(0.2126, 0.7152, 0.0722));\n"
@@ -431,6 +475,7 @@ static int sCompW, sCompH; // composite size = on-screen size of the game image
 static int sLastWinW, sLastWinH;
 static int sGrade = 1;
 static int sLighting = 1;
+static float sNight;
 
 static int LoadGl(void)
 {
@@ -738,9 +783,34 @@ static void RenderHd(int outW, int outH)
     {
         float tint[3] = { 1, 1, 1 };
         int on = sLighting && gPcOutdoors && PcFieldWideActive();
+        int field = PcFieldWideActive();
+        float night = 0, lum;
+        char name[32];
+        int k;
         if (on)
             TimeOfDayTint(tint);
         glUniform4f(glGetUniformLocation(sProgComp, "uTint"), tint[0], tint[1], tint[2], on ? 1.0f : 0.0f);
+        lum = 0.2126f * tint[0] + 0.7152f * tint[1] + 0.0722f * tint[2];
+        if (on)
+            night = (1.0f - lum) * 1.8f;
+        if (night > 1) night = 1;
+        if (night < 0) night = 0;
+        sNight = night;
+        glUniform1i(glGetUniformLocation(sProgComp, "uFieldFx"), field && sLighting);
+        glUniform1f(glGetUniformLocation(sProgComp, "uNight"), night);
+        glUniform1f(glGetUniformLocation(sProgComp, "uMargin"), (gPcScreenW - GBA_W) / 2.0f);
+        glUniform1i(glGetUniformLocation(sProgComp, "uNumLights"), field ? gPcFieldFx.numLights : 0);
+        glUniform1i(glGetUniformLocation(sProgComp, "uNumShadows"), field ? gPcFieldFx.numShadows : 0);
+        for (k = 0; field && k < gPcFieldFx.numLights; k++)
+        {
+            snprintf(name, sizeof(name), "uLights[%d]", k);
+            glUniform3f(glGetUniformLocation(sProgComp, name), gPcFieldFx.lights[k].x, gPcFieldFx.lights[k].y, gPcFieldFx.lights[k].radius);
+        }
+        for (k = 0; field && k < gPcFieldFx.numShadows; k++)
+        {
+            snprintf(name, sizeof(name), "uShadows[%d]", k);
+            glUniform3f(glGetUniformLocation(sProgComp, name), gPcFieldFx.shadows[k].x, gPcFieldFx.shadows[k].y, gPcFieldFx.shadows[k].w);
+        }
     }
     glUniform1f(glGetUniformLocation(sProgComp, "uPackScale"), (float)sPackScale);
     glUniform1i(glGetUniformLocation(sProgComp, "uPerRow"), sPackPerRow > 0 ? sPackPerRow : 1);
@@ -807,6 +877,8 @@ static void DrawPresent(int hdMode, int winW, int winH)
         glUniform1f(glGetUniformLocation(sProgPresent, "uGrade"), sGrade ? 1.0f : 0.0f);
         glUniform1f(glGetUniformLocation(sProgPresent, "uFlip"), 0.0f);
         glUniform1f(glGetUniformLocation(sProgPresent, "uUScale"), 1.0f);
+        glUniform1f(glGetUniformLocation(sProgPresent, "uBloom"), sGrade ? 0.9f + sNight * 1.6f : 0.0f);
+        glUniform2f(glGetUniformLocation(sProgPresent, "uTexel"), 1.0f / (sCompW > 0 ? sCompW : 1), 1.0f / (sCompH > 0 ? sCompH : 1));
         glUniform2f(glGetUniformLocation(sProgPresent, "uContentUv"),
                     (float)gPpuContentX0 / gPcScreenW, (float)gPpuContentX1 / gPcScreenW);
     }
@@ -816,6 +888,7 @@ static void DrawPresent(int hdMode, int winW, int winH)
         glUniform1f(glGetUniformLocation(sProgPresent, "uGrade"), 0.0f);
         glUniform1f(glGetUniformLocation(sProgPresent, "uFlip"), 1.0f);
         glUniform1f(glGetUniformLocation(sProgPresent, "uUScale"), (float)gPcScreenW / PC_MAX_W);
+        glUniform1f(glGetUniformLocation(sProgPresent, "uBloom"), 0.0f);
         glUniform2f(glGetUniformLocation(sProgPresent, "uContentUv"), -1.0f, 2.0f);
     }
     DrawQuad();
