@@ -45,6 +45,7 @@ the game's assets.
 | F4 | Day/night lighting |
 | F5 | HD audio / original GBA sound |
 | F6 | Dump tiles for HD packs |
+| F7 | New synthesised instruments / original instrument samples |
 | F11 or Alt+Enter | Fullscreen |
 | F12 | Screenshot |
 | Esc | Quit |

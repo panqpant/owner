@@ -330,6 +330,13 @@ static void PumpEvents(void)
                 M4aPcSetHdAudio(!gPcHdAudio);
                 SDL_SetWindowTitle(sWindow, gPcHdAudio ? "Pokémon Emerald  [HD audio]" : "Pokémon Emerald  [original audio]");
             }
+            else if (e.key.keysym.sym == SDLK_F7)
+            {
+                extern int gPcSynthInstruments;
+                extern void M4aPcSetSynth(int on);
+                M4aPcSetSynth(!gPcSynthInstruments);
+                SDL_SetWindowTitle(sWindow, gPcSynthInstruments ? "Pokémon Emerald  [new instruments]" : "Pokémon Emerald  [original instruments]");
+            }
             else if (e.key.keysym.sym == SDLK_F6)
             {
                 HdPackSetDump(!gHdDumpEnabled);

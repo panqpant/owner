@@ -10,6 +10,7 @@
 //
 // Compiled with the game's flags so it can use the real m4a structures.
 #include <math.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include "global.h"
 #include "gba/m4a_internal.h"
@@ -698,6 +699,8 @@ static double sPos[MAX_DIRECTSOUND_CHANNELS]; // playback position (samples)
 int gPcHdAudio = 1;
 static float sLastVol[MAX_DIRECTSOUND_CHANNELS][2];
 static u8 sJustStarted[MAX_DIRECTSOUND_CHANNELS];
+static u8 sSynNew[MAX_DIRECTSOUND_CHANNELS];
+int gPcSynthInstruments = 1;   // HD audio: melodic samples replaced by synthesised voices (F7)
 
 static s8 sDecoded[64];
 static const struct WaveData *sDecodedWav;
@@ -768,6 +771,7 @@ static int UpdateEnvelope(struct SoundInfo *si, struct SoundChannel *c, int idx)
         f = SOUND_CHANNEL_SF_ENV_ATTACK;
         c->statusFlags = f;
         sJustStarted[idx] = 1;
+        sSynNew[idx] = 1;
         sPos[idx] = c->count; // start offset
         c->currentPointer = c->wav->data + c->count;
         c->count = c->wav->size - c->count;
@@ -876,6 +880,296 @@ static void InitLanczos(void)
     }
 }
 
+
+// ---------------------------------------------------------------------------
+// Synthesised instruments (HD audio). The game's sequencer and envelopes
+// still drive every note; only the waveform of the melodic samples listed in
+// instr_table.h is replaced. Each sample's pitch (cycles per sample) and
+// loudness are measured once, so a voice plays the same note at the same
+// level as the sample it replaces.
+#include "instr_table.h"
+
+#define SYN_MAX_WAVS 40
+struct WavInfo { const struct WaveData *w; int kind; double f0; float gain; };
+static struct WavInfo sWavInfo[SYN_MAX_WAVS];
+static int sNumWavInfo, sSynReady;
+
+struct Svf { float lp, bp; };
+static inline float SvfRun(struct Svf *f, float in, float g, float q, float *bpOut)
+{
+    float hp;
+    f->lp += g * f->bp;
+    hp = in - f->lp - q * f->bp;
+    f->bp += g * hp;
+    if (bpOut) *bpOut = f->bp;
+    return f->lp;
+}
+static inline float SvfG(double fc)
+{
+    double g = 2.0 * sin(M_PI * (fc < OUT_RATE * 0.2 ? fc : OUT_RATE * 0.2) / OUT_RATE);
+    return (float)g;
+}
+
+struct SynVoice {
+    int kind;
+    double ph[8];
+    double t;
+    struct Svf f[2][3];
+    u32 rng;
+    float noiseLp;
+};
+static struct SynVoice sSyn[MAX_DIRECTSOUND_CHANNELS];
+
+static inline double SawB(double ph, double dt)
+{
+    double v = 2.0 * ph - 1.0;
+    if (ph < dt) { double x = ph / dt; v -= x + x - x * x - 1.0; }
+    else if (ph > 1.0 - dt) { double x = (ph - 1.0) / dt; v -= x * x + x + x + 1.0; }
+    return v;
+}
+static inline float Rnd(struct SynVoice *v)
+{
+    v->rng = v->rng * 1664525u + 1013904223u;
+    return (float)((v->rng >> 9) & 0x7FFF) / 16384.0f - 1.0f;
+}
+
+// One stereo sample of a voice at `hz`.
+static void SynthSample(struct SynVoice *v, double hz, float *outL, float *outR)
+{
+    const double t = v->t, inv = 1.0 / OUT_RATE;
+    float L = 0, R = 0;
+    int k;
+    double vib = 1.0;
+    v->t += inv;
+    switch (v->kind)
+    {
+    case SYN_STRINGS:
+    case SYN_CHOIR:
+    {
+        static const double det[6] = { -0.0082, -0.0047, -0.0017, 0.0017, 0.0047, 0.0082 };
+        double d = v->kind == SYN_CHOIR ? 0.6 : 1.0;
+        vib = 1.0 + 0.0028 * sin(2 * M_PI * 5.1 * t) * (t > 0.25 ? 1.0 : t / 0.25);
+        for (k = 0; k < 6; k++)
+        {
+            double f = hz * vib * (1.0 + det[k] * d), dt = f * inv;
+            float sw;
+            v->ph[k] += dt;
+            if (v->ph[k] >= 1.0) v->ph[k] -= 1.0;
+            sw = (float)SawB(v->ph[k], dt);
+            if (k & 1) R += sw; else L += sw;
+        }
+        if (v->kind == SYN_STRINGS)
+        {
+            float g = SvfG(hz * 4.5 + 900);
+            L = SvfRun(&v->f[0][0], L, g, 1.2f, NULL);
+            R = SvfRun(&v->f[1][0], R, g, 1.2f, NULL);
+            L = SvfRun(&v->f[0][1], L, g, 1.4f, NULL);
+            R = SvfRun(&v->f[1][1], R, g, 1.4f, NULL);
+        }
+        else
+        {
+            // "Aah" formants.
+            static const float fm[3] = { 750, 1150, 2700 }, fa[3] = { 1.0f, 0.55f, 0.22f };
+            float l2 = 0, r2 = 0, bp;
+            for (k = 0; k < 3; k++)
+            {
+                float g = SvfG(fm[k]);
+                SvfRun(&v->f[0][k], L, g, 0.25f, &bp); l2 += bp * fa[k];
+                SvfRun(&v->f[1][k], R, g, 0.25f, &bp); r2 += bp * fa[k];
+            }
+            L = l2; R = r2;
+        }
+        break;
+    }
+    case SYN_BRASS:
+    {
+        static const double det[3] = { -0.003, 0.0, 0.003 };
+        float g, env = (float)((1.0 - exp(-t * 45.0)) * exp(-t * 5.0));
+        vib = 1.0 + 0.0035 * sin(2 * M_PI * 5.4 * t) * (t > 0.35 ? (t < 0.7 ? (t - 0.35) / 0.35 : 1.0) : 0.0);
+        for (k = 0; k < 3; k++)
+        {
+            double f = hz * vib * (1.0 + det[k]), dt = f * inv;
+            float sw;
+            v->ph[k] += dt;
+            if (v->ph[k] >= 1.0) v->ph[k] -= 1.0;
+            sw = (float)SawB(v->ph[k], dt);
+            L += sw * (k == 0 ? 1.0f : 0.5f);
+            R += sw * (k == 2 ? 1.0f : 0.5f);
+        }
+        g = SvfG(hz * (2.5 + 7.0 * env) + 350);   // the "blat" opens the filter
+        L = SvfRun(&v->f[0][0], L, g, 0.9f, NULL);
+        R = SvfRun(&v->f[1][0], R, g, 0.9f, NULL);
+        L = SvfRun(&v->f[0][1], L, g, 1.1f, NULL);
+        R = SvfRun(&v->f[1][1], R, g, 1.1f, NULL);
+        L = tanhf(L * 1.4f); R = tanhf(R * 1.4f);
+        break;
+    }
+    case SYN_PIANO:
+    {
+        // Stretched partials decaying faster the higher they are, two
+        // slightly detuned strings for the low partials, and a hammer knock.
+        double brightness = sqrt(hz / 261.6);
+        for (k = 0; k < 8; k++)
+        {
+            int n = k + 1;
+            double f = n * hz * sqrt(1.0 + 0.00035 * n * n), a = pow(n, -1.15) * exp(-t * (0.55 + 0.45 * n) * brightness);
+            double s1, s2;
+            if (f > OUT_RATE * 0.45) break;
+            v->ph[k] += f * inv;
+            if (v->ph[k] >= 1.0) v->ph[k] -= 1.0;
+            s1 = sin(2 * M_PI * v->ph[k]);
+            s2 = n <= 3 ? sin(2 * M_PI * (v->ph[k] + t * 0.7 * n)) : s1;   // second string beats slowly
+            L += (float)(a * (s1 * 0.6 + s2 * 0.4));
+            R += (float)(a * (s1 * 0.4 + s2 * 0.6));
+        }
+        {
+            float knock = Rnd(v) * (float)exp(-t * 90.0) * 0.35f;
+            v->noiseLp += (knock - v->noiseLp) * 0.3f;
+            L += knock - v->noiseLp; R += knock - v->noiseLp;
+        }
+        break;
+    }
+    case SYN_ORGAN:
+    {
+        static const float h[6] = { 1, 2, 3, 4, 6, 8 }, a[6] = { 1.0f, 0.75f, 0.45f, 0.35f, 0.22f, 0.15f };
+        float trem = 1.0f + 0.07f * (float)sin(2 * M_PI * 6.2 * t);
+        for (k = 0; k < 6; k++)
+        {
+            double f = hz * h[k] * (1.0 + 0.0008 * sin(2 * M_PI * 6.2 * t + k)), s1;
+            if (f > OUT_RATE * 0.45) break;
+            v->ph[k] += f * inv;
+            if (v->ph[k] >= 1.0) v->ph[k] -= 1.0;
+            s1 = sin(2 * M_PI * v->ph[k]) * a[k];
+            L += (float)s1 * trem; R += (float)s1 * (2.0f - trem);
+        }
+        break;
+    }
+    case SYN_WIND:
+    {
+        float breath, s1;
+        vib = 1.0 + 0.0045 * sin(2 * M_PI * 5.0 * t) * (t > 0.2 ? 1.0 : t / 0.2);
+        v->ph[0] += hz * vib * inv;
+        if (v->ph[0] >= 1.0) v->ph[0] -= 1.0;
+        s1 = (float)(sin(2 * M_PI * v->ph[0]) + 0.22 * sin(4 * M_PI * v->ph[0]) + 0.07 * sin(6 * M_PI * v->ph[0]));
+        breath = SvfRun(&v->f[0][0], Rnd(v), SvfG(hz * 2.0), 0.3f, NULL) * (0.06f + 0.25f * (float)exp(-t * 18.0));
+        L = R = s1 + breath;
+        break;
+    }
+    case SYN_BASS:
+    {
+        double dt = hz * inv;
+        float g, sw, sub;
+        v->ph[0] += dt;
+        if (v->ph[0] >= 1.0) v->ph[0] -= 1.0;
+        sw = (float)SawB(v->ph[0], dt);
+        sub = (float)sin(2 * M_PI * v->ph[0]);
+        g = SvfG(hz * (1.5 + 6.0 * exp(-t * 9.0)) + 120);
+        sw = SvfRun(&v->f[0][0], sw, g, 0.7f, NULL);
+        sw = SvfRun(&v->f[0][1], sw, g, 0.9f, NULL);
+        L = R = tanhf((sw + sub * 0.7f) * 1.2f);
+        break;
+    }
+    }
+    *outL = L;
+    *outR = R;
+}
+
+static void ResetVoice(struct SynVoice *v, int kind)
+{
+    u32 seed = v->rng;
+    memset(v, 0, sizeof(*v));
+    v->kind = kind;
+    v->rng = seed * 747796405u + 2891336453u;
+}
+
+// Fundamental (cycles per sample) and RMS of a sample, measured on its loop
+// (or its body for one-shot samples) by autocorrelation.
+static void AnalyseWave(const struct WaveData *w, double *f0, float *rms)
+{
+    struct SoundChannel tmp;
+    static float buf[4096];
+    u32 start, len, i;
+    int lag, best = 0, maxLag;
+    double bestR = -1, e0 = 0, r[2048];
+    memset(&tmp, 0, sizeof(tmp));
+    tmp.wav = (struct WaveData *)w;
+    if ((((const u8 *)w)[3] & WAVE_DATA_FLAG_LOOP) && w->size > w->loopStart + 64)
+        start = w->loopStart;
+    else
+        start = w->size / 6;
+    len = w->size - start;
+    if (len > 4096) len = 4096;
+    for (i = 0; i < len; i++) { buf[i] = WaveSample(&tmp, start + i); e0 += buf[i] * buf[i]; }
+    *rms = len ? (float)sqrt(e0 / len) : 0;
+    maxLag = len / 2 < 2000 ? len / 2 : 2000;
+    for (lag = 4; lag < maxLag; lag++)
+    {
+        double a = 0, ea = 0, eb = 0;
+        for (i = 0; i + lag < len; i++) { a += buf[i] * buf[i + lag]; ea += buf[i] * buf[i]; eb += buf[i + lag] * buf[i + lag]; }
+        r[lag] = a / sqrt(ea * eb + 1e-9);
+        if (r[lag] > bestR) bestR = r[lag];
+    }
+    // First strong peak = the fundamental's period (avoids octave errors).
+    for (lag = 5; lag < maxLag - 1; lag++)
+        if (r[lag] >= bestR * 0.88 && r[lag] >= r[lag - 1] && r[lag] >= r[lag + 1]) { best = lag; break; }
+    if (!best) { *f0 = 0; return; }
+    {
+        double y0 = r[best - 1], y1 = r[best], y2 = r[best + 1], den = y0 - 2 * y1 + y2;
+        double off = fabs(den) > 1e-9 ? 0.5 * (y0 - y2) / den : 0;
+        *f0 = 1.0 / (best + off);
+    }
+}
+
+static void SynthInit(void)
+{
+    int i, k, n = sizeof(sSynthInstruments) / sizeof(sSynthInstruments[0]);
+    float kindRms[8] = { 0 };
+    // Loudness of each voice at a mid pitch, to match the samples.
+    for (k = 1; k <= SYN_CHOIR; k++)
+    {
+        struct SynVoice v;
+        double acc = 0;
+        int s;
+        memset(&v, 0, sizeof(v));
+        v.kind = k;
+        v.rng = 12345;
+        for (s = 0; s < OUT_RATE / 3; s++)
+        {
+            float a, b;
+            SynthSample(&v, 262.0, &a, &b);
+            acc += 0.5 * (a * a + b * b);
+        }
+        kindRms[k] = (float)sqrt(acc / (OUT_RATE / 3));
+    }
+    for (i = 0; i < n && sNumWavInfo < SYN_MAX_WAVS; i++)
+    {
+        struct WavInfo *wi = &sWavInfo[sNumWavInfo];
+        float rms;
+        wi->w = sSynthInstruments[i].wav;
+        wi->kind = sSynthInstruments[i].kind;
+        AnalyseWave(wi->w, &wi->f0, &rms);
+        wi->gain = kindRms[wi->kind] > 1e-6f ? rms / kindRms[wi->kind] : 0;
+        if (getenv("EMERALD_SYNTH_DEBUG"))
+            fprintf(stderr, "synth: wav %p kind %d f0 %.6f rms %.1f\n", (void *)wi->w, wi->kind, wi->f0, rms);
+        if (wi->f0 > 0)
+            sNumWavInfo++;
+    }
+    if (getenv("EMERALD_NO_SYNTH"))
+        gPcSynthInstruments = 0;
+    sSynReady = 1;
+}
+
+static const struct WavInfo *SynthFor(const struct WaveData *w)
+{
+    int i;
+    for (i = 0; i < sNumWavInfo; i++)
+        if (sWavInfo[i].w == w)
+            return &sWavInfo[i];
+    return NULL;
+}
+
+void M4aPcSetSynth(int on) { gPcSynthInstruments = on; }
+
 static void MixDirectSound(struct SoundInfo *si, int n)
 {
     int i, s;
@@ -922,6 +1216,20 @@ static void MixDirectSound(struct SoundInfo *si, int n)
         sLastVol[i][1] = vr;
         vl = vl0;
         vr = vr0;
+        {
+        const struct WavInfo *syn = NULL;
+        double synHz = 0;
+        if (!sSynReady)
+            SynthInit();
+        if (gPcHdAudio && gPcSynthInstruments && !(c->type & (TONEDATA_TYPE_FIX | TONEDATA_TYPE_REV | TONEDATA_TYPE_CMP)))
+            syn = SynthFor(w);
+        if (syn)
+        {
+            synHz = syn->f0 * step * OUT_RATE;
+            if (sSynNew[i] || sSyn[i].kind != syn->kind)
+                ResetVoice(&sSyn[i], syn->kind);
+        }
+        sSynNew[i] = 0;
 
         for (s = 0; s < n; s++)
         {
@@ -939,6 +1247,17 @@ static void MixDirectSound(struct SoundInfo *si, int n)
                     ChannelOff(c);
                     break;
                 }
+            }
+            if (syn)
+            {
+                float a, b;
+                SynthSample(&sSyn[i], synHz, &a, &b);
+                sMixL[s] += a * syn->gain * vl;
+                sMixR[s] += b * syn->gain * vr;
+                vl += dvl;
+                vr += dvr;
+                pos += step;
+                continue;
             }
             if (gPcHdAudio && step <= 1.0)
             {
@@ -966,6 +1285,7 @@ static void MixDirectSound(struct SoundInfo *si, int n)
             vl += dvl;
             vr += dvr;
             pos += step;
+        }
         }
         }
         sPos[i] = pos;
