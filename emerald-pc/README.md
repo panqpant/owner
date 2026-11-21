@@ -24,6 +24,7 @@ the game's assets.
 | **HD texture packs:** dump tiles (F6), replace with hand-drawn art in `hd/tiles` | done, see [HDPACKS.md](HDPACKS.md) |
 | Day/night lighting outdoors, soft side fill for 3:2 screens, colour grade | done |
 | **Lighting engine:** sun shadows that move with the clock, character silhouette shadows (sun and night lights), ambient occlusion, cloud shadows, swaying grass and trees, fireflies, rain splashes, forest light shafts, cave mist, lit windows at night, scenery reflections on water | done |
+| **HD audio:** Lanczos resampling, smooth volume ramps, band-limited PSG with a stereo double, stereo hall reverb, mastering EQ and soft limiter | done |
 | Sharp scaling (pixel-edge sampling plus contrast-adaptive sharpening), highlight roll-off | done |
 | **Relit:** per-pixel surface lighting (sun, moon, indoor key light, lamp rim light), water reflections of characters and sky, wet ground with puddle reflections and light streaks, lightning with shadows | done |
 | Verified: intro, new game, overworld, a full battle turn, all 518 maps load and render | done |
@@ -41,6 +42,7 @@ the game's assets.
 | F1 | HD / original graphics |
 | F3 | Colour grade |
 | F4 | Day/night lighting |
+| F5 | HD audio / original GBA sound |
 | F6 | Dump tiles for HD packs |
 | F11 or Alt+Enter | Fullscreen |
 | F12 | Screenshot |

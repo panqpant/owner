@@ -10,6 +10,7 @@
 //
 // Compiled with the game's flags so it can use the real m4a structures.
 #include <math.h>
+#include <stdlib.h>
 #include "global.h"
 #include "gba/m4a_internal.h"
 #include "port.h"
@@ -691,6 +692,13 @@ static float sPrevL[MAX_FRAME_SAMPLES], sPrevR[MAX_FRAME_SAMPLES];
 static s16 sOut[MAX_FRAME_SAMPLES * 2];
 static double sPos[MAX_DIRECTSOUND_CHANNELS]; // playback position (samples)
 
+// "HD audio" (on by default, F5 toggles): high-quality resampling, smooth
+// volume changes, band-limited PSG with a stereo double, a stereo hall
+// reverb and a mastering stage. Off = the GBA mixer's sound.
+int gPcHdAudio = 1;
+static float sLastVol[MAX_DIRECTSOUND_CHANNELS][2];
+static u8 sJustStarted[MAX_DIRECTSOUND_CHANNELS];
+
 static s8 sDecoded[64];
 static const struct WaveData *sDecodedWav;
 static s32 sDecodedBlock = -1;
@@ -759,6 +767,7 @@ static int UpdateEnvelope(struct SoundInfo *si, struct SoundChannel *c, int idx)
         }
         f = SOUND_CHANNEL_SF_ENV_ATTACK;
         c->statusFlags = f;
+        sJustStarted[idx] = 1;
         sPos[idx] = c->count; // start offset
         c->currentPointer = c->wav->data + c->count;
         c->count = c->wav->size - c->count;
@@ -831,9 +840,53 @@ store:
     return 1;
 }
 
+// Sample with looping/ends handled, for interpolation taps.
+static inline float Tap(const struct SoundChannel *c, s32 idx, u32 size, u32 loopStart, int loop)
+{
+    if (idx < 0)
+        return 0;
+    if ((u32)idx >= size)
+    {
+        if (!loop || size <= loopStart)
+            return 0;
+        idx = loopStart + (idx - size) % (s32)(size - loopStart);
+    }
+    return WaveSample(c, idx);
+}
+
+// Lanczos-3 kernel, tabulated at 256 sub-sample phases.
+static float sLanczos[257][6];
+static void InitLanczos(void)
+{
+    int ph, k;
+    for (ph = 0; ph <= 256; ph++)
+    {
+        double f = ph / 256.0, sum = 0;
+        for (k = 0; k < 6; k++)
+        {
+            double x = (k - 2) - f, v;
+            if (fabs(x) < 1e-9) v = 1;
+            else if (fabs(x) >= 3) v = 0;
+            else v = 3 * sin(M_PI * x) * sin(M_PI * x / 3) / (M_PI * M_PI * x * x);
+            sLanczos[ph][k] = (float)v;
+            sum += v;
+        }
+        for (k = 0; k < 6; k++)
+            sLanczos[ph][k] /= (float)sum;
+    }
+}
+
 static void MixDirectSound(struct SoundInfo *si, int n)
 {
     int i, s;
+    static int lanczosReady;
+    if (!lanczosReady)
+    {
+        InitLanczos();
+        lanczosReady = 1;
+        if (getenv("EMERALD_CLASSIC_AUDIO"))
+            gPcHdAudio = 0;
+    }
     double pcmFreq = si->pcmFreq ? si->pcmFreq : 13379;
 
     for (i = 0; i < si->maxChans && i < MAX_DIRECTSOUND_CHANNELS; i++)
@@ -859,6 +912,16 @@ static void MixDirectSound(struct SoundInfo *si, int n)
         vl = c->envelopeVolumeLeft / 256.0f;
         vr = c->envelopeVolumeRight / 256.0f;
         pos = sPos[i];
+        {
+        // HD: glide from last frame's volume (except on a new note, so attacks stay crisp).
+        float vl0 = sJustStarted[i] ? vl : sLastVol[i][0], vr0 = sJustStarted[i] ? vr : sLastVol[i][1];
+        float dvl = gPcHdAudio ? (vl - vl0) / n : 0, dvr = gPcHdAudio ? (vr - vr0) / n : 0;
+        if (!gPcHdAudio) { vl0 = vl; vr0 = vr; }
+        sJustStarted[i] = 0;
+        sLastVol[i][0] = vl;
+        sLastVol[i][1] = vr;
+        vl = vl0;
+        vr = vr0;
 
         for (s = 0; s < n; s++)
         {
@@ -877,7 +940,14 @@ static void MixDirectSound(struct SoundInfo *si, int n)
                     break;
                 }
             }
-            if (c->type & TONEDATA_TYPE_FIX)
+            if (gPcHdAudio && step <= 1.0)
+            {
+                const float *kk = sLanczos[(int)((pos - ip) * 256.0)];
+                smp = kk[0] * Tap(c, ip - 2, size, loopStart, loop) + kk[1] * Tap(c, ip - 1, size, loopStart, loop)
+                    + kk[2] * Tap(c, ip, size, loopStart, loop) + kk[3] * Tap(c, ip + 1, size, loopStart, loop)
+                    + kk[4] * Tap(c, ip + 2, size, loopStart, loop) + kk[5] * Tap(c, ip + 3, size, loopStart, loop);
+            }
+            else if (c->type & TONEDATA_TYPE_FIX)
             {
                 smp = WaveSample(c, ip);
             }
@@ -893,7 +963,10 @@ static void MixDirectSound(struct SoundInfo *si, int n)
             }
             sMixL[s] += smp * vl;
             sMixR[s] += smp * vr;
+            vl += dvl;
+            vr += dvr;
             pos += step;
+        }
         }
         sPos[i] = pos;
         if (c->statusFlags)
@@ -922,6 +995,8 @@ struct Psg {
     u32 freq;        // 11-bit GB frequency value
     u16 lfsr;
     u8 wave[32];
+    double phase2;   // HD: detuned double of the square channels
+    float lp;        // HD: smoothing filter state
 };
 static struct Psg sPsg[4];
 
@@ -990,6 +1065,27 @@ static void PsgLatch(void)
         if (ch == 2 && !(NR(NR30) & 0x80))
             p->on = 0;
     }
+}
+
+static inline float PolyBlep(double t, double dt)
+{
+    if (t < dt) { t /= dt; return (float)(t + t - t * t - 1.0); }
+    if (t > 1.0 - dt) { t = (t - 1.0) / dt; return (float)(t * t + t + t + 1.0); }
+    return 0.0f;
+}
+
+// Band-limited GB pulse: high from s to s + d (fractions of a cycle).
+static float Pulse(double ph, double dt, int duty)
+{
+    static const double sStart[4] = { 7 / 8.0, 7 / 8.0, 5 / 8.0, 1 / 8.0 };
+    static const double sLen[4] = { 1 / 8.0, 2 / 8.0, 4 / 8.0, 6 / 8.0 };
+    double st = sStart[duty], ln = sLen[duty];
+    double t = ph - st; t -= floor(t);
+    float v = t < ln ? 1.0f : -1.0f;
+    double te = t - ln; te -= floor(te);
+    v += PolyBlep(t, dt);      // rising edge
+    v -= PolyBlep(te, dt);     // falling edge
+    return v;
 }
 
 static void MixPsg(int n)
@@ -1067,6 +1163,23 @@ static void MixPsg(int n)
             }
 
             p->phase += hz * dt;
+            if (ch < 2 && gPcHdAudio)
+            {
+                // Two band-limited oscillators ~7 cents apart, spread across
+                // the stereo field: a fuller, wider lead.
+                int duty = NR(sNrx1[ch]) >> 6;
+                double cyc = hz / 8.0 * dt;
+                float a, b;
+                p->phase2 += hz * 1.004 * dt;
+                if (p->phase2 > 64.0) p->phase2 -= 64.0;
+                a = Pulse(p->phase / 8.0, cyc, duty);
+                b = Pulse(p->phase2 / 8.0, cyc * 1.004, duty);
+                if (toL) sMixL[s] += (a * 0.62f + b * 0.38f) * p->vol * mvL * 0.92f;
+                if (toR) sMixR[s] += (a * 0.38f + b * 0.62f) * p->vol * mvR * 0.92f;
+                if (ch < 3 && p->phase > 64.0)
+                    p->phase -= 64.0;
+                continue;
+            }
             if (ch < 2)
             {
                 int duty = NR(sNrx1[ch]) >> 6;
@@ -1095,6 +1208,13 @@ static void MixPsg(int n)
                 }
                 out = (p->lfsr & 1) ? -p->vol : p->vol;
             }
+            if (gPcHdAudio && ch >= 2)
+            {
+                // Soften the wave channel's 4-bit steps and the noise channel's hiss.
+                float k = ch == 2 ? 0.45f : 0.6f;
+                p->lp += (out - p->lp) * k;
+                out = p->lp;
+            }
             if (ch < 3 && p->phase > 64.0)
                 p->phase -= 64.0;
 
@@ -1106,6 +1226,82 @@ static void MixPsg(int n)
 }
 
 // ---------------------------------------------------------------------------
+// HD reverb (Freeverb-style: 8 parallel combs + 4 allpasses per side) and mastering.
+
+#define NCOMB 8
+#define NAP 4
+static const int sCombLen[NCOMB] = { 1215, 1293, 1390, 1476, 1548, 1623, 1696, 1759 };
+static const int sApLen[NAP] = { 605, 480, 371, 245 };
+#define STEREO_SPREAD 25
+static float sCombBuf[2][NCOMB][1800], sCombStore[2][NCOMB];
+static int sCombIdx[2][NCOMB];
+static float sApBuf[2][NAP][640];
+static int sApIdx[2][NAP];
+
+static float Reverb(int side, float in)
+{
+    float out = 0;
+    int i;
+    const float fb = 0.83f, damp = 0.28f;
+    for (i = 0; i < NCOMB; i++)
+    {
+        int len = sCombLen[i] + side * STEREO_SPREAD;
+        float *b = sCombBuf[side][i];
+        float y = b[sCombIdx[side][i]];
+        sCombStore[side][i] = y * (1 - damp) + sCombStore[side][i] * damp;
+        b[sCombIdx[side][i]] = in + sCombStore[side][i] * fb;
+        if (++sCombIdx[side][i] >= len) sCombIdx[side][i] = 0;
+        out += y;
+    }
+    for (i = 0; i < NAP; i++)
+    {
+        int len = sApLen[i] + side * STEREO_SPREAD;
+        float *b = sApBuf[side][i];
+        float bo = b[sApIdx[side][i]];
+        b[sApIdx[side][i]] = out + bo * 0.5f;
+        out = bo - out;
+        if (++sApIdx[side][i] >= len) sApIdx[side][i] = 0;
+    }
+    return out;
+}
+
+// RBJ shelving biquads.
+struct Biquad { float b0, b1, b2, a1, a2, z1[2], z2[2]; };
+static struct Biquad sLowShelf, sHighShelf;
+static void ShelfInit(struct Biquad *q, int high, double f0, double gainDb)
+{
+    double A = pow(10, gainDb / 40), w = 2 * M_PI * f0 / OUT_RATE, cw = cos(w), sw = sin(w);
+    double al = sw / 2 * sqrt(2.0), b0, b1, b2, a0, a1, a2, sq = 2 * sqrt(A) * al;
+    if (!high)
+    {
+        b0 = A * ((A + 1) - (A - 1) * cw + sq); b1 = 2 * A * ((A - 1) - (A + 1) * cw); b2 = A * ((A + 1) - (A - 1) * cw - sq);
+        a0 = (A + 1) + (A - 1) * cw + sq; a1 = -2 * ((A - 1) + (A + 1) * cw); a2 = (A + 1) + (A - 1) * cw - sq;
+    }
+    else
+    {
+        b0 = A * ((A + 1) + (A - 1) * cw + sq); b1 = -2 * A * ((A - 1) + (A + 1) * cw); b2 = A * ((A + 1) + (A - 1) * cw - sq);
+        a0 = (A + 1) - (A - 1) * cw + sq; a1 = 2 * ((A - 1) - (A + 1) * cw); a2 = (A + 1) - (A - 1) * cw - sq;
+    }
+    q->b0 = b0 / a0; q->b1 = b1 / a0; q->b2 = b2 / a0; q->a1 = a1 / a0; q->a2 = a2 / a0;
+}
+static inline float Biq(struct Biquad *q, int ch, float x)
+{
+    float y = q->b0 * x + q->z1[ch];
+    q->z1[ch] = q->b1 * x - q->a1 * y + q->z2[ch];
+    q->z2[ch] = q->b2 * x - q->a2 * y;
+    return y;
+}
+static inline float SoftClip(float x)
+{
+    // Linear up to 0.8 of full scale, then a smooth knee into the ceiling.
+    float a = fabsf(x);
+    if (a <= 0.8f) return x;
+    a = 0.8f + 0.2f * tanhf((a - 0.8f) / 0.2f);
+    return x < 0 ? -a : a;
+}
+
+void M4aPcSetHdAudio(int on) { gPcHdAudio = on; }
+
 // SoundMain: called from the game's VBlank handler.
 
 void SoundMain(void)
@@ -1129,7 +1325,7 @@ void SoundMain(void)
 
     // Reverb: feed back the previous frame, as the GBA mixer does with its
     // double-buffered PCM output.
-    if (si->reverb)
+    if (si->reverb && !gPcHdAudio)
     {
         float r = si->reverb / 512.0f;
         for (i = 0; i < n; i++)
@@ -1154,6 +1350,38 @@ void SoundMain(void)
         memset(sMixL, 0, n * sizeof(float));
         memset(sMixR, 0, n * sizeof(float));
         MixPsg(n);
+        if (gPcHdAudio)
+        {
+            static int init;
+            float wet = 0.10f + (si->reverb & 0x7F) / 127.0f * 0.14f;
+            if (!init)
+            {
+                ShelfInit(&sLowShelf, 0, 140, 2.0);
+                ShelfInit(&sHighShelf, 1, 7000, 2.0);
+                init = 1;
+            }
+            for (i = 0; i < n; i++)
+            {
+                float l = dsL[i] * 4.0f + sMixL[i] * 4.0f;
+                float r = dsR[i] * 4.0f + sMixR[i] * 4.0f;
+                static float hp, hpx;
+                float rin = (l + r) * 0.5f * 0.015f;
+                hp = 0.974f * (hp + rin - hpx); hpx = rin;   // keep bass out of the reverb (~200 Hz high-pass)
+                rin = hp;
+                float m, sd;
+                l += Reverb(0, rin) * wet * 4.5f;
+                r += Reverb(1, rin) * wet * 4.5f;
+                m = (l + r) * 0.5f; sd = (l - r) * 0.5f * 1.2f;   // a little wider
+                l = m + sd; r = m - sd;
+                l = Biq(&sHighShelf, 0, Biq(&sLowShelf, 0, l));
+                r = Biq(&sHighShelf, 1, Biq(&sLowShelf, 1, r));
+                sOut[i * 2] = (s16)(SoftClip(l * 48.0f / 32768.0f) * 32767.0f);
+                sOut[i * 2 + 1] = (s16)(SoftClip(r * 48.0f / 32768.0f) * 32767.0f);
+            }
+            FrontendAudio(sOut, n);
+            si->ident = ID_NUMBER;
+            return;
+        }
         for (i = 0; i < n; i++)
         {
             // Direct Sound: s8 units * 4 (100% volume) -> 10-bit; PSG already 10-bit-ish.

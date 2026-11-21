@@ -323,6 +323,13 @@ static void PumpEvents(void)
                 HdSetGrade(!HdGetGrade());
             else if (e.key.keysym.sym == SDLK_F4 && sUseGl)
                 HdSetLighting(!HdGetLighting());
+            else if (e.key.keysym.sym == SDLK_F5)
+            {
+                extern int gPcHdAudio;
+                extern void M4aPcSetHdAudio(int on);
+                M4aPcSetHdAudio(!gPcHdAudio);
+                SDL_SetWindowTitle(sWindow, gPcHdAudio ? "Pokémon Emerald  [HD audio]" : "Pokémon Emerald  [original audio]");
+            }
             else if (e.key.keysym.sym == SDLK_F6)
             {
                 HdPackSetDump(!gHdDumpEnabled);
