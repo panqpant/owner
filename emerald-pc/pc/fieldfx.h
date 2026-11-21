@@ -39,6 +39,9 @@ struct PcBattleFx {
     int outdoors;
     int scene;   // new backdrop: -1 keep the game's, else PC_BSCENE_*
     int count;
+    int anim;            // a move animation is playing
+    int attacker, target, moveType;
+    float shake;         // 0-1: a hit just landed
     struct { short x, y, w, h; unsigned short tile; unsigned char side, visible; } mon[4]; // sprite rects (GBA screen coords), first OBJ tile
 };
 extern struct PcBattleFx gPcBattleFx;

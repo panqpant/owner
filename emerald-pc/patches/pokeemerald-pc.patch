@@ -57,6 +57,28 @@ index f624850..578207d 100644
  // Prevent cross-jump optimization.
  #define BLOCK_CROSS_JUMP asm("");
  
+diff --git a/src/battle_anim.c b/src/battle_anim.c
+index fb2817a..3e22b57 100644
+--- a/src/battle_anim.c
++++ b/src/battle_anim.c
+@@ -205,9 +205,17 @@ void DoMoveAnim(u16 move)
+     LaunchBattleAnimation(gBattleAnims_Moves, move, TRUE);
+ }
+ 
++#ifdef PLATFORM_PC
++u16 gPcAnimMove;      // move being animated (0 = not a move), for the PC battle camera
++u8 gPcAnimIsMove;
++#endif
+ void LaunchBattleAnimation(const u8 *const animsTable[], u16 tableId, bool8 isMoveAnim)
+ {
+     s32 i;
++#ifdef PLATFORM_PC
++    gPcAnimMove = tableId;
++    gPcAnimIsMove = isMoveAnim;
++#endif
+ 
+     if (!IsContest())
+     {
 diff --git a/src/battle_main.c b/src/battle_main.c
 index 11fc168..083e191 100644
 --- a/src/battle_main.c

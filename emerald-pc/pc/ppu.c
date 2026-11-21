@@ -736,7 +736,7 @@ static void ExportLine(int line, const int *bgOn, const int *bgPrio, int forcedB
             if (sObjColor[x] != TRANSPARENT && !sObjHidden[x])
                 opaque |= 16;
             meta[x] = sWinMask[x] | ((u32)((sObjPrio[x] & 3) | (sObjSemi[x] ? 4 : 0)) << 8) | (opaque << 16)
-                    | ((u32)(gPpuObjBattler[line][x] == 1) << 24);
+                    | ((u32)gPpuObjBattler[line][x] << 24);
         }
     }
 }

@@ -21,6 +21,8 @@
 #include "constants/trainers.h"
 #include "constants/battle.h"
 #include "constants/map_types.h"
+#include "pokemon.h"
+#include "constants/moves.h"
 #include "fieldfx.h"
 
 struct PcFieldFx gPcFieldFx;
@@ -196,6 +198,29 @@ void PcUpdateBattleFx(void)
             b->scene = atoi(getenv("EMERALD_BSCENE"));
     }
     b->count = gBattlersCount < 4 ? gBattlersCount : 4;
+    {
+        extern u16 gPcAnimMove;
+        extern u8 gPcAnimIsMove;
+        static u16 lastHp[4];
+        static int seen;
+        b->anim = gAnimScriptActive && gPcAnimIsMove;
+        b->attacker = gBattleAnimAttacker & 3;
+        b->target = gBattleAnimTarget & 3;
+        b->moveType = b->anim && gPcAnimMove < MOVES_COUNT ? gBattleMoves[gPcAnimMove].type : -1;
+        b->shake *= 0.85f;
+        for (i = 0; i < b->count; i++)
+        {
+            u16 hp = gBattleMons[i].hp;
+            if (seen && hp < lastHp[i] && gBattleMons[i].maxHP)
+            {
+                float f = 0.35f + 2.0f * (lastHp[i] - hp) / (float)gBattleMons[i].maxHP;
+                if (f > 1) f = 1;
+                if (f > b->shake) b->shake = f;
+            }
+            lastHp[i] = hp;
+        }
+        seen = 1;
+    }
     for (i = 0; i < b->count; i++)
     {
         u8 id = gBattlerSpriteIds[i];

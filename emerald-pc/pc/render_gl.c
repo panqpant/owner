@@ -301,7 +301,12 @@ static const char *kComposite =
     "uniform vec3 uBShadow;\n"      // shadow direction per px of height (x, y), strength
     "uniform vec4 uMoveLight;\n"    // move effects as a light: x, y, strength, radius
     "uniform vec3 uMoveColor;\n"
-    "uniform int uScene;\n"         // procedural battle backdrop (-1 = the game's art)
+    "uniform int uScene;\n"
+    "uniform vec3 uCam;\n"          // battle camera: centre (uv), zoom
+    "uniform vec2 uShake;\n"        // camera shake offset, GBA px
+    "uniform float uBoxTop;\n"      // battle message box top line
+    "uniform int uMoveType;\n"      // type of the move being animated (-1 none)
+    "uniform float uMoveFx;\n"      // its effect strength 0-1         // procedural battle backdrop (-1 = the game's art)
     "uniform vec3 uSkyTop, uSkyHor;\n"
     "uniform vec3 uSunPos;\n"       // sun (z = 1) or moon (z = 0) position, GBA px; z = -1 none
     "uniform float uNightB;\n"
@@ -678,6 +683,17 @@ static const char *kComposite =
     "  vec2 uv = vec2(vUv.x, 1.0 - vUv.y);\n"
     "  gUpSize = vec2(textureSize(uLayer[0], 0));\n"
     "  gUpFw = fwidth(uv * gUpSize);\n"
+    "  vec2 uvc = uv; ivec2 npc = np; bool camOn = false;\n"
+    "  if (uBattle != 0 && float(np.y) < uBoxTop) {\n"
+    "    camOn = true;\n"
+    "    uvc = uCam.xy + (uv - uCam.xy) / uCam.z + uShake / uDim;\n"
+    "    if (uMoveFx > 0.0) {\n"
+    "      vec2 gq = uvc * uDim;\n"
+    "      if (uMoveType == 10) uvc.x += sin(gq.y * 0.9 + uTime * 9.0) * 0.35 * uMoveFx / uDim.x;\n"
+    "      if (uMoveType == 14) uvc += vec2(sin(gq.y * 0.25 + uTime * 5.0), cos(gq.x * 0.2 + uTime * 4.0)) * 0.6 * uMoveFx / uDim;\n"
+    "    }\n"
+    "    npc = clamp(ivec2(floor(uvc * uDim)), ivec2(0), ivec2(uDim) - 1);\n"
+    "  }\n"
     "  uvec4 L0 = texelFetch(uLine, ivec2(0, np.y), 0);\n"
     "  uvec4 L1 = texelFetch(uLine, ivec2(1, np.y), 0);\n"
     "  uvec4 L2 = texelFetch(uLine, ivec2(2, np.y), 0);\n"
@@ -690,10 +706,22 @@ static const char *kComposite =
     "  float eva = float(L2.b) / 16.0, evb = float(L2.a) / 16.0, evy = float(L3.r) / 16.0;\n"
     "  uint effect = L3.g;\n"
     "  vec4 lay[5];\n"
-    "  lay[0] = TexS(uLayer[0], uv); lay[1] = TexS(uLayer[1], uv);\n"
-    "  lay[2] = TexS(uLayer[2], uv); lay[3] = TexS(uLayer[3], uv);\n"
+    "  lay[0] = TexS(uLayer[0], uv); lay[1] = TexS(uLayer[1], uvc);\n"
+    "  lay[2] = TexS(uLayer[2], uvc); lay[3] = TexS(uLayer[3], uvc);\n"
     "  lay[4] = TexS(uLayer[4], uv);\n"
+    "  if (camOn) {\n"
+    "    uvec4 Mc = texelFetch(uMeta, npc, 0);\n"
+    "    vec2 gs = uv * uDim - vec2(uMargin, 0.0), gc = uvc * uDim - vec2(uMargin, 0.0);\n"
+    "    bool hbS = M.a == 2u && ((gs.y >= 70.0 && gs.y < 114.0 && gs.x >= 118.0) || (gs.y < 46.0 && gs.x < 120.0));\n"
+    "    bool hbC = Mc.a == 2u && ((gc.y >= 70.0 && gc.y < 114.0 && gc.x >= 118.0) || (gc.y < 46.0 && gc.x < 120.0));\n"
+    "    if (!hbS) {\n"
+    "      lay[4] = hbC ? vec4(0.0) : TexS(uLayer[4], uvc);\n"
+    "      M = uvec4(M.r, Mc.g, M.b, hbC ? 0u : Mc.a);\n"
+    "      objPrio = M.g & 3u; semi = (M.g & 4u) != 0u;\n"
+    "    }\n"
+    "  }\n"
     "  vec2 gp = vec2(vUv.x * uDim.x - uMargin, (1.0 - vUv.y) * uDim.y);\n"
+    "  if (camOn) gp = uvc * uDim - vec2(uMargin, 0.0);\n"
     "  vec2 wp = gp - uGridPos.xy + uGridPos.zw * 16.0;\n"   // world position (map pixels)
     "  int here = uFieldFx != 0 ? Cell(ivec2(floor(CellPos(gp)))) : 0;\n"
     // Wind: grass and tree leaves sway, anchored at the top and bottom of each tile.
@@ -743,7 +771,7 @@ static const char *kComposite =
     // reveal what the GBA keeps hidden underneath; use the upscaled original
     // frame there instead.
     "  if (top != 5 && top != 0 && ((M.b >> uint(top)) & 1u) != 0u && lay[top].a < 0.999)\n"
-    "    under = TexS(uFlat, uv).rgb;\n"
+    "    under = TexS(uFlat, uvc).rgb;\n"
     "  vec3 botCol = bot == 5 ? bd : lay[bot].rgb / max(lay[bot].a, 1e-4);\n"
     "  vec3 res = under;\n"
     "  if (top != 5) {\n"
@@ -1071,6 +1099,35 @@ static const char *kComposite =
     "        float f = exp(-d * d / (2.0 * uMoveLight.w * uMoveLight.w));\n"
     "        float facing = mk >= 0 ? 0.6 + max(dot(N.xy, to / max(d, 1e-3)), 0.0) * 2.0 : 1.0;\n"
     "        res += uMoveColor * f * uMoveLight.z * facing * (0.45 + 0.55 * res);\n"
+    "      }\n"
+    "      if (uMoveFx > 0.0) {\n"
+    "        float e = uMoveFx; vec2 q = gp;\n"
+    "        float l = dot(res, vec3(0.299, 0.587, 0.114));\n"
+    "        if (uMoveType == 10) res = mix(res, res * vec3(1.12, 0.98, 0.86) + vec3(0.03, 0.01, 0.0), e);\n"
+    "        else if (uMoveType == 11) {\n"
+    "          float c = pow(abs(sin(q.x * 0.11 + sin(q.y * 0.13 + uTime * 1.7) * 2.0 + uTime) * sin(q.y * 0.09 - uTime * 1.3 + sin(q.x * 0.07) * 2.0)), 3.0);\n"
+    "          res = mix(res, res * vec3(0.8, 0.95, 1.15) + vec3(0.5, 0.8, 1.0) * c * 0.35, e);\n"
+    "        } else if (uMoveType == 13) {\n"
+    "          float fl = step(0.55, Hash(vec2(floor(uTime * 18.0), 1.0)));\n"
+    "          res = mix(res, res * (1.0 + fl * 0.5) + vec3(0.25, 0.22, 0.0) * fl, e);\n"
+    "        } else if (uMoveType == 15) {\n"
+    "          float edge = max(abs(gp.x / 240.0 - 0.5), abs(gp.y / 112.0 - 0.5)) * 2.0;\n"
+    "          float fr = smoothstep(0.55, 1.0, edge + Noise(gp * 0.2) * 0.25);\n"
+    "          res = mix(res, mix(vec3(l) * vec3(0.85, 0.95, 1.15), vec3(0.85, 0.93, 1.0), fr * 0.7), e);\n"
+    "        } else if (uMoveType == 14) res = mix(res, res * vec3(1.1, 0.85, 1.2) + vec3(0.06, 0.0, 0.08), e);\n"
+    "        else if (uMoveType == 7 || uMoveType == 17) {\n"
+    "          float v = length((gp - vec2(120.0, 60.0)) / vec2(150.0, 90.0));\n"
+    "          res = mix(res, res * mix(vec3(0.75, 0.65, 0.9), vec3(0.15, 0.08, 0.2), smoothstep(0.3, 1.0, v)), e);\n"
+    "        } else if (uMoveType == 12) res = mix(res, res * vec3(0.9, 1.15, 0.85) + vec3(0.0, 0.05, 0.0), e);\n"
+    "        else if (uMoveType == 16) res = mix(res, res * vec3(0.95, 0.85, 1.2), e);\n"
+    "        else if (uMoveType == 3) res = mix(res, res * vec3(1.05, 0.85, 1.1), e);\n"
+    "        else if (uMoveType == 4 || uMoveType == 5) {\n"
+    "          float d = smoothstep(40.0, 112.0, gp.y) * (0.6 + 0.4 * Noise(gp * 0.05 + vec2(uTime * 0.5, -uTime * 0.8)));\n"
+    "          res = mix(res, mix(res, vec3(0.72, 0.6, 0.42), d * 0.45), e);\n"
+    "        } else if (uMoveType == 2) {\n"
+    "          float w = smoothstep(0.75, 1.0, Noise(vec2(gp.x * 0.02 - uTime * 3.0, gp.y * 0.6)));\n"
+    "          res = mix(res, res + vec3(0.25) * w, e);\n"
+    "        }\n"
     "      }\n"
     "    }\n"
     "  }\n"
@@ -1416,6 +1473,43 @@ static void SetBattleUniforms(void)
 
     glUniform1i(glGetUniformLocation(sProgComp, "uBattle"), on);
     glUniform1i(glGetUniformLocation(sProgComp, "uScene"), -1);
+    {
+        // Battle camera: eases toward the action during a move, follows it
+        // from attacker to target, and shakes when a hit lands.
+        static float cx = -1, cy = 0.4f, cz = 1.0f, fx;
+        static int animFrames;
+        float tx, ty, tz = 1.0f, tfx = 0;
+        const struct PcBattleFx *b = &gPcBattleFx;
+        float W = (float)gPcScreenW, mm = (gPcScreenW - GBA_W) / 2.0f;
+        float t = (float)(PortFrameCount() % 36000) / 59.73f;
+        tx = (120.0f + mm) / W; ty = 60.0f / GBA_H;
+        if (cx < 0) { cx = tx; cy = ty; }
+        if (on && b->anim && b->attacker < b->count && b->target < b->count)
+        {
+            float ax = b->mon[b->attacker].x + b->mon[b->attacker].w / 2.0f, ay = b->mon[b->attacker].y + b->mon[b->attacker].h / 2.0f;
+            float bx = b->mon[b->target].x + b->mon[b->target].w / 2.0f, by = b->mon[b->target].y + b->mon[b->target].h / 2.0f;
+            float k = animFrames < 20 ? 0.25f : 0.7f;
+            tx = ((ax + (bx - ax) * k) * 0.5f + 60.0f + mm) / W;
+            ty = ((ay + (by - ay) * k) * 0.5f + 30.0f) / GBA_H;
+            tz = 1.10f;
+            tfx = 1.0f;
+            animFrames++;
+        }
+        else
+            animFrames = 0;
+        if (getenv("EMERALD_NOCAM"))
+            tz = 1.0f, tx = (120.0f + mm) / W, ty = 60.0f / GBA_H;
+        cx += (tx - cx) * 0.06f; cy += (ty - cy) * 0.06f; cz += (tz - cz) * 0.06f;
+        fx += (tfx - fx) * (tfx > fx ? 0.12f : 0.05f);
+        glUniform3f(glGetUniformLocation(sProgComp, "uCam"), cx + 0.004f * sinf(t * 0.21f), cy + 0.003f * sinf(t * 0.17f), cz + 0.012f + 0.006f * sinf(t * 0.29f));
+        {
+            float sh = on ? b->shake * (b->moveType == 1 || b->moveType == 4 || b->moveType == 5 ? 4.0f : 2.5f) : 0;
+            glUniform2f(glGetUniformLocation(sProgComp, "uShake"), sh * sinf(t * 91.0f), sh * cosf(t * 73.0f) * 0.7f);
+        }
+        glUniform1f(glGetUniformLocation(sProgComp, "uBoxTop"), (float)gPpuBattleBoxTop);
+        glUniform1i(glGetUniformLocation(sProgComp, "uMoveType"), b->moveType);
+        glUniform1f(glGetUniformLocation(sProgComp, "uMoveFx"), on && b->moveType >= 0 ? fx * 0.8f : 0.0f);
+    }
     if (getenv("EMERALD_DEBUG_BATTLE"))
     {
         static int n;
@@ -1528,7 +1622,7 @@ static void SetBattleUniforms(void)
         cr /= sw; cg /= sw; cb /= sw;
         mxc = (float)(cr > cg ? (cr > cb ? cr : cb) : (cg > cb ? cg : cb));
         if (str > 1) str = 1;
-        glUniform4f(glGetUniformLocation(sProgComp, "uMoveLight"), (float)(sx / sw), (float)(sy / sw), str * 0.9f, 75.0f);
+        glUniform4f(glGetUniformLocation(sProgComp, "uMoveLight"), (float)(sx / sw), (float)(sy / sw), str * 0.65f, 60.0f);
         glUniform3f(glGetUniformLocation(sProgComp, "uMoveColor"), (float)cr / mxc, (float)cg / mxc, (float)cb / mxc);
     }
     else
