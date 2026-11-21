@@ -1,0 +1,182 @@
+diff --git a/include/gba/macro.h b/include/gba/macro.h
+index 8566762..097e815 100644
+--- a/include/gba/macro.h
++++ b/include/gba/macro.h
+@@ -54,6 +54,11 @@
+ 
+ #define CpuFastCopy(src, dest, size) CpuFastSet(src, dest, ((size)/(32/8) & 0x1FFFFF))
+ 
++#ifdef PLATFORM_PC
++void PortDmaSet(int dmaNum, u32 src, u32 dest, u32 control);
++#define DmaSetUnchecked(dmaNum, src, dest, control) \
++    PortDmaSet(dmaNum, (u32)(src), (u32)(dest), (u32)(control))
++#else
+ #define DmaSetUnchecked(dmaNum, src, dest, control) \
+ {                                                 \
+     vu32 *dmaRegs = (vu32 *)REG_ADDR_DMA##dmaNum; \
+@@ -62,6 +67,7 @@
+     dmaRegs[2] = (vu32)(control);                 \
+     dmaRegs[2];                                   \
+ }
++#endif // PLATFORM_PC
+ 
+ #if MODERN
+ // NOTE: Assumes 16-bit DMAs.
+diff --git a/src/bg.c b/src/bg.c
+index 2c82a42..fbc3a87 100644
+--- a/src/bg.c
++++ b/src/bg.c
+@@ -1238,9 +1238,12 @@ bool32 IsInvalidBg32(u8 bg)
+ 
+ bool32 IsTileMapOutsideWram(u8 bg)
+ {
++#ifndef PLATFORM_PC // on PC, heap buffers live in host memory above the GBA map
+     if (sGpuBgConfigs2[bg].tilemap > (void *)IWRAM_END)
+         return TRUE;
+-    else if (sGpuBgConfigs2[bg].tilemap == NULL)
++    else
++#endif
++    if (sGpuBgConfigs2[bg].tilemap == NULL)
+         return TRUE;
+     else
+         return FALSE;
+diff --git a/src/librfu_intr.c b/src/librfu_intr.c
+index 5ae53ab..36b7e5d 100644
+--- a/src/librfu_intr.c
++++ b/src/librfu_intr.c
+@@ -395,6 +395,22 @@ static void STWI_init_slave(void)
+     REG_SIOCNT = SIO_INTR_ENABLE | SIO_32BIT_MODE | SIO_57600_BPS | SIO_ENABLE;
+ }
+ 
++#ifdef PLATFORM_PC
++static void Callback_Dummy_M(int reqCommandId, int error, void (*callbackM)())
++{
++    callbackM(reqCommandId, error);
++}
++
++static void Callback_Dummy_S(u16 reqCommandId, void (*callbackS)(u16))
++{
++    callbackS(reqCommandId);
++}
++
++static void Callback_Dummy_ID(void (*callbackId)(void))
++{
++    callbackId();
++}
++#else
+ NAKED
+ #if __STDC_VERSION__ < 202311L
+ static void Callback_Dummy_M(int reqCommandId, int error, void (*callbackM)())
+@@ -416,3 +432,4 @@ static void Callback_Dummy_ID(void (*callbackId)(void))
+ {
+     asm("bx r0");
+ }
++#endif // PLATFORM_PC
+diff --git a/src/librfu_sio32id.c b/src/librfu_sio32id.c
+index c40bb82..364e543 100644
+--- a/src/librfu_sio32id.c
++++ b/src/librfu_sio32id.c
+@@ -26,6 +26,10 @@ s32 AgbRFU_checkID(u8 maxTries)
+     vu16 *regTMCNTL;
+     s32 id;
+ 
++#ifdef PLATFORM_PC
++    // No wireless adapter is ever attached on PC.
++    return 0;
++#endif
+     // Interrupts must be enabled
+     if (REG_IME == 0)
+         return -1;
+diff --git a/src/librfu_stwi.c b/src/librfu_stwi.c
+index 13a7e34..38a06ef 100644
+--- a/src/librfu_stwi.c
++++ b/src/librfu_stwi.c
+@@ -66,8 +66,10 @@ void AgbRFU_SoftReset(void)
+     *timerH = 0;
+     *timerL = 0;
+     *timerH = TIMER_ENABLE | TIMER_1024CLK;
++#ifndef PLATFORM_PC // no wireless adapter on PC; skip the timed reset pulse
+     while (*timerL <= 0x11)
+         REG_RCNT = 0x80A2;
++#endif
+     *timerH = 3;
+     REG_RCNT = 0x80A0;
+     REG_SIOCNT = SIO_INTR_ENABLE | SIO_32BIT_MODE | SIO_115200_BPS;
+diff --git a/src/m4a.c b/src/m4a.c
+index 1a2d541..0a712e8 100644
+--- a/src/m4a.c
++++ b/src/m4a.c
+@@ -420,11 +420,13 @@ void SampleFreqSet(u32 freq)
+ 
+     m4aSoundVSyncOn();
+ 
++#ifndef PLATFORM_PC // syncs the PCM timer to the display; the PC mixer is frame-driven
+     while (*(vu8 *)REG_ADDR_VCOUNT == 159)
+         ;
+ 
+     while (*(vu8 *)REG_ADDR_VCOUNT != 159)
+         ;
++#endif
+ 
+     REG_TM0CNT_H = TIMER_ENABLE | TIMER_1CLK;
+ }
+diff --git a/src/main.c b/src/main.c
+index 2a47ec5..1b21f1e 100644
+--- a/src/main.c
++++ b/src/main.c
+@@ -411,8 +411,14 @@ static void WaitForVBlank(void)
+ {
+     gMain.intrCheck &= ~INTR_FLAG_VBLANK;
+ 
++#ifdef PLATFORM_PC
++    // No asynchronous interrupts on PC: run the hardware up to the next VBlank.
++    while (!(gMain.intrCheck & INTR_FLAG_VBLANK))
++        VBlankIntrWait();
++#else
+     while (!(gMain.intrCheck & INTR_FLAG_VBLANK))
+         ;
++#endif
+ }
+ 
+ void SetTrainerHillVBlankCounter(u32 *counter)
+diff --git a/src/multiboot.c b/src/multiboot.c
+index 15b062e..fa904f8 100644
+--- a/src/multiboot.c
++++ b/src/multiboot.c
+@@ -436,6 +436,11 @@ static int MultiBootHandShake(struct MultiBootParam *mp)
+ #undef must_data
+ }
+ 
++#ifdef PLATFORM_PC
++static void MultiBootWaitCycles(u32 cycles)
++{
++}
++#else
+ NAKED
+ static void MultiBootWaitCycles(u32 cycles)
+ {
+@@ -454,6 +459,7 @@ MultiBootWaitCyclesLoop:\n\
+     bgt  MultiBootWaitCyclesLoop\n\
+     bx   lr\n");
+ }
++#endif // PLATFORM_PC
+ 
+ static void MultiBootWaitSendDone(void)
+ {
+diff --git a/src/naming_screen.c b/src/naming_screen.c
+index ca3be25..0cd0de9 100644
+--- a/src/naming_screen.c
++++ b/src/naming_screen.c
+@@ -2008,6 +2008,12 @@ static void PrintControls(void)
+ static void CB2_NamingScreen(void)
+ {
+     RunTasks();
++#ifdef UBFIX
++    // The exit task frees sNamingScreen; the cursor sprite callback would
++    // then dereference NULL (harmless BIOS read on GBA, a crash elsewhere).
++    if (sNamingScreen == NULL)
++        return;
++#endif
+     AnimateSprites();
+     BuildOamBuffer();
+     UpdatePaletteFade();
