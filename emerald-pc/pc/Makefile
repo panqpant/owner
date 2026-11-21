@@ -1,22 +1,49 @@
 # Native PC build of pokeemerald. Run from the repository root:
-#   make -f pc/Makefile            (headless test binary)
-#   make -f pc/Makefile sdl        (SDL2 window build)
+#   make -f pc/Makefile                  headless test binary (Linux)
+#   make -f pc/Makefile sdl              windowed game (Linux, SDL2)
+#   make -f pc/Makefile PLATFORM=win     windowed game (Windows .exe, cross-built with MinGW)
 # Requires the normal GBA build to have run once (it generates the graphics,
 # maps, music and tool binaries this build reuses).
 
-HOST_CC   ?= gcc
-HOST_AS   ?= as
-ARCH      := -m32
-BUILD     := build/pc
-OBJ       := $(BUILD)/obj
-ASMTREE   := $(BUILD)/asmtree
+PLATFORM  ?= linux
 PREPROC   := tools/preproc/preproc
+ASMTREE   := build/pc/asmtree
+SDL_MINGW ?= ../sdl2-mingw/i686-w64-mingw32
 
-CPPFLAGS  := $(ARCH) -iquote include -Wno-trigraphs -DMODERN=1 -DPLATFORM_PC -DBUGFIX -std=gnu11
-CFLAGS    := $(ARCH) -std=gnu11 -O2 -g -funsigned-char -fno-strict-aliasing -fwrapv \
-             -fno-pie -fno-stack-protector -fcommon -w
-PC_CFLAGS := $(ARCH) -std=gnu11 -O2 -g -fno-pie -fno-stack-protector -Wall -Wno-unused-function -Ipc
-LDFLAGS   := $(ARCH) -no-pie -z noexecstack -Wl,--defsym,gNumMusicPlayers=4 -Wl,--defsym,gMaxLines=0
+# The game uses GCC bitfield layout and 32-bit pointers on every platform.
+COMMON_CPP := -iquote include -Wno-trigraphs -DMODERN=1 -DPLATFORM_PC -DBUGFIX -std=gnu11
+COMMON_C   := -std=gnu11 -O2 -g -funsigned-char -fno-strict-aliasing -fwrapv -fno-stack-protector -fcommon
+
+ifeq ($(PLATFORM),win)
+  HOST_CC   := i686-w64-mingw32-gcc
+  HOST_AS   := i686-w64-mingw32-as
+  OBJCOPY   := i686-w64-mingw32-objcopy
+  BUILD     := build/win
+  ARCH      := -mno-ms-bitfields
+  SYMPREFIX := _
+  # Keep the image clear of the GBA address range (0x02000000-0x08000000).
+  LDFLAGS   := -static-libgcc -Wl,--image-base,0x10000000 -Wl,--disable-dynamicbase \
+               -Wl,--defsym,_gNumMusicPlayers=4 -Wl,--defsym,_gMaxLines=0 -mwindows
+  SDL_CFLAGS := -I$(SDL_MINGW)/include/SDL2
+  SDL_LIBS   := -L$(SDL_MINGW)/lib -lSDL2
+  EXE       := .exe
+else
+  HOST_CC   := gcc
+  HOST_AS   := as
+  OBJCOPY   := objcopy
+  BUILD     := build/pc
+  ARCH      := -m32 -fno-pie
+  SYMPREFIX :=
+  LDFLAGS   := -m32 -no-pie -z noexecstack -Wl,--defsym,gNumMusicPlayers=4 -Wl,--defsym,gMaxLines=0
+  SDL_CFLAGS := $(shell PKG_CONFIG_PATH=/usr/lib/i386-linux-gnu/pkgconfig pkg-config --cflags sdl2 2>/dev/null)
+  SDL_LIBS   := $(shell PKG_CONFIG_PATH=/usr/lib/i386-linux-gnu/pkgconfig pkg-config --libs sdl2 2>/dev/null || echo -lSDL2)
+  EXE       :=
+endif
+
+OBJ       := $(BUILD)/obj
+CPPFLAGS  := $(ARCH) $(COMMON_CPP)
+CFLAGS    := $(ARCH) $(COMMON_C) -w
+PC_CFLAGS := $(ARCH) -std=gnu11 -O2 -g -fno-stack-protector -Wall -Wno-unused-function -Ipc
 LIBS      := -lm
 
 # Hardware drivers replaced by pc/*.c
@@ -37,15 +64,22 @@ PORT_OBJS := $(patsubst %,$(OBJ)/pc/%.o,$(PORT_COMMON)) $(patsubst %,$(OBJ)/pcga
 ALL_GAME := $(GAME_OBJS) $(DATA_OBJS) $(SONG_OBJS) $(PORT_OBJS)
 
 .PHONY: all headless sdl asmtree clean
+ifeq ($(PLATFORM),win)
+all: $(BUILD)/emerald.exe
+else
 all: headless
-headless: $(BUILD)/emerald_headless
-sdl: $(BUILD)/emerald
+endif
+headless: $(BUILD)/emerald_headless$(EXE)
+sdl: $(BUILD)/emerald$(EXE)
 
-$(BUILD)/emerald_headless: $(ALL_GAME) $(OBJ)/pc/frontend_headless.o
+$(BUILD)/emerald_headless$(EXE): $(ALL_GAME) $(OBJ)/pc/frontend_headless.o
 	$(HOST_CC) $(LDFLAGS) -o $@ $^ $(LIBS)
 
-$(BUILD)/emerald: $(ALL_GAME) $(OBJ)/pc/frontend_sdl.o
-	$(HOST_CC) $(LDFLAGS) -o $@ $^ $(LIBS) $(shell pkg-config --libs sdl2 2>/dev/null || echo -lSDL2)
+$(BUILD)/emerald$(EXE): $(ALL_GAME) $(OBJ)/pc/frontend_sdl.o
+	$(HOST_CC) $(LDFLAGS) -o $@ $^ $(LIBS) $(SDL_LIBS)
+ifeq ($(PLATFORM),win)
+	cp $(SDL_MINGW)/bin/SDL2.dll $(BUILD)/
+endif
 
 $(OBJ)/game/%.o: src/%.c
 	@mkdir -p $(@D)
@@ -55,25 +89,31 @@ $(OBJ)/game/%.o: src/%.c
 $(OBJ)/pc/%.o: pc/%.c pc/port.h
 	@mkdir -p $(@D)
 	@echo "cc  $<"
-	@$(HOST_CC) $(PC_CFLAGS) $(if $(findstring sdl,$*),$(shell pkg-config --cflags sdl2 2>/dev/null)) -c $< -o $@
+	@$(HOST_CC) $(PC_CFLAGS) $(if $(findstring sdl,$*),$(SDL_CFLAGS)) -c $< -o $@
 
 $(OBJ)/pcgame/%.o: pc/%.c pc/port.h
 	@mkdir -p $(@D)
 	@echo "cc  $<"
-	@$(HOST_CC) $(CPPFLAGS) $(subst -w,-Wall -Wno-unused-function -Wno-pointer-to-int-cast -Wno-int-to-pointer-cast,$(CFLAGS)) -Ipc -c $< -o $@
+	@$(HOST_CC) $(CPPFLAGS) $(COMMON_C) -Wall -Wno-unused-function -Wno-pointer-to-int-cast -Wno-int-to-pointer-cast -Ipc -c $< -o $@
 
-# Data assembly is converted to x86 gas syntax in a mirror tree first.
+# Data assembly is converted to x86 gas syntax in a mirror tree first. On
+# Windows, C symbols carry a leading underscore, so the assembled data gets
+# the same prefix.
 asmtree:
 	@python3 -I pc/mkasmtree.py
+
+define ASM_FIXUP
+$(if $(SYMPREFIX),&& $(OBJCOPY) --prefix-symbols=$(SYMPREFIX) $(1) $(1))
+endef
 
 $(OBJ)/data/%.o: data/%.s | asmtree
 	@mkdir -p $(@D)
 	@echo "as  $<"
-	@cd $(ASMTREE) && ../../../$(PREPROC) $< charmap.txt | cpp -I include - | ../../../$(PREPROC) -ie $< charmap.txt | $(HOST_AS) --32 --divide -o ../../../$@
+	@cd $(ASMTREE) && ../../../$(PREPROC) $< charmap.txt | cpp -I include - | ../../../$(PREPROC) -ie $< charmap.txt | $(HOST_AS) --32 --divide -o ../../../$@ $(call ASM_FIXUP,../../../$@)
 
 $(OBJ)/songs/%.o: sound/songs/midi/%.s | asmtree
 	@mkdir -p $(@D)
-	@cd $(ASMTREE) && $(HOST_AS) --32 --divide -I sound -o ../../../$@ $<
+	@cd $(ASMTREE) && $(HOST_AS) --32 --divide -I sound -o ../../../$@ $< $(call ASM_FIXUP,../../../$@)
 
 clean:
 	rm -rf $(BUILD)

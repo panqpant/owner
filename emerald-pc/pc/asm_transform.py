@@ -7,10 +7,11 @@ ARM-only mode directives.
 """
 import re, sys
 
-DROP = re.compile(r'^\s*\.(thumb|arm|thumb_func|syntax|code|cpu|fpu)\b')
+DROP = re.compile(r'^\s*\.(thumb|arm|thumb_func|syntax|code|cpu|fpu|size)\b')
 ALIGN = re.compile(r'(^|\s|;)\.align(\s)')
 WORD = re.compile(r'(^|\s|;)\.word(\s)')
 TYPE = re.compile(r'^\s*\.type\b')
+SECTYPE = re.compile(r',\s*[%@](progbits|nobits)\b')
 
 def strip_comment(line):
     out = []
@@ -42,6 +43,7 @@ def convert(text):
             continue
         line = ALIGN.sub(r'\1.p2align\2', line)
         line = WORD.sub(r'\1.4byte\2', line)
+        line = SECTYPE.sub('', line)
         res.append(line)
     return '\n'.join(res)
 
