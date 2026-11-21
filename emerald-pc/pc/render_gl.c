@@ -853,7 +853,7 @@ static const char *kComposite =
     "  }\n"
     // Scenery lighting on the ground: ambient occlusion around solid
     // scenery, sun shadows that follow the time of day, drifting cloud shadows.
-    "  float recv = (uFieldFx != 0 && top >= 1 && top <= 3) ? 1.0 - Solid(gp) : 0.0;\n"   // how much this is open ground
+    "  float recv = (uFieldFx != 0 && top >= 1 && top <= 3 && uMapType != 8 && uMapType != 9) ? 1.0 - Solid(gp) : 0.0;\n"   // how much this is open ground
     "  if (recv > 0.0) {\n"
     "    float ao = Solid(gp + vec2(0.0, -5.0)) * 0.55 + Solid(gp + vec2(-5.0, 0.0)) * 0.22\n"
     "             + Solid(gp + vec2(5.0, 0.0)) * 0.22 + Solid(gp + vec2(0.0, 5.0)) * 0.12;\n"
@@ -1027,12 +1027,7 @@ static const char *kComposite =
     // soft furniture shadows, warm lamplight at night ----
     "  if (uFieldFx != 0 && top != 0 && (uMapType == 8 || uMapType == 9)) {\n"
     "    bool floor_ = top >= 1 && top <= 3 && (here & 1) == 0;\n"
-    "    if (floor_) {\n"   // furniture contact shadows (light from above and slightly behind)
-    "      float sh = Solid(gp - vec2(1.5, 4.0)) * 0.6 + Solid(gp - vec2(-1.5, 4.0)) * 0.4;\n"
-    "      sh = (sh + Solid(gp - vec2(0.0, 8.0)) * 0.5) / 1.5;\n"
-    "      res *= 1.0 - clamp(sh - Solid(gp), 0.0, 1.0) * 0.13;\n"
-    "    }\n"
-    "    if (top >= 1 && top <= 3 && uInSun.z > 0.0 && !Glass(gp)) {\n"   // trace back toward the window along the light
+    "    if (false) {\n"   // window sunbeams: removed (blocky edges)   // trace back toward the window along the light
     "      float beam = 0.0; vec2 dir = uInSun.xy;\n"
     "      for (int k = 2; k <= 14; k++) {\n"
     "        vec2 q = gp - dir * float(k) * 3.5;\n"
@@ -1047,19 +1042,6 @@ static const char *kComposite =
     "        res += vec3(1.0, 0.88, 0.65) * (edge * (0.22 + 0.3 * beam) * dust + mote * 0.6 * beam) * uInSun.z * (0.5 + 0.5 * res);\n"
     "      }\n"
     "    }\n"
-    "    {\n"   // screens and lamps: very bright pixels nearby glow onto their surroundings
-    "      vec3 glow = vec3(0.0);\n"
-    "      for (int k = 0; k < 8; k++) {\n"
-    "        float a = float(k) * 0.785 + 0.39;\n"
-    "        for (int rr = 1; rr <= 2; rr++) {\n"
-    "          vec2 q = gp + vec2(cos(a), sin(a)) * float(rr) * 5.0;\n"
-    "          vec3 c = TexS(uFlat, vec2((q.x + uMargin) / uDim.x, q.y / uDim.y)).rgb;\n"
-    "          float mx = max(c.r, max(c.g, c.b)), mn = min(c.r, min(c.g, c.b));\n"
-    "          glow += c * smoothstep(0.82, 0.97, mx) * smoothstep(0.25, 0.45, mx - mn) / float(rr);\n"
-    "        }\n"
-    "      }\n"
-    "      res += glow * (0.05 + 0.07 * uInSun.w);\n"
-    "    }\n"
     "    if (uInSun.w > 0.0) {\n"   // night: dark windows, warm lamplight in the room
     "      if (top >= 1 && top <= 3 && Glass(gp)) res = mix(res, vec3(0.08, 0.12, 0.28) + res * 0.2, uInSun.w * 0.8);\n"
     "      else res *= mix(vec3(1.0), vec3(1.06, 0.97, 0.86), uInSun.w);\n"
@@ -1070,13 +1052,13 @@ static const char *kComposite =
     "    bool outside = uMapType != 4 && uMapType != 8 && uMapType != 9;\n"
     "    float day = uSun.w;\n"
     // Falling leaves in wooded areas, drifting with the wind, with shadows.
-    "    if (outside && uForest > 0.22 && uWeather == 0) {\n"
+    "    if (outside && uForest > 0.32 && uWeather == 0) {\n"
     "      for (int L = 0; L < 2; L++) {\n"
     "        vec2 vel = vec2(-9.0, 13.0) * (L == 0 ? 1.0 : 0.7);\n"
     "        for (int S = 0; S < 2; S++) {\n"   // S = 0 shadow, 1 leaf
     "          vec2 q = gp - vel * uTime + (S == 0 ? vec2(-4.0, -7.0) : vec2(0.0)) + float(L) * 17.0;\n"
     "          vec2 c = floor(q / 30.0); float h = Hash(c + float(L) * 7.3);\n"
-    "          if (h > 0.35 + 0.3 * smoothstep(0.25, 0.6, uForest)) continue;\n"
+    "          if (h > 0.12 + 0.3 * smoothstep(0.32, 0.6, uForest)) continue;\n"
     "          vec2 ctr = (c + 0.5) * 30.0 + vec2(sin(uTime * 1.7 + h * 30.0) * 6.0, cos(uTime * 1.1 + h * 17.0) * 3.0);\n"
     "          float an = uTime * (1.5 + h * 3.0) + h * 20.0;\n"
     "          vec2 d = mat2(cos(an), -sin(an), sin(an), cos(an)) * (q - ctr);\n"
@@ -2030,7 +2012,7 @@ static void RenderHd(const uint32_t *frame, int outW, int outH)
                 else
                 {
                     kx = -0.3f; ky = -0.6f; kz = 1.0f;
-                    ks = gPcFieldFx.mapType == 4 /* underground */ ? 0.4f : 0.55f;
+                    ks = gPcFieldFx.mapType == 4 /* underground */ ? 0.4f : 0.0f;   // none indoors: furniture is all tiles
                 }
                 n = sqrtf(kx * kx + ky * ky + kz * kz);
                 if (getenv("EMERALD_NORELIEF"))
