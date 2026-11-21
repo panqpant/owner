@@ -21,6 +21,8 @@ typedef int16_t s16; typedef int32_t s32;
 enum { L_BG0, L_BG1, L_BG2, L_BG3, L_OBJ, L_BD };
 
 #define TRANSPARENT 0x8000
+#define POPUP_W 96 // map-name sign size including its frame
+#define POPUP_H 40
 
 int gPcScreenW = GBA_W;
 uint16_t *gPcFieldMap[4];
@@ -130,7 +132,7 @@ static void RenderTextBg(int bg, int line)
     const u16 *fieldMap = NULL;
     int x0 = sMargin, x1 = sMargin + GBA_W;
 
-    if (sBattle)
+    if ((sBattle && bg == 0) || (sWide && bg == 0 && gPcMapPopup))
     {
         x0 = 0;
         x1 = sW;
@@ -179,9 +181,19 @@ static void RenderTextBg(int bg, int line)
             else if (x >= sMargin + GBA_W - 8)
                 gx = GBA_W - 9;
         }
-        else if (sBattle && (gx < 0 || gx >= GBA_W))
+        else if (sWide && bg == 0 && gPcMapPopup)
         {
-            gx = gx < 0 ? 0 : GBA_W - 1; // backgrounds: repeat the edge column
+            // Map-name sign (BG0 tiles 0-11 x 0-4): draw it in the true top-left
+            // corner of the wide screen and hide it at its original place.
+            int inSign = (y & 255) < POPUP_H;
+            if (inSign && x < POPUP_W)
+                gx = x;
+            else if (gx < 0 || gx >= GBA_W || (inSign && gx < POPUP_W))
+            {
+                out[x] = TRANSPARENT;
+                if (sDoRefs) refSlot[x] = 0;
+                continue;
+            }
         }
         sx = gx - ((gx % mosH) + mosH) % mosH;
         tx = (sx + hofs) & (w - 1);
@@ -241,6 +253,28 @@ static void RenderTextBg(int bg, int line)
         }
         if (sDoRefs)
             refInfo[x] = px | (py << 3) | ((entry & 0x400) ? 64 : 0) | ((entry & 0x800) ? 128 : 0);
+    }
+
+    // Battle backgrounds: extend each row into the margins. Rows are uniform
+    // bands except where a platform touches an edge, so use the edge colour
+    // only if it matches the row's background (taken from the middle, which
+    // platforms never reach); otherwise use the background colour.
+    if (sBattle && bg != 0)
+    {
+        u16 ref = out[sMargin + GBA_W / 2];
+        u16 l = out[sMargin], rr = out[sMargin + GBA_W - 1];
+        u16 lf = (ref == TRANSPARENT || l == ref) ? l : ref;
+        u16 rf = (ref == TRANSPARENT || rr == ref) ? rr : ref;
+        for (x = 0; x < sMargin; x++)
+        {
+            out[x] = lf;
+            if (sDoRefs) refSlot[x] = 0;
+        }
+        for (x = sMargin + GBA_W; x < sW; x++)
+        {
+            out[x] = rf;
+            if (sDoRefs) refSlot[x] = 0;
+        }
     }
 }
 

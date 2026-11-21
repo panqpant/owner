@@ -19,6 +19,7 @@ extern uint8_t gPcFieldMapBase[4];
 int PcFieldWideActive(void);
 extern int gPcOutdoors; // overworld map is outdoors (time-of-day lighting applies)
 extern int gPcBattleFrame; // the current frame belongs to a battle (widescreen battle rendering)
+extern int gPcMapPopup;    // the map-name sign window exists (top-left of BG0)
 extern int gPpuContentX0, gPpuContentX1;
 
 // GBA memory regions are mapped at their real addresses inside the

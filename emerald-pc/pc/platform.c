@@ -275,6 +275,8 @@ void PcSetFieldMaps(uint16_t *bg1, uint16_t *bg2, uint16_t *bg3, int base1, int 
 
 int gPcOutdoors;
 void PcMarkBattleFrame(void) { sBattleSeen = 1; }
+int gPcMapPopup;
+void PcSetMapPopup(int shown) { gPcMapPopup = shown; }
 void PcSetOutdoors(int outdoors) { gPcOutdoors = outdoors; }
 
 // Extra pixels visible on each side of the GBA screen on the overworld.

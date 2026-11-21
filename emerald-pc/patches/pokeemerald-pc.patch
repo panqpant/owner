@@ -23,10 +23,10 @@ index 8566762..097e815 100644
  #if MODERN
  // NOTE: Assumes 16-bit DMAs.
 diff --git a/include/global.h b/include/global.h
-index f624850..a722f26 100644
+index f624850..44ca0df 100644
 --- a/include/global.h
 +++ b/include/global.h
-@@ -17,6 +17,28 @@
+@@ -17,6 +17,29 @@
  #include "constants/easy_chat.h"
  #include "constants/trainer_hill.h"
  
@@ -41,6 +41,7 @@ index f624850..a722f26 100644
 +void PcSetOutdoors(int outdoors); // enables time-of-day lighting on the overworld
 +void PcUpdateFieldFx(void);       // lights and character shadows (pc/fieldfx.c)
 +void PcMarkBattleFrame(void);     // this frame is a battle: render it widescreen
++void PcSetMapPopup(int shown);    // map-name sign: drawn at the widescreen corner
 +// High-resolution text (pc/texthd.c): keep per-pixel glyph tags in step with windows.
 +struct TextPrinter;
 +void PcTextGlyph(struct TextPrinter *printer);
@@ -455,6 +456,40 @@ index 2a47ec5..1b21f1e 100644
  }
  
  void SetTrainerHillVBlankCounter(u32 *counter)
+diff --git a/src/menu.c b/src/menu.c
+index 094ccd7..e79fbe9 100644
+--- a/src/menu.c
++++ b/src/menu.c
+@@ -145,6 +145,9 @@ void InitStandardTextBoxWindows(void)
+     InitWindows(sStandardTextBox_WindowTemplates);
+     sStartMenuWindowId = WINDOW_NONE;
+     sMapNamePopupWindowId = WINDOW_NONE;
++#ifdef PLATFORM_PC
++    PcSetMapPopup(0);
++#endif
+ }
+ 
+ void FreeAllOverworldWindowBuffers(void)
+@@ -522,6 +525,9 @@ u8 AddMapNamePopUpWindow(void)
+ {
+     if (sMapNamePopupWindowId == WINDOW_NONE)
+         sMapNamePopupWindowId = AddWindowParameterized(0, 1, 1, 10, 3, 14, 0x107);
++#ifdef PLATFORM_PC
++    PcSetMapPopup(1);
++#endif
+     return sMapNamePopupWindowId;
+ }
+ 
+@@ -537,6 +543,9 @@ void RemoveMapNamePopUpWindow(void)
+         RemoveWindow(sMapNamePopupWindowId);
+         sMapNamePopupWindowId = WINDOW_NONE;
+     }
++#ifdef PLATFORM_PC
++    PcSetMapPopup(0);
++#endif
+ }
+ 
+ void AddTextPrinterWithCallbackForMessage(bool8 canSpeedUp, TextPrinterCallback callback)
 diff --git a/src/multiboot.c b/src/multiboot.c
 index 15b062e..fa904f8 100644
 --- a/src/multiboot.c
