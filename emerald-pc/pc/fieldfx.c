@@ -23,6 +23,7 @@
 #include "constants/map_types.h"
 #include "pokemon.h"
 #include "constants/moves.h"
+#include "constants/map_groups.h"
 #include "fieldfx.h"
 
 struct PcFieldFx gPcFieldFx;
@@ -55,6 +56,12 @@ void PcUpdateFieldFx(void)
         break;
     }
     fx->flash = 0;
+    fx->ash = gWeatherPtr->currWeather == WEATHER_VOLCANIC_ASH;
+    {
+        u16 id = gSaveBlock1Ptr->location.mapNum | (gSaveBlock1Ptr->location.mapGroup << 8);
+        fx->heat = id == MAP_MT_CHIMNEY || id == MAP_FIERY_PATH
+                || (id >= MAP_MAGMA_HIDEOUT_1F && id <= MAP_MAGMA_HIDEOUT_1F + 7);
+    }
     if (gWeatherPtr->currWeather == WEATHER_RAIN_THUNDERSTORM && gWeatherPtr->colorMapIndex > 3)
         fx->flash = gWeatherPtr->colorMapIndex - 3;
     if (fx->weather == PC_WEATHER_RAIN || fx->weather == PC_WEATHER_DOWNPOUR)

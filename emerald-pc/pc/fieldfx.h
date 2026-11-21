@@ -21,6 +21,8 @@ struct PcFieldFx {
     int hideTileStart[2], hideTileCount[2]; // OBJ tiles of the original weather sprites
     int mapType;
     int flash;
+    int ash;                             // volcanic ash falling (Route 113)
+    int heat;                            // heat haze (Mt. Chimney, Fiery Path, Magma Hideout)
     int playerX, playerY;                // player's feet, GBA screen coords (-999 if none)                           // lightning brightness 0-16 (thunderstorms)
     int gridX, gridY;                    // screen position of the grid's first metatile
     int gridWX, gridWY;                  // its map coordinates (world position = cell * 16)

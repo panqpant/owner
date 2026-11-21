@@ -294,6 +294,7 @@ static const char *kComposite =
     "uniform vec4 uKey;\n"
     "uniform float uFlash;\n"
     "uniform vec2 uPlayer;\n"
+    "uniform vec3 uLife;\n"         // x: water fraction on screen, y: volcanic ash, z: heat haze
     "uniform int uBattle;\n"        // battle scene lighting on
     "uniform vec4 uMon[4];\n"       // battler sprite rects x, y, w, h (w = 0: none)
     "uniform vec3 uMonFeet[4];\n"   // feet x, y; half width
@@ -694,6 +695,11 @@ static const char *kComposite =
     "    }\n"
     "    npc = clamp(ivec2(floor(uvc * uDim)), ivec2(0), ivec2(uDim) - 1);\n"
     "  }\n"
+    "  if (uFieldFx != 0 && uLife.z > 0.0 && np.y > 0) {\n"   // heat rising off the ground
+    "    vec2 gq = uv * uDim;\n"
+    "    uvc.x += sin(gq.y * 0.55 + uTime * 5.5 + sin(gq.x * 0.08 + uTime) * 2.0) * 0.32 / uDim.x;\n"
+    "    uvc.y += sin(gq.x * 0.31 + uTime * 4.0) * 0.18 / uDim.y;\n"
+    "  }\n"
     "  uvec4 L0 = texelFetch(uLine, ivec2(0, np.y), 0);\n"
     "  uvec4 L1 = texelFetch(uLine, ivec2(1, np.y), 0);\n"
     "  uvec4 L2 = texelFetch(uLine, ivec2(2, np.y), 0);\n"
@@ -1004,6 +1010,126 @@ static const char *kComposite =
     "    float lamp = (1.0 - smoothstep(10.0, 95.0, dl)) * (1.0 - occ * 0.5);\n"
     "    float flick = 0.95 + 0.05 * sin(uTime * 9.0) * Noise(vec2(uTime * 3.0, 1.0));\n"
     "    res *= 0.72 + vec3(1.0, 0.82, 0.6) * lamp * 0.5 * flick;\n"
+    "  }\n"
+    // ---- Living world: particles drawn into the scene (not over menus) ----
+    "  if (uFieldFx != 0 && top != 0) {\n"
+    "    bool outside = uMapType != 4 && uMapType != 8 && uMapType != 9;\n"
+    "    float day = uSun.w;\n"
+    // Falling leaves in wooded areas, drifting with the wind, with shadows.
+    "    if (outside && uForest > 0.22 && uWeather == 0) {\n"
+    "      for (int L = 0; L < 2; L++) {\n"
+    "        vec2 vel = vec2(-9.0, 13.0) * (L == 0 ? 1.0 : 0.7);\n"
+    "        for (int S = 0; S < 2; S++) {\n"   // S = 0 shadow, 1 leaf
+    "          vec2 q = gp - vel * uTime + (S == 0 ? vec2(-4.0, -7.0) : vec2(0.0)) + float(L) * 17.0;\n"
+    "          vec2 c = floor(q / 30.0); float h = Hash(c + float(L) * 7.3);\n"
+    "          if (h > 0.35 + 0.3 * smoothstep(0.25, 0.6, uForest)) continue;\n"
+    "          vec2 ctr = (c + 0.5) * 30.0 + vec2(sin(uTime * 1.7 + h * 30.0) * 6.0, cos(uTime * 1.1 + h * 17.0) * 3.0);\n"
+    "          float an = uTime * (1.5 + h * 3.0) + h * 20.0;\n"
+    "          vec2 d = mat2(cos(an), -sin(an), sin(an), cos(an)) * (q - ctr);\n"
+    "          float flip = 0.35 + 0.65 * abs(sin(uTime * 3.0 + h * 9.0));\n"
+    "          float leaf = 1.0 - smoothstep(0.75, 1.0, length(d / vec2(2.8, 1.5 * flip)));\n"
+    "          if (leaf <= 0.0) continue;\n"
+    "          vec3 lc = mix(vec3(0.45, 0.62, 0.18), vec3(0.85, 0.48, 0.15), Hash(c + 3.1)) * mix(0.35, 1.0, day);\n"
+    "          res = S == 0 ? res * (1.0 - leaf * 0.25 * day) : mix(res, lc, leaf);\n"
+    "        }\n"
+    "      }\n"
+    "    }\n"
+    // Butterflies fluttering over grass on sunny days.
+    "    if (outside && day > 0.5 && uWeather == 0) {\n"
+    "      vec2 c = floor(wp / 64.0);\n"
+    "      for (int i = -1; i <= 1; i++) for (int j = -1; j <= 1; j++) {\n"
+    "        vec2 cc = c + vec2(float(i), float(j)); float h = Hash(cc * 2.3 + 5.0);\n"
+    "        if (h > 0.4) continue;\n"
+    "        vec2 p = (cc + 0.5) * 64.0 + vec2(sin(uTime * 0.5 + h * 40.0) * 20.0 + sin(uTime * 1.3 + h * 9.0) * 6.0, cos(uTime * 0.4 + h * 23.0) * 14.0);\n"
+    "        if ((Cell(ivec2(floor((p - uGridPos.zw * 16.0) / 16.0))) & 1) != 0) continue;\n"
+    "        vec2 d = wp - p;\n"
+    "        float sh = exp(-dot(d - vec2(-3.0, 7.0), d - vec2(-3.0, 7.0)) / 3.0);\n"
+    "        res *= 1.0 - sh * 0.25;\n"
+    "        float flap = 0.25 + 0.75 * abs(sin(uTime * 15.0 + h * 50.0));\n"
+    "        d /= 1.6;\n"
+    "        float wing = 1.0 - smoothstep(0.8, 1.0, length(vec2(abs(d.x) - 1.3 * flap, d.y * 1.2) / vec2(1.4 * flap + 0.3, 1.3)));\n"
+    "        vec3 bc = h < 0.13 ? vec3(1.0, 0.95, 0.5) : h < 0.27 ? vec3(1.0) : vec3(1.0, 0.65, 0.8);\n"
+    "        res = mix(res, bc, wing);\n"
+    "        res = mix(res, vec3(0.15), (1.0 - smoothstep(0.3, 0.6, length(d * vec2(2.5, 0.8)))) * 0.8);\n"
+    "      }\n"
+    "    }\n"
+    // A flock of birds now and then: only their shadows sweep over the ground.
+    "    if (outside && day > 0.3 && top >= 1 && top <= 3) {\n"
+    "      float per = 26.0, k = floor(uTime / per), ph = fract(uTime / per);\n"
+    "      vec2 base = vec2(-120.0 + ph * (uDim.x + 260.0) - uMargin, 30.0 + Hash(vec2(k, 2.0)) * 100.0 - ph * 30.0);\n"
+    "      float sh = 0.0;\n"
+    "      for (int b = 0; b < 4; b++) {\n"
+    "        vec2 o = base + vec2(-float(b) * 11.0, float(b - (b / 2) * 2) * 9.0 - 4.0 + float(b) * 2.0);\n"
+    "        vec2 d = gp - o; float fl = 0.6 + 0.4 * sin(uTime * 7.0 + float(b));\n"
+    "        float v = 1.0 - smoothstep(0.9, 1.7, abs(abs(d.x) * 0.45 * fl - (-d.y + 1.0)) + max(abs(d.x) - 8.0, 0.0));\n"
+    "        sh = max(sh, v * step(abs(d.y), 6.0));\n"
+    "      }\n"
+    "      res *= 1.0 - sh * 0.22 * day;\n"
+    "    }\n"
+    // Coast: seagulls circling overhead with shadows on the water, spray along the shore.
+    "    if (outside && uLife.x > 0.12) {\n"
+    "      for (int g = 0; g < 3; g++) {\n"
+    "        float gh = float(g) * 2.1 + 1.0;\n"
+    "        vec2 p = vec2(120.0 + sin(uTime * 0.23 + gh) * 150.0, 50.0 + sin(uTime * 0.17 + gh * 1.7) * 40.0);\n"
+    "        vec2 dir = normalize(vec2(cos(uTime * 0.23 + gh) * 150.0 * 0.23, cos(uTime * 0.17 + gh * 1.7) * 40.0 * 0.17) + 1e-4);\n"
+    "        float fl = 0.5 + 0.5 * sin(uTime * 6.0 + gh);\n"
+    "        for (int S = 0; S < 2; S++) {\n"
+    "          vec2 d = gp - p - (S == 0 ? vec2(10.0, 22.0) : vec2(0.0));\n"
+    "          d = vec2(dot(d, vec2(dir.y, -dir.x)), dot(d, dir));\n"   // wings across the flight direction
+    "          float w = 1.0 - smoothstep(0.5, 1.2, abs(abs(d.x) * (0.25 + 0.25 * fl) - d.y * 0.9 - 0.8) + max(abs(d.x) - 7.0, 0.0) * 2.0);\n"
+    "          if (S == 0) res *= 1.0 - w * 0.18 * day;\n"
+    "          else res = mix(res, mix(vec3(0.25, 0.27, 0.3), vec3(0.98), smoothstep(0.0, 2.0, abs(d.x))) * mix(0.4, 1.0, day), w);\n"
+    "        }\n"
+    "      }\n"
+    "    }\n"
+    "    if ((here & 2) != 0 && top >= 1 && top <= 3) {\n"
+    "      ivec2 c0 = ivec2(floor(CellPos(gp)));\n"
+    "      vec2 f = fract(CellPos(gp)) * 16.0;\n"   // distance (px) to the nearest land edge of this water tile
+    "      float de = 99.0;\n"
+    "      if ((Cell(c0 + ivec2(1, 0)) & 3) == 0) de = min(de, 16.0 - f.x);\n"
+    "      if ((Cell(c0 - ivec2(1, 0)) & 3) == 0) de = min(de, f.x);\n"
+    "      if ((Cell(c0 + ivec2(0, 1)) & 3) == 0) de = min(de, 16.0 - f.y);\n"
+    "      if ((Cell(c0 - ivec2(0, 1)) & 3) == 0) de = min(de, f.y);\n"
+    "      if (de < 5.0) {\n"
+    "        vec2 sc = floor(wp / 4.0); float hh = Hash(sc);\n"
+    "        float life = fract(uTime * 0.8 + hh * 7.0);\n"
+    "        vec2 sp = (sc + 0.5 + 0.35 * vec2(Hash(sc + 1.3), Hash(sc + 2.7)) - 0.17) * 4.0;\n"
+    "        float dot_ = (1.0 - smoothstep(0.3, 0.8, length(wp - sp))) * step(0.82, hh) * (1.0 - life) * (1.0 - de / 5.0);\n"
+    "        res = mix(res, vec3(0.95, 0.98, 1.0), dot_ * 0.8);\n"
+    "        res = mix(res, vec3(0.9, 0.95, 1.0), (1.0 - smoothstep(0.0, 2.5, de)) * (0.25 + 0.15 * sin(uTime * 2.0 + wp.x * 0.3)));\n"   // foam line
+    "      }\n"
+    "    }\n"
+    // Volcanic ash: thick grey flakes drifting down.
+    "    if (uLife.y > 0.0) {\n"
+    "      for (int L = 0; L < 3; L++) {\n"
+    "        float sz = 1.0 + float(L) * 0.6;\n"
+    "        vec2 q = gp - vec2(-4.0 - float(L) * 3.0, 10.0 + float(L) * 6.0) * uTime + float(L) * 31.0;\n"
+    "        vec2 c = floor(q / 9.0); float h = Hash(c + float(L));\n"
+    "        if (h > 0.45) continue;\n"
+    "        vec2 ctr = (c + 0.5) * 9.0 + vec2(sin(uTime * 2.0 + h * 30.0) * 2.5, 0.0);\n"
+    "        float f = 1.0 - smoothstep(sz * 0.5, sz, length(q - ctr));\n"
+    "        res = mix(res, vec3(0.62, 0.6, 0.58) * mix(0.5, 1.0, day), f * 0.85);\n"
+    "      }\n"
+    "      res = mix(res, vec3(0.55, 0.53, 0.5) * mix(0.5, 1.0, day), 0.10);\n"   // ashy air
+    "    }\n"
+    // Heat: a faint orange glow from below.
+    "    if (uLife.z > 0.0) res *= vec3(1.06, 0.98, 0.92);\n"
+    // Caves: water drips from the ceiling, with a ring where each lands.
+    "    if (uMapType == 4) {\n"
+    "      for (int k = 0; k < 6; k++) {\n"
+    "        float per = 2.2 + float(k) * 0.37, ph = fract(uTime / per + float(k) * 0.31), n = floor(uTime / per + float(k) * 0.31);\n"
+    "        vec2 land = vec2(Hash(vec2(n, float(k))) * 240.0, 30.0 + Hash(vec2(float(k), n)) * 110.0);\n"
+    "        if (ph < 0.6) {\n"
+    "          float y = land.y - 60.0 * (1.0 - ph / 0.6) * (1.0 - ph / 0.6);\n"
+    "          vec2 d = gp - vec2(land.x, y);\n"
+    "          res += vec3(0.6, 0.75, 0.9) * (1.0 - smoothstep(0.3, 0.9, length(d * vec2(1.6, 0.6)))) * 0.6;\n"
+    "        } else {\n"
+    "          float rr = (ph - 0.6) / 0.4 * 6.0;\n"
+    "          float ring = 1.0 - smoothstep(0.0, 0.6, abs(length((gp - land) * vec2(1.0, 1.8)) - rr));\n"
+    "          res += vec3(0.5, 0.65, 0.8) * ring * (1.0 - (ph - 0.6) / 0.4) * 0.35;\n"
+    "        }\n"
+    "      }\n"
+    "    }\n"
     "  }\n"
     // Fireflies over grass and trees on summer nights.
     "  if (uFieldFx != 0 && top != 0 && uNight > 0.3 && uMapType != 4 && uMapType != 8 && uWeather == 0) {\n"
@@ -1799,6 +1925,13 @@ static void RenderHd(const uint32_t *frame, int outW, int outH)
             glUniform1iv(glGetUniformLocation(sProgComp, "uGrid"), cells / 4, packed);
             glUniform1i(glGetUniformLocation(sProgComp, "uMapType"), gPcFieldFx.mapType);
             glUniform1f(glGetUniformLocation(sProgComp, "uForest"), (float)solid / cells);
+            {
+                int water = 0;
+                for (k = 0; k < cells; k++)
+                    water += (g[k] & 2) != 0;
+                glUniform3f(glGetUniformLocation(sProgComp, "uLife"), (float)water / cells,
+                            field && gPcFieldFx.ash ? 1.0f : 0.0f, field && gPcFieldFx.heat ? 1.0f : 0.0f);
+            }
             glUniform2f(glGetUniformLocation(sProgComp, "uPlayer"), (float)gPcFieldFx.playerX, (float)gPcFieldFx.playerY);
             SetBattleUniforms();
             glUniform1f(glGetUniformLocation(sProgComp, "uFlash"), field ? (getenv("EMERALD_FLASH") ? 1.0f : gPcFieldFx.flash / 16.0f) : 0.0f);
