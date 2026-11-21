@@ -10,6 +10,7 @@
 #include "field_weather.h"
 #include "metatile_behavior.h"
 #include "constants/weather.h"
+#include "field_player_avatar.h"
 #include "fieldfx.h"
 
 struct PcFieldFx gPcFieldFx;
@@ -106,6 +107,14 @@ void PcUpdateFieldFx(void)
             fx->lights[fx->numLights].radius = 34;
             fx->numLights++;
         }
+    }
+
+    fx->playerX = fx->playerY = -999;
+    if (gPlayerAvatar.spriteId < MAX_SPRITES && gSprites[gPlayerAvatar.spriteId].inUse)
+    {
+        struct Sprite *sp = &gSprites[gPlayerAvatar.spriteId];
+        fx->playerX = sp->x + sp->x2 + (sp->coordOffsetEnabled ? gSpriteCoordOffsetX : 0);
+        fx->playerY = sp->y + sp->y2 + (sp->coordOffsetEnabled ? gSpriteCoordOffsetY : 0) - sp->centerToCornerVecY - 2;
     }
 
     // Soft shadows under characters.

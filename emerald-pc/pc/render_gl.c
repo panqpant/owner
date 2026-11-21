@@ -292,7 +292,8 @@ static const char *kComposite =
     "uniform int uMapType;\n"
     "uniform float uForest;\n"
     "uniform vec4 uKey;\n"
-    "uniform float uFlash;\n"       // lightning, 0-1          // key light: direction towards the light (x, y down, z up), strength      // fraction of scenery around: light shafts
+    "uniform float uFlash;\n"
+    "uniform vec2 uPlayer;\n"       // player's feet (GBA screen coords)       // lightning, 0-1          // key light: direction towards the light (x, y down, z up), strength      // fraction of scenery around: light shafts
     "vec2 gUpSize, gUpFw;\n"
     // Sharp magnification of the upscaled layers: each upscaled pixel stays
     // solid and only the 1-output-pixel seam between neighbours is blended.
@@ -533,6 +534,18 @@ static const char *kComposite =
     "    float d = dot(N.xy, normalize(uKey.xy + 1e-5)) * 1.6;\n"   // facing the light brightens, facing away darkens; 0 on average
     "    res *= 1.0 + clamp(d, -0.45, 0.45) * uKey.w;\n"
     "  }\n"
+    // Light bounce: open ground next to coloured scenery picks up a little
+    // of its colour (a red roof warms the path beside it).
+    "  if (uFieldFx != 0 && top >= 1 && top <= 3 && uKey.w > 0.0) {\n"
+    "    vec2 gr = vec2(Solid(gp + vec2(6.0, 0.0)) - Solid(gp - vec2(6.0, 0.0)), Solid(gp + vec2(0.0, 6.0)) - Solid(gp - vec2(0.0, 6.0)));\n"
+    "    float gl = length(gr);\n"
+    "    if (gl > 0.02 && Solid(gp) < 0.5) {\n"
+    "      vec2 sp = gp + gr / gl * 9.0;\n"
+    "      vec3 bc = TexS(uFlat, vec2((sp.x + uMargin) / uDim.x, sp.y / uDim.y)).rgb;\n"
+    "      vec3 tintc = bc / max(dot(bc, vec3(0.333)), 0.08);\n"
+    "      res *= mix(vec3(1.0), clamp(tintc, 0.6, 1.6), min(gl, 1.0) * 0.14 * uKey.w / 0.6);\n"
+    "    }\n"
+    "  }\n"
     // Scenery lighting on the ground: ambient occlusion around solid
     // scenery, sun shadows that follow the time of day, drifting cloud shadows.
     "  float recv = (uFieldFx != 0 && top >= 1 && top <= 3) ? 1.0 - Solid(gp) : 0.0;\n"   // how much this is open ground
@@ -611,9 +624,12 @@ static const char *kComposite =
     "  }\n"
     // Rain: wet ground darkens and puddles reflect buildings, trees,
     // characters and lights (streaks below lamps and doorways).
-    "  if (uFieldFx != 0 && (uWeather == 1 || uWeather == 2) && recv > 0.5 && (here & 2) == 0 && top >= 1 && top <= 3) {\n"
-    "    float pud = Puddles(wp) * (uWeather == 2 ? 1.0 : 0.75);\n"
-    "    res *= 0.88 - 0.08 * pud;\n"
+    "  if (uFieldFx != 0 && (uWeather == 1 || uWeather == 2) && top >= 1 && top <= 4 && (here & 2) == 0) {\n"
+    "    res *= 0.88;\n"   // everything outdoors is wet: no edge between ground and scenery
+    "  }\n"
+    "  if (uFieldFx != 0 && (uWeather == 1 || uWeather == 2) && recv > 0.0 && (here & 2) == 0 && top >= 1 && top <= 3) {\n"
+    "    float pud = Puddles(wp) * (uWeather == 2 ? 1.0 : 0.75) * smoothstep(0.2, 0.9, recv);\n"
+    "    res *= 1.0 - 0.08 * pud;\n"
     "    if (pud > 0.01) {\n"
     "      ivec2 c0 = ivec2(floor(CellPos(gp)));\n"
     "      int up = -1;\n"
@@ -670,6 +686,37 @@ static const char *kComposite =
     "    vec3 lit = res * (1.0 + warm * g * 0.55) + warm * g * 0.22 * (1.0 - res);\n"
     // Soft shoulder: bright surfaces (white hair, signs) roll off instead of clipping.
     "    res = mix(lit, 0.8 + 0.2 * (1.0 - exp(-(lit - 0.8) / 0.2)), step(0.8, lit));\n"
+    "  }\n"
+    // Light beams: cones of light spilling from doorways at night.
+    "  if (uFieldFx != 0 && uNight > 0.1 && top != 0) {\n"
+    "    float b = 0.0;\n"
+    "    for (int k = 0; k < uNumLights; k++) {\n"
+    "      vec2 q = gp - uLights[k].xy + vec2(0.0, 6.0);\n"
+    "      if (q.y < 0.0 || q.y > 46.0) continue;\n"
+    "      float wdt = 5.0 + q.y * 0.42;\n"
+    "      b += (1.0 - smoothstep(wdt * 0.55, wdt, abs(q.x))) * (1.0 - q.y / 46.0) * (0.75 + 0.25 * Noise(wp * 0.15 + vec2(0.0, uTime * 0.6)));\n"
+    "    }\n"
+    "    res += vec3(1.0, 0.8, 0.5) * min(b, 1.0) * 0.10 * uNight;\n"
+    "  }\n"
+    // Golden hour: low sun streams through the air in broad warm rays.
+    "  if (uFieldFx != 0 && top != 0 && uSun.z > 0.0 && uMapType != 4 && uMapType != 8) {\n"
+    "    float low = smoothstep(9.0, 17.0, length(uSun.xy));\n"
+    "    if (low > 0.0) {\n"
+    "      vec2 dir = normalize(uSun.xy), perp = vec2(-dir.y, dir.x);\n"
+    "      float x = dot(gp, perp) * 0.022;\n"
+    "      float ray = smoothstep(0.5, 0.85, Noise(vec2(x + uTime * 0.015, 3.0))) * (0.6 + 0.4 * Noise(vec2(x * 0.4, uTime * 0.05)));\n"
+    "      res += vec3(1.0, 0.82, 0.55) * ray * low * 0.10 * (1.0 - 0.5 * res);\n"
+    "    }\n"
+    "  }\n"
+    // Caves: the player carries a lantern; rocks cast shadows away from it.
+    "  if (uFieldFx != 0 && uMapType == 4 && top != 0 && uPlayer.x > -900.0) {\n"
+    "    vec2 lp = uPlayer - vec2(0.0, 10.0);\n"
+    "    vec2 to = lp - gp; float dl = length(to);\n"
+    "    float occ = 0.0;\n"
+    "    if (recv > 0.0) for (int k = 1; k <= 8; k++) occ = max(occ, Solid(gp + to * (float(k) / 9.0)) * step(8.0, dl * (1.0 - float(k) / 9.0)));\n"
+    "    float lamp = (1.0 - smoothstep(10.0, 95.0, dl)) * (1.0 - occ * 0.5);\n"
+    "    float flick = 0.95 + 0.05 * sin(uTime * 9.0) * Noise(vec2(uTime * 3.0, 1.0));\n"
+    "    res *= 0.72 + vec3(1.0, 0.82, 0.6) * lamp * 0.5 * flick;\n"
     "  }\n"
     // Fireflies over grass and trees on summer nights.
     "  if (uFieldFx != 0 && top != 0 && uNight > 0.3 && uMapType != 4 && uMapType != 8 && uWeather == 0) {\n"
@@ -1057,16 +1104,19 @@ static void SunVector(float *sun, int weather)
 // and dusk, cool and dim at night, blended smoothly between.
 static void TimeOfDayTint(float *rgb)
 {
+    // Night, pre-dawn blue, pink sunrise, warm morning, neutral day,
+    // golden hour, orange sunset, blue hour, night.
     static const float k[][4] = {
-        { 0.0f, 0.52f, 0.58f, 0.86f }, { 4.5f, 0.52f, 0.58f, 0.86f },
-        { 6.0f, 1.02f, 0.88f, 0.80f }, { 7.5f, 1.00f, 1.00f, 1.00f },
-        { 16.5f, 1.00f, 1.00f, 1.00f }, { 18.0f, 1.06f, 0.86f, 0.70f },
-        { 19.5f, 0.72f, 0.68f, 0.88f }, { 21.0f, 0.52f, 0.58f, 0.86f },
-        { 24.0f, 0.52f, 0.58f, 0.86f },
+        { 0.0f, 0.52f, 0.58f, 0.86f }, { 4.6f, 0.52f, 0.58f, 0.86f },
+        { 5.5f, 0.70f, 0.66f, 0.88f }, { 6.3f, 1.05f, 0.82f, 0.80f },
+        { 7.5f, 1.03f, 0.97f, 0.90f }, { 9.0f, 1.00f, 1.00f, 1.00f },
+        { 16.0f, 1.00f, 1.00f, 1.00f }, { 17.3f, 1.08f, 0.94f, 0.76f },
+        { 18.4f, 1.10f, 0.78f, 0.62f }, { 19.2f, 0.68f, 0.66f, 0.92f },
+        { 20.5f, 0.52f, 0.58f, 0.86f }, { 24.0f, 0.52f, 0.58f, 0.86f },
     };
     float h = LocalHour(), f;
     int i;
-    for (i = 0; i < 8 && h >= k[i + 1][0]; i++)
+    for (i = 0; i < 10 && h >= k[i + 1][0]; i++)
         ;
     f = (h - k[i][0]) / (k[i + 1][0] - k[i][0]);
     rgb[0] = k[i][1] + (k[i + 1][1] - k[i][1]) * f;
@@ -1219,6 +1269,7 @@ static void RenderHd(const uint32_t *frame, int outW, int outH)
             glUniform1iv(glGetUniformLocation(sProgComp, "uGrid"), cells / 4, packed);
             glUniform1i(glGetUniformLocation(sProgComp, "uMapType"), gPcFieldFx.mapType);
             glUniform1f(glGetUniformLocation(sProgComp, "uForest"), (float)solid / cells);
+            glUniform2f(glGetUniformLocation(sProgComp, "uPlayer"), (float)gPcFieldFx.playerX, (float)gPcFieldFx.playerY);
             glUniform1f(glGetUniformLocation(sProgComp, "uFlash"), field ? (getenv("EMERALD_FLASH") ? 1.0f : gPcFieldFx.flash / 16.0f) : 0.0f);
             if (on)
                 SunVector(sun, gPcFieldFx.weather);

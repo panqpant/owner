@@ -96,7 +96,7 @@ EOF
 
 ## Roadmap
 
-- Relit 3: light bounce, light beams from doors/windows, sky colours by hour, cave lantern with shadows (in progress)
+- ~~Relit 3~~ done: light bounce, door light beams, golden-hour rays, sky colours by hour, cave lantern with shadows
 - **Relit 4: battle lighting** (promised): battles use the location's sun direction and time-of-day colour, shadows on platforms, move effects light the scene
 - Phase 5: widescreen menus, settings screen, rebindable keys, 64-bit
 - Phase 1: offline HD art rebuild (pilot tooling in `tools/hdpilot`; needs a decision on AI upscaling)
