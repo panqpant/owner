@@ -23,6 +23,7 @@ the game's assets.
 | **Widescreen:** overworld fills any aspect ratio (16:9, 21:9, any window); UI stays centred | done |
 | **HD texture packs:** dump tiles (F6), replace with hand-drawn art in `hd/tiles` | done, see [HDPACKS.md](HDPACKS.md) |
 | Day/night lighting outdoors, soft side fill for 3:2 screens, colour grade | done |
+| **Lighting engine:** sun shadows that move with the clock, character silhouette shadows (sun and night lights), ambient occlusion, cloud shadows, swaying grass and trees, fireflies, rain splashes, forest light shafts, cave mist | done |
 | Verified: intro, new game, overworld, a full battle turn, all 518 maps load and render | done |
 | Full playthrough (late-game scenes, every menu, link features) | needs playtesting |
 

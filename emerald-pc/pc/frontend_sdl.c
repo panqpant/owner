@@ -207,7 +207,7 @@ int FrontendInit(int argc, char **argv)
         HdPackInit(sBasePath);
         if (sDumpAtStart)
             HdPackSetDump(1);
-        if (sGl && HdInit() == 0)
+        if (sGl && !getenv("EMERALD_NOGL") && HdInit() == 0)
         {
             sUseGl = 1;
             // Vsync (adaptive where supported) to avoid tearing; frame pacing

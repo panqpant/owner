@@ -10,6 +10,7 @@
 // nearest-neighbour scaling.
 #include <stdio.h>
 #include <string.h>
+#include <math.h>
 #include <time.h>
 #include <stdlib.h>
 #include <SDL.h>
@@ -282,10 +283,14 @@ static const char *kComposite =
     "uniform int uNumLights, uNumShadows;\n"
     "uniform vec3 uLights[24];\n"   // x, y (GBA screen coords), radius
     "uniform vec3 uShadows[32];\n"  // feet x, y, width
+    "uniform vec3 uShadowLight[32];\n"  // per character: shadow direction from the nearest light (x, y per px of height), strength
     "uniform int uWeather;\n"       // 1 rain, 2 downpour, 3 sandstorm
     "uniform float uTime;\n"
-    "uniform vec3 uWaterGrid;\n"    // first metatile's screen x, y; number of columns
-    "uniform int uWater[13];\n"
+    "uniform vec4 uGridPos;\n"      // grid cell (0,0): screen x, y; map x, y
+    "uniform int uGrid[144];\n"     // 36x16 metatile flags, 4 per int (PC_CELL_*)
+    "uniform vec4 uSun;\n"          // xy: shadow vector (GBA px), z: shadow strength, w: daylight
+    "uniform int uMapType;\n"
+    "uniform float uForest;\n"      // fraction of scenery around: light shafts
     "float Hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }\n"
     "float Rain(vec2 p, float t, float scale, float speed, float density) {\n"
     "  p.x += p.y * 0.22;\n"
@@ -300,6 +305,32 @@ static const char *kComposite =
     "  vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);\n"
     "  return mix(mix(Hash(i), Hash(i + vec2(1, 0)), f.x), mix(Hash(i + vec2(0, 1)), Hash(i + vec2(1, 1)), f.x), f.y);\n"
     "}\n"
+    "int Cell(ivec2 c) {\n"
+    "  if (c.x < 0 || c.y < 0 || c.x >= 36 || c.y >= 16) return 0;\n"
+    "  int i = c.y * 36 + c.x;\n"
+    "  return (uGrid[i >> 2] >> ((i & 3) * 8)) & 255;\n"
+    "}\n"
+    "vec2 CellPos(vec2 gp) { return (gp - uGridPos.xy) / 16.0; }\n"
+    // Smooth 0..1 field of solid scenery (rounded corners, ~6 px soft edge).
+    "float Solid(vec2 gp) {\n"
+    "  vec2 q = CellPos(gp) - 0.5; ivec2 i = ivec2(floor(q)); vec2 f = fract(q);\n"
+    "  float a = float(Cell(i) & 1), b = float(Cell(i + ivec2(1, 0)) & 1);\n"
+    "  float c = float(Cell(i + ivec2(0, 1)) & 1), d = float(Cell(i + ivec2(1, 1)) & 1);\n"
+    "  return smoothstep(0.12, 0.88, mix(mix(a, b, f.x), mix(c, d, f.x), f.y));\n"
+    "}\n"
+    // A character's own sprite silhouette projected onto the ground: a point
+    // h px above the feet lands at feet + h * k.
+    "float Sil(vec2 g, vec3 s, vec2 k) {\n"
+    "  if (abs(k.y) < 0.15) k.y = k.y < 0.0 ? -0.15 : 0.15;\n"
+    "  float h = (g.y - s.y) / k.y;\n"
+    "  if (h < 0.0 || h > 34.0) return 0.0;\n"
+    "  vec2 sp = vec2(g.x - h * k.x, s.y - h);\n"
+    "  if (abs(sp.x - s.x) > s.z * 0.75) return 0.0;\n"
+    "  vec2 suv = vec2((sp.x + uMargin) / uDim.x, sp.y / uDim.y);\n"
+    "  float a = texture(uLayer[4], suv).a + texture(uLayer[4], suv + vec2(0.6 / uDim.x, 0.0)).a;\n"
+    "  return min(a * 0.5, 1.0) * (1.0 - smoothstep(8.0, 34.0, h) * 0.55);\n"   // softer toward the head
+    "}\n"
+    "bool Green(vec4 c) { vec3 k = c.rgb / max(c.a, 1e-4); return c.a > 0.5 && k.g > k.r * 1.05 && k.g > k.b * 1.1; }\n"
     "vec3 C555(uint c) { return vec3(float(c & 31u), float((c >> 5) & 31u), float((c >> 10) & 31u)) / 31.0; }\n"
     "vec3 PalC(uint i) { return C555(texelFetch(uPal, ivec2(int(i), 0), 0).r); }\n"
     // Hand-made replacement tile, with the GBA's palette fade re-applied.
@@ -352,6 +383,20 @@ static const char *kComposite =
     "  lay[0] = texture(uLayer[0], uv); lay[1] = texture(uLayer[1], uv);\n"
     "  lay[2] = texture(uLayer[2], uv); lay[3] = texture(uLayer[3], uv);\n"
     "  lay[4] = texture(uLayer[4], uv);\n"
+    "  vec2 gp = vec2(vUv.x * uDim.x - uMargin, (1.0 - vUv.y) * uDim.y);\n"
+    "  vec2 wp = gp - uGridPos.xy + uGridPos.zw * 16.0;\n"   // world position (map pixels)
+    "  int here = uFieldFx != 0 ? Cell(ivec2(floor(CellPos(gp)))) : 0;\n"
+    // Wind: grass and tree leaves sway, anchored at the top and bottom of each tile.
+    "  if (uFieldFx != 0 && uMapType != 4 && uMapType != 8 && (here & 5) != 0) {\n"
+    "    float fy = fract(CellPos(gp).y);\n"
+    "    float gust = 0.6 + 0.4 * sin(uTime * 0.37 + wp.x * 0.004);\n"
+    "    float amp = ((here & 4) != 0 ? 0.55 : 0.3) * gust * sin(3.14159 * fy);\n"
+    "    vec2 o = vec2(sin(uTime * 2.1 + wp.x * 0.045 + wp.y * 0.11) * amp / uDim.x, 0.0);\n"
+    "    vec4 s2;\n"
+    "    if (Green(lay[1])) { s2 = texture(uLayer[1], uv + o); if (Green(s2)) lay[1] = s2; }\n"
+    "    if (Green(lay[2])) { s2 = texture(uLayer[2], uv + o); if (Green(s2)) lay[2] = s2; }\n"
+    "    if (Green(lay[3])) { s2 = texture(uLayer[3], uv + o); if (Green(s2)) lay[3] = s2; }\n"
+    "  }\n"
     "  if (uHasPack != 0) {\n"
     "    vec2 sub = vec2(fract(vUv.x * uDim.x), 1.0 - fract(vUv.y * uDim.y));\n"
     "    lay[0] = Pack(uTref[0], lay[0], np, sub); lay[1] = Pack(uTref[1], lay[1], np, sub);\n"
@@ -405,14 +450,45 @@ static const char *kComposite =
     "      else if (effect == 3u) res = res - res * evy;\n"
     "    }\n"
     "  }\n"
+    // Thin, mostly transparent fringes of map/sprite layers in front of the
+    // top layer: added before lighting so they are lit like what they edge.
+    "  for (int k = ti - 1; k >= 0; k--) if (order[k] != 0) { vec4 c = lay[order[k]]; res = res * (1.0 - c.a) + c.rgb; }\n"
+    // Scenery lighting on the ground: ambient occlusion around solid
+    // scenery, sun shadows that follow the time of day, drifting cloud shadows.
+    "  float recv = (uFieldFx != 0 && top >= 1 && top <= 3) ? 1.0 - Solid(gp) : 0.0;\n"   // how much this is open ground
+    "  if (recv > 0.0) {\n"
+    "    float ao = Solid(gp + vec2(0.0, -5.0)) * 0.55 + Solid(gp + vec2(-5.0, 0.0)) * 0.22\n"
+    "             + Solid(gp + vec2(5.0, 0.0)) * 0.22 + Solid(gp + vec2(0.0, 5.0)) * 0.12;\n"
+    "    res *= 1.0 - clamp(ao, 0.0, 1.0) * 0.17 * recv;\n"
+    "    if (uSun.z > 0.0) {\n"
+    "      float occ = 0.0;\n"
+    "      vec2 side = normalize(vec2(-uSun.y, uSun.x)) * 2.5;\n"
+    "      for (int k = 1; k <= 7; k++) {\n"
+    "        vec2 q = gp - uSun.xy * (float(k) / 7.0);\n"
+    "        occ = max(occ, (Solid(q) * 2.0 + Solid(q + side) + Solid(q - side)) * 0.25);\n"
+    "      }\n"
+    "      vec2 cu = vec2(uSun.x / uDim.x, uSun.y / uDim.y);\n"   // canopies/roofs: exact outline
+    "      occ = max(occ, texture(uLayer[1], uv - cu).a * 0.9);\n"
+    "      res *= vec3(1.0) - occ * uSun.z * recv * vec3(1.0, 0.93, 0.78);\n"
+    "    }\n"
+    "  }\n"
+    "  if (uFieldFx != 0 && top != 0 && uSun.w > 0.0 && uMapType != 4 && uMapType != 8 && uMapType != 9) {\n"
+    "    vec2 q = wp * 0.0055 + uTime * vec2(0.018, 0.007);\n"
+    "    float cl = Noise(q) * 0.62 + Noise(q * 2.2 + 3.1) * 0.38;\n"
+    "    res *= 1.0 - smoothstep(0.56, 0.74, cl) * 0.15 * uSun.w;\n"
+    "  }\n"
     // Soft shadows under characters, cast on the ground (not on sprites or UI).
-    "  vec2 gp = vec2(vUv.x * uDim.x - uMargin, (1.0 - vUv.y) * uDim.y);\n"
     "  if (uFieldFx != 0 && top != 4 && top != 0) {\n"
     "    float sh = 0.0;\n"
     "    for (int k = 0; k < uNumShadows; k++) {\n"
     "      vec3 s = uShadows[k];\n"
     "      vec2 e = (gp - s.xy) / vec2(s.z * 0.5, s.z * 0.2);\n"
-    "      sh = max(sh, (1.0 - smoothstep(0.45, 1.0, length(e))) * 0.30);\n"
+    "      float blob = (1.0 - smoothstep(0.45, 1.0, length(e)));\n"
+    "      sh = max(sh, blob * (uSun.z > 0.0 ? 0.20 : 0.28));\n"     // contact shadow
+    "      if (uSun.z > 0.0) sh = max(sh, Sil(gp, s, uSun.xy / 14.0) * uSun.z * 1.5);\n"   // sun
+    "      vec3 L = uShadowLight[k];\n"
+    "      if (L.z > 0.0) sh = max(sh, Sil(gp, s, L.xy) * L.z);\n"   // lamps and lit doorways
+    "      if (sh > 0.55) break;\n"
     "    }\n"
     "    res *= 1.0 - sh;\n"
     "  }\n"
@@ -423,14 +499,12 @@ static const char *kComposite =
     "    res = mix(res, vec3(l), night * 0.35) * uTint.rgb;\n"
     "  }\n"
     // Water: moving sparkle and a gentle shimmer on water metatiles.
-    "  if (uFieldFx != 0 && top >= 2 && top <= 3 && uWaterGrid.z > 0.0) {\n"
-    "    ivec2 cell = ivec2(floor((gp - uWaterGrid.xy) / 16.0));\n"
-    "    if (cell.y >= 0 && cell.y < 13 && cell.x >= 0 && float(cell.x) < uWaterGrid.z && ((uWater[cell.y] >> cell.x) & 1) != 0) {\n"
-    "      float w = sin(gp.x * 0.42 + uTime * 1.6 + sin(gp.y * 0.31 + uTime * 0.9) * 1.7) * 0.5\n"
-    "              + sin(gp.y * 0.57 - uTime * 1.2 + gp.x * 0.13) * 0.5;\n"
-    "      float sp = smoothstep(0.82, 0.98, w) * (0.6 + 0.4 * Noise(gp * 0.7 + uTime));\n"
-    "      res = res * (1.0 + w * 0.035) + vec3(0.85, 0.95, 1.0) * sp * 0.22;\n"
-    "    }\n"
+    "  if (uFieldFx != 0 && top >= 1 && top <= 3 && (here & 2) != 0) {\n"
+    "    float w = sin(wp.x * 0.42 + uTime * 1.6 + sin(wp.y * 0.31 + uTime * 0.9) * 1.7) * 0.5\n"
+    "            + sin(wp.y * 0.57 - uTime * 1.2 + wp.x * 0.13) * 0.5;\n"
+    "    float sp = smoothstep(0.82, 0.98, w) * (0.6 + 0.4 * Noise(wp * 0.7 + uTime));\n"
+    "    vec3 glint = mix(vec3(0.75, 0.85, 1.0), vec3(1.0, 0.95, 0.8), uSun.w);\n"
+    "    res = res * (1.0 + w * 0.04) + glint * sp * (0.12 + 0.16 * uSun.w);\n"
     "  }\n"
     // Warm light around doors at night.
     "  if (uFieldFx != 0 && uNight > 0.0 && top != 0) {\n"
@@ -442,6 +516,45 @@ static const char *kComposite =
     "    }\n"
     "    g = min(g, 1.2) * uNight;\n"
     "    res += vec3(1.0, 0.78, 0.48) * g * (0.35 + res * 0.6);\n"
+    "  }\n"
+    // Fireflies over grass and trees on summer nights.
+    "  if (uFieldFx != 0 && top != 0 && uNight > 0.3 && uMapType != 4 && uMapType != 8 && uWeather == 0) {\n"
+    "    vec2 base = floor(wp / 40.0); float glow = 0.0;\n"
+    "    for (int i = -1; i <= 1; i++) for (int j = -1; j <= 1; j++) {\n"
+    "      vec2 c = base + vec2(float(i), float(j)); float h = Hash(c * 1.37 + 11.0);\n"
+    "      if (h > 0.45) continue;\n"
+    "      vec2 p = c * 40.0 + 20.0 + 15.0 * vec2(sin(uTime * 0.31 + h * 40.0), cos(uTime * 0.23 + h * 23.0));\n"
+    "      int f = Cell(ivec2(floor((p - uGridPos.zw * 16.0) / 16.0)));\n"
+    "      if ((f & 5) == 0) continue;\n"
+    "      float blink = smoothstep(0.2, 1.0, sin(uTime * (0.9 + h * 2.0) + h * 30.0));\n"
+    "      float d = distance(wp, p);\n"
+    "      glow += (exp(-d * d / 1.2) + exp(-d * d / 18.0) * 0.35) * blink;\n"
+    "    }\n"
+    "    res += vec3(0.75, 1.0, 0.35) * glow * (uNight - 0.3) * 1.2;\n"
+    "  }\n"
+    // Raindrops splashing on the ground and on water.
+    "  if (uFieldFx != 0 && (uWeather == 1 || uWeather == 2) && top >= 1 && top <= 3 && (here & 1) == 0) {\n"
+    "    float cs = 11.0; vec2 c = floor(wp / cs); float h = Hash(c + 3.7);\n"
+    "    float ph = fract(uTime * (0.8 + 0.5 * float(uWeather - 1)) + h);\n"
+    "    vec2 ctr = (c + 0.25 + 0.5 * vec2(Hash(c + 1.1), Hash(c + 2.3))) * cs;\n"
+    "    float d = distance(wp * vec2(1.0, 1.6), ctr * vec2(1.0, 1.6));\n"
+    "    float ring = (1.0 - smoothstep(0.0, 0.7, abs(d - ph * 5.0))) * (1.0 - ph);\n"
+    "    res = res * 0.94 + vec3(0.82, 0.88, 0.98) * ring * ((here & 34) != 0 ? 0.35 : 0.2);\n"
+    "  }\n"
+    // Sunlight shafts through dense trees.
+    "  if (uFieldFx != 0 && top != 0 && uForest > 0.25 && uSun.w > 0.2 && uMapType != 4 && uMapType != 8) {\n"
+    "    float x = (gp.x + gp.y * 0.6) * 0.03;\n"
+    "    float ray = pow(Noise(vec2(x + uTime * 0.02, uTime * 0.04)), 3.0) * Noise(vec2(x * 0.3, 7.0));\n"
+    "    res += vec3(1.0, 0.92, 0.7) * ray * 0.22 * smoothstep(0.25, 0.5, uForest) * uSun.w;\n"
+    "  }\n"
+    // Caves: slow drifting mist and floating dust.
+    "  if (uFieldFx != 0 && top != 0 && uMapType == 4) {\n"
+    "    vec2 q = wp * 0.012 + uTime * vec2(0.03, 0.012);\n"
+    "    float m = Noise(q) * 0.6 + Noise(q * 2.3 + 4.0) * 0.4;\n"
+    "    res = mix(res, vec3(0.62, 0.66, 0.74) * max(dot(res, vec3(0.33)) + 0.25, 0.3), smoothstep(0.45, 0.85, m) * 0.16);\n"
+    "    vec2 dc = floor(wp / 18.0); float dh = Hash(dc);\n"
+    "    vec2 dp = (dc + 0.5) * 18.0 + 7.0 * vec2(sin(uTime * 0.2 + dh * 50.0), cos(uTime * 0.15 + dh * 31.0));\n"
+    "    if (dh < 0.3) res += vec3(0.9, 0.85, 0.7) * exp(-dot(wp - dp, wp - dp) / 0.5) * 0.35 * (0.5 + 0.5 * sin(uTime + dh * 20.0));\n"
     "  }\n"
     // Full-resolution weather over the whole widescreen frame (not over UI).
     "  if (uFieldFx != 0 && uWeather != 0 && top != 0) {\n"
@@ -458,7 +571,7 @@ static const char *kComposite =
     "    }\n"
     "  }\n"
     // Thin, mostly transparent fringes of layers in front of the top layer.
-    "  for (int k = ti - 1; k >= 0; k--) { vec4 c = lay[order[k]]; res = res * (1.0 - c.a) + c.rgb; }\n"
+    "  for (int k = ti - 1; k >= 0; k--) if (order[k] == 0) { vec4 c = lay[0]; res = res * (1.0 - c.a) + c.rgb; }\n"
     "  oColor = vec4(res, 1.0);\n"
     "}\n";
 
@@ -743,6 +856,37 @@ int HdGetGrade(void) { return sGrade; }
 void HdSetLighting(int on) { sLighting = on; }
 int HdGetLighting(void) { return sLighting; }
 
+static float LocalHour(void)
+{
+    time_t t = time(NULL);
+    struct tm *lt = localtime(&t);
+    const char *force = getenv("EMERALD_HOUR"); // testing: pretend it is this hour
+    if (force)
+        return (float)atof(force);
+    return lt->tm_hour + lt->tm_min / 60.0f + lt->tm_sec / 3600.0f;
+}
+
+// Sun shadow for the local time: long and to the west in the morning, short
+// at noon, long and to the east in the evening; none at night or in rain.
+static void SunVector(float *sun, int weather)
+{
+    float h = LocalHour(), a = (h - 6.0f) / 13.0f, e, len, dx, dy, n;
+    if (a <= 0.0f || a >= 1.0f)
+        return;
+    e = sinf(a * 3.14159f);
+    len = 5.0f + 15.0f * (1.0f - e);
+    dx = 2.0f * a - 1.0f;
+    dy = 0.45f + 0.35f * e;
+    n = sqrtf(dx * dx + dy * dy);
+    sun[0] = dx / n * len;
+    sun[1] = dy / n * len;
+    sun[2] = 0.30f * fminf(a / 0.06f, 1.0f) * fminf((1.0f - a) / 0.06f, 1.0f);
+    if (weather == PC_WEATHER_RAIN || weather == PC_WEATHER_DOWNPOUR)
+        sun[2] *= 0.2f;
+    else if (weather == PC_WEATHER_SANDSTORM)
+        sun[2] *= 0.5f;
+}
+
 // Outdoor lighting colour for the local time: neutral by day, warm at dawn
 // and dusk, cool and dim at night, blended smoothly between.
 static void TimeOfDayTint(float *rgb)
@@ -754,13 +898,8 @@ static void TimeOfDayTint(float *rgb)
         { 19.5f, 0.72f, 0.68f, 0.88f }, { 21.0f, 0.52f, 0.58f, 0.86f },
         { 24.0f, 0.52f, 0.58f, 0.86f },
     };
-    time_t t = time(NULL);
-    struct tm *lt = localtime(&t);
-    float h = lt->tm_hour + lt->tm_min / 60.0f, f;
-    const char *force = getenv("EMERALD_HOUR"); // testing: pretend it is this hour
+    float h = LocalHour(), f;
     int i;
-    if (force)
-        h = (float)atof(force);
     for (i = 0; i < 8 && h >= k[i + 1][0]; i++)
         ;
     f = (h - k[i][0]) / (k[i + 1][0] - k[i][0]);
@@ -878,9 +1017,26 @@ static void RenderHd(const uint32_t *frame, int outW, int outH)
         gPcHdEffects = field && sLighting;
         glUniform1i(glGetUniformLocation(sProgComp, "uWeather"), gPcHdEffects ? gPcFieldFx.weather : 0);
         glUniform1f(glGetUniformLocation(sProgComp, "uTime"), (float)(PortFrameCount() % 36000) / 59.73f);
-        glUniform3f(glGetUniformLocation(sProgComp, "uWaterGrid"), gPcFieldFx.waterX, gPcFieldFx.waterY,
-                    field ? (float)gPcFieldFx.waterCols : 0.0f);
-        glUniform1iv(glGetUniformLocation(sProgComp, "uWater"), PC_WATER_ROWS, gPcFieldFx.water);
+        {
+            int packed[PC_GRID_W * PC_GRID_H / 4], solid = 0, cells = PC_GRID_W * PC_GRID_H;
+            const unsigned char *g = &gPcFieldFx.grid[0][0];
+            float sun[4] = { 0, 0, 0, 0 };
+            for (k = 0; k < cells / 4; k++)
+                packed[k] = g[k * 4] | (g[k * 4 + 1] << 8) | (g[k * 4 + 2] << 16) | ((unsigned)g[k * 4 + 3] << 24);
+            for (k = 0; k < cells; k++)
+                solid += g[k] & 1;
+            if (!field)
+                memset(packed, 0, sizeof(packed));
+            glUniform4f(glGetUniformLocation(sProgComp, "uGridPos"), gPcFieldFx.gridX, gPcFieldFx.gridY,
+                        gPcFieldFx.gridWX, gPcFieldFx.gridWY);
+            glUniform1iv(glGetUniformLocation(sProgComp, "uGrid"), cells / 4, packed);
+            glUniform1i(glGetUniformLocation(sProgComp, "uMapType"), gPcFieldFx.mapType);
+            glUniform1f(glGetUniformLocation(sProgComp, "uForest"), (float)solid / cells);
+            if (on)
+                SunVector(sun, gPcFieldFx.weather);
+            sun[3] = on ? 1.0f - night : 0.0f;
+            glUniform4f(glGetUniformLocation(sProgComp, "uSun"), sun[0], sun[1], sun[2], sun[3]);
+        }
         for (k = 0; field && k < gPcFieldFx.numLights; k++)
         {
             snprintf(name, sizeof(name), "uLights[%d]", k);
@@ -888,8 +1044,29 @@ static void RenderHd(const uint32_t *frame, int outW, int outH)
         }
         for (k = 0; field && k < gPcFieldFx.numShadows; k++)
         {
+            float fx = gPcFieldFx.shadows[k].x, fy = gPcFieldFx.shadows[k].y, best = 0, bx = 0, by = 0;
+            int j;
             snprintf(name, sizeof(name), "uShadows[%d]", k);
-            glUniform3f(glGetUniformLocation(sProgComp, name), gPcFieldFx.shadows[k].x, gPcFieldFx.shadows[k].y, gPcFieldFx.shadows[k].w);
+            glUniform3f(glGetUniformLocation(sProgComp, name), fx, fy, gPcFieldFx.shadows[k].w);
+            // At night, the strongest nearby light casts this character's shadow away from it.
+            for (j = 0; night > 0 && j < gPcFieldFx.numLights; j++)
+            {
+                float dx = fx - gPcFieldFx.lights[j].x, dy = fy - gPcFieldFx.lights[j].y;
+                float d = sqrtf(dx * dx + dy * dy), r = gPcFieldFx.lights[j].radius * 1.8f, f;
+                if (d >= r || d < 1.0f)
+                    continue;
+                f = 1.0f - d / r;
+                f *= f;
+                if (f > best)
+                {
+                    float len = 0.5f + 1.5f * (1.0f - f); // closer light, shorter shadow
+                    best = f;
+                    bx = dx / d * len;
+                    by = dy / d * len;
+                }
+            }
+            snprintf(name, sizeof(name), "uShadowLight[%d]", k);
+            glUniform3f(glGetUniformLocation(sProgComp, name), bx, by, best * night * 0.55f);
         }
     }
     glUniform1f(glGetUniformLocation(sProgComp, "uPackScale"), (float)sPackScale);

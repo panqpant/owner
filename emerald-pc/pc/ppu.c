@@ -52,7 +52,7 @@ static u16 sFinal[PC_MAX_W];
 
 // Per-line geometry. sWide: overworld widescreen; sBattle: battle widescreen
 // (backgrounds extended by repeating their edges, message box stretched).
-static int sW, sMargin, sWide, sBattle;
+static int sW, sMargin, sWide, sBattle, sFieldMaps;
 
 // Affine BG internal reference points (BG2, BG3).
 static s32 sRefX[2], sRefY[2];
@@ -142,7 +142,7 @@ static void RenderTextBg(int bg, int line)
         x1 = sW;
     }
     // Overworld map layers: read the wide map buffer and fill the margins.
-    if (sWide && gPcFieldMap[bg] && ((cnt >> 8) & 0x1F) == gPcFieldMapBase[bg])
+    if (sFieldMaps && gPcFieldMap[bg] && ((cnt >> 8) & 0x1F) == gPcFieldMapBase[bg])
     {
         fieldMap = gPcFieldMap[bg];
         w = 512;
@@ -685,7 +685,8 @@ void PpuRenderLine(int line, u32 *out)
 
     sW = gPcScreenW;
     sMargin = (sW - GBA_W) / 2;
-    sWide = sMargin > 0 && PcFieldWideActive();
+    sFieldMaps = PcFieldWideActive(); // the map buffers are 64 tiles wide even at 240 px
+    sWide = sMargin > 0 && sFieldMaps;
     sBattle = sMargin > 0 && !sWide && gPcBattleFrame;
     sDoRefs = gHdPackActive || gHdDumpEnabled || gPcTextHd;
     if (sDoRefs)

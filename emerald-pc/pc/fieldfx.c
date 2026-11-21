@@ -51,25 +51,38 @@ void PcUpdateFieldFx(void)
         if (t != 0xFFFF) { fx->hideTileStart[0] = t; fx->hideTileCount[0] = 80 /* graphics/weather/sandstorm.png */; }
     }
 
-    // Water metatiles around the camera, for the shimmer effect.
+    // Metatile flags around the camera (one row above the screen too, so
+    // shadows from scenery just off-screen still fall into view).
+    fx->mapType = gMapHeader.mapType;
     {
         int margin = (PcFieldMargin() + 15) / 16 + 1, row, col;
-        int mx0 = gSaveBlock1Ptr->pos.x - margin, my0 = gSaveBlock1Ptr->pos.y;
+        int mx0 = gSaveBlock1Ptr->pos.x - margin, my0 = gSaveBlock1Ptr->pos.y - 2;
         s16 sx, sy;
         SetSpritePosToMapCoords(mx0, my0, &sx, &sy);
-        fx->waterX = sx + gSpriteCoordOffsetX;
-        fx->waterY = sy + gSpriteCoordOffsetY;
-        fx->waterCols = 17 + margin * 2;
-        if (fx->waterCols > 31)
-            fx->waterCols = 31;
-        for (row = 0; row < PC_WATER_ROWS; row++)
-        {
-            int bits = 0;
-            for (col = 0; col < fx->waterCols; col++)
-                if (MetatileBehavior_IsSurfableWaterOrUnderwater(MapGridGetMetatileBehaviorAt(mx0 + col, my0 + row)))
-                    bits |= 1 << col;
-            fx->water[row] = bits;
-        }
+        fx->gridX = sx + gSpriteCoordOffsetX;
+        fx->gridY = sy + gSpriteCoordOffsetY;
+        fx->gridWX = mx0;
+        fx->gridWY = my0;
+        for (row = 0; row < PC_GRID_H; row++)
+            for (col = 0; col < PC_GRID_W; col++)
+            {
+                int x = mx0 + col, y = my0 + row;
+                u8 b = MapGridGetMetatileBehaviorAt(x, y), f = 0;
+                if (MetatileBehavior_IsSurfableWaterOrUnderwater(b))
+                    f |= PC_CELL_WATER;
+                else if (MapGridGetCollisionAt(x, y))
+                    f |= PC_CELL_SOLID;
+                if (MetatileBehavior_IsTallGrass(b) || MetatileBehavior_IsLongGrass(b) || MetatileBehavior_IsAshGrass(b))
+                    f |= PC_CELL_GRASS;
+                if (MetatileBehavior_IsSandOrDeepSand(b) || MetatileBehavior_IsFootprints(b))
+                    f |= PC_CELL_SAND;
+                if (MetatileBehavior_IsJumpEast(b) || MetatileBehavior_IsJumpWest(b)
+                 || MetatileBehavior_IsJumpNorth(b) || MetatileBehavior_IsJumpSouth(b))
+                    f |= PC_CELL_LEDGE;
+                if (MetatileBehavior_IsPuddle(b) || MetatileBehavior_IsShallowFlowingWater(b) || MetatileBehavior_IsReflective(b))
+                    f |= PC_CELL_PUDDLE;
+                fx->grid[row][col] = f;
+            }
     }
 
     // Doors and other entrances glow at night.
