@@ -295,7 +295,8 @@ static const char *kComposite =
     "uniform float uFlash;\n"
     "uniform vec2 uPlayer;\n"
     "uniform vec3 uLife;\n"
-    "uniform vec4 uInSun;\n"        // indoors: direction sunlight travels from windows (x, y), strength, night         // x: water fraction on screen, y: volcanic ash, z: heat haze
+    "uniform vec4 uInSun;\n"
+    "uniform vec3 uGrassDark, uGrassLight;\n"   // this screen's tall grass colours        // indoors: direction sunlight travels from windows (x, y), strength, night         // x: water fraction on screen, y: volcanic ash, z: heat haze
     "uniform int uBattle;\n"        // battle scene lighting on
     "uniform vec4 uMon[4];\n"       // battler sprite rects x, y, w, h (w = 0: none)
     "uniform vec3 uMonFeet[4];\n"   // feet x, y; half width
@@ -660,6 +661,29 @@ static const char *kComposite =
     "  vec3 k = TexS(uFlat, q).rgb;\n"
     "  return smoothstep(0.06, 0.16, k.b - max(k.r, k.g * 0.9)) * smoothstep(0.25, 0.4, k.b);\n"
     "}\n"
+    "void GrassColors(ivec2 cell, out vec3 dark, out vec3 light) {\n"   // darkest and lightest colours of a grass cell's art
+    "  vec2 o = uGridPos.xy + vec2(cell) * 16.0;\n"
+    "  dark = vec3(1.0); light = vec3(0.0); float dl = 9.0, ll = -1.0;\n"
+    "  for (int i = 0; i < 4; i++) for (int j = 0; j < 4; j++) {\n"
+    "    vec2 q = o + vec2(float(i), float(j)) * 4.0 + 2.0;\n"
+    "    vec2 qq = vec2((q.x + uMargin) / uDim.x, q.y / uDim.y);\n"   // map layers only, never sprites
+    "    vec4 l3 = TexS(uLayer[3], qq), l2 = TexS(uLayer[2], qq), l1 = TexS(uLayer[1], qq);\n"
+    "    vec3 c = l3.rgb; c = c * (1.0 - l2.a) + l2.rgb; c = c * (1.0 - l1.a) + l1.rgb;\n"
+    "    float l = dot(c, vec3(0.3, 0.59, 0.11));\n"
+    "    if (c.g >= c.r * 0.9 || c.g >= c.b) { if (l < dl) { dl = l; dark = c; } if (l > ll) { ll = l; light = c; } }\n"
+    "  }\n"
+    "  if (ll < 0.0) { dark = vec3(0.12, 0.38, 0.2); light = vec3(0.45, 0.78, 0.42); }\n"
+    "  dark = mix(dark, light, 0.35); light = mix(light, vec3(1.0), 0.08);\n"
+    "}\n"
+    "void GrassPal(ivec2 c, out vec3 dark, out vec3 light) {\n"
+    "  vec3 d, l; float n = 0.0; dark = vec3(0.0); light = vec3(0.0);\n"
+    "  for (int i = -1; i <= 1; i++) for (int j = -1; j <= 1; j++) {\n"
+    "    ivec2 q = c + ivec2(i, j);\n"
+    "    if ((Cell(q) & 4) == 0) continue;\n"
+    "    GrassColors(q, d, l); dark += d; light += l; n += 1.0;\n"
+    "  }\n"
+    "  if (n > 0.0) { dark /= n; light /= n; } else GrassColors(c, dark, light);\n"
+    "}\n"
     "bool Green(vec4 c) { vec3 k = c.rgb / max(c.a, 1e-4); return c.a > 0.5 && k.g > k.r * 1.05 && k.g > k.b * 1.1; }\n"
     "vec3 C555(uint c) { return vec3(float(c & 31u), float((c >> 5) & 31u), float((c >> 10) & 31u)) / 31.0; }\n"
     "vec3 PalC(uint i) { return C555(texelFetch(uPal, ivec2(int(i), 0), 0).r); }\n"
@@ -747,7 +771,7 @@ static const char *kComposite =
     "  vec2 wp = gp - uGridPos.xy + uGridPos.zw * 16.0;\n"   // world position (map pixels)
     "  int here = uFieldFx != 0 ? Cell(ivec2(floor(CellPos(gp)))) : 0;\n"
     // Wind: grass and tree leaves sway, anchored at the top and bottom of each tile.
-    "  if (uFieldFx != 0 && uMapType != 4 && uMapType != 8 && (here & 5) != 0) {\n"
+    "  if (uFieldFx != 0 && uMapType != 4 && uMapType != 8 && (here & 1) != 0 && (here & 4) == 0) {\n"
     "    float fy = fract(CellPos(gp).y);\n"
     "    float gust = 0.6 + 0.4 * sin(uTime * 0.37 + wp.x * 0.004);\n"
     "    float amp = ((here & 4) != 0 ? 0.55 : 0.3) * gust * sin(3.14159 * fy);\n"
@@ -862,11 +886,57 @@ static const char *kComposite =
     "      }\n"
     "    }\n"
     "  }\n"
+    // ---- Remade tall grass: tufts of tapered blades drawn over the cell
+    // (and over the legs of anyone standing in it), coloured from the area's
+    // own grass art, swaying with the wind ----
+    "  float gm = (uFieldFx != 0 && (here & 4) != 0) ? 1.0 : 0.0;\n"   // original tall grass art, untouched by relief
+    "  if (false) {\n"   // redrawn grass: dropped
+    "    ivec2 c0 = ivec2(floor(CellPos(gp)));\n"
+    "    bool anyGrass = ((Cell(c0) | Cell(c0 + ivec2(0, 1))) & 4) != 0;\n"
+    "    if (anyGrass) {\n"
+    "      bool mapPx = top <= 3 || ((Cell(c0) & 4) != 0 && Green(lay[4]) && fract(CellPos(gp).y) >= 0.5);\n"   // map art, or the game's own grass-over sprite
+    "      vec3 dark, light;\n"
+    "      dark = uGrassDark; light = uGrassLight;\n"
+    "      if ((Cell(c0) & 4) != 0 && mapPx) { res = mix(dark, light, 0.8) * (0.95 + 0.05 * Noise(wp * 0.4)); gm = 1.0; }\n"
+    "      vec2 T = vec2(8.0, 8.0);\n"
+    "      vec2 bc = floor(wp / T);\n"
+    "      float wind = sin(uTime * 1.7 + wp.x * 0.03) * 0.6 + sin(uTime * 3.1 + wp.y * 0.05) * 0.25;\n"
+    "      for (int dy = 0; dy <= 2; dy++) {\n"   // tufts whose base is at or below this pixel, far to near
+    "        for (int dx = -2; dx <= 2; dx++) {\n"
+    "          vec2 t = bc + vec2(float(dx), float(dy));\n"
+    "          float h0 = Hash(t * 1.7 + 3.0);\n"
+    "          if (h0 < 0.18) continue;\n"   // a few gaps, like separate tufts
+    "          vec2 base = (t + vec2(0.5 + (h0 - 0.5) * 0.6 + mod(t.y, 2.0) * 0.5, 1.0 - Hash(t + 9.0) * 0.35)) * T;\n"
+    "          ivec2 bcell = ivec2(floor((base - vec2(0.0, 0.5) - uGridPos.zw * 16.0) / 16.0));\n"
+    "          if ((Cell(bcell) & 4) == 0) continue;\n"
+    "          vec3 dk = dark, lt = light;\n"
+    "          for (int b = 0; b < 5; b++) {\n"
+    "            float hb = Hash(t * 3.1 + float(b) * 1.3);\n"
+    "            float bx = (float(b) - 2.0) * 1.5 + (hb - 0.5);\n"
+    "            float h = 4.5 + hb * 2.5 - abs(float(b) - 2.0) * 0.9;\n"
+    "            vec2 a = base + vec2(bx, 0.0);\n"
+    "            vec2 tip = a + vec2(bx * 0.55 + wind * (1.0 + hb), -h);\n"
+    "            vec2 pa = wp - a, ba = tip - a;\n"
+    "            float k = clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0);\n"
+    "            float w = mix(1.25, 0.15, k);\n"
+    "            float d = length(pa - ba * k);\n"
+    "            float edge = 1.0 - smoothstep(w - 0.35, w + 0.35, d);\n"
+    "            float rim = 1.0 - smoothstep(w + 0.1, w + 0.75, d);\n"
+    "            if (rim <= 0.0) continue;\n"
+    "            vec3 bcol = mix(dk, lt, k * 0.9 + 0.1 * hb);\n"
+    "            res = mix(res, dk * 0.55, rim * 0.6);\n"   // dark outline, like the game's art style
+    "            res = mix(res, bcol, edge);\n"
+    "            gm = max(gm, rim);\n"
+    "          }\n"
+    "        }\n"
+    "      }\n"
+    "    }\n"
+    "  }\n"
     // Per-pixel surface lighting: a normal for every pixel from the art's
     // shading (fine relief), sprite outlines (rounded characters) and depth
     // inside solid scenery (domed trees, roofs, cliffs); lit by the key light.
     "  vec3 N = vec3(0.0, 0.0, 1.0);\n"
-    "  if (uFieldFx != 0 && top >= 1 && top <= 4 && uKey.w > 0.0 && wm < 0.5) {\n"
+    "  if (uFieldFx != 0 && top >= 1 && top <= 4 && uKey.w > 0.0 && wm < 0.5 && gm < 0.5) {\n"
     "    float st = top == 4 ? 2.5 : 1.0;\n"
     "    vec2 du = vec2(st / uDim.x, 0.0), dv = vec2(0.0, st / uDim.y);\n"
     "    float hc = top == 4 ? 1.0 : dot(lay[top].rgb / max(lay[top].a, 1e-4), vec3(0.3, 0.59, 0.11));\n"
@@ -1616,6 +1686,10 @@ int HdInit(void)
     return 0;
 }
 
+void HdDebugEnv(void)
+{
+    if (getenv("EMERALD_NOLIGHT")) sLighting = 0;
+}
 void HdSetScale(int scale)
 {
     if (scale < 1) scale = 1;
@@ -1875,6 +1949,10 @@ static void RenderHd(const uint32_t *frame, int outW, int outH)
         sW = gPcScreenW;
         AllocScaled();
     }
+    {
+        static int once;
+        if (!once) { once = 1; HdDebugEnv(); }
+    }
     w = sW * sScale;
     h = GBA_H * sScale;
 
@@ -2005,6 +2083,63 @@ static void RenderHd(const uint32_t *frame, int outW, int outH)
             glUniform1iv(glGetUniformLocation(sProgComp, "uGrid"), cells / 4, packed);
             glUniform1i(glGetUniformLocation(sProgComp, "uMapType"), gPcFieldFx.mapType);
             glUniform1f(glGetUniformLocation(sProgComp, "uForest"), (float)solid / cells);
+            {
+                // Tall grass palette for this screen: dark and light ends of the
+                // greenish colours found in tall-grass cells (map layers only).
+                static float dk[3] = { 0.12f, 0.38f, 0.2f }, lt[3] = { 0.45f, 0.78f, 0.42f };
+                int hist[64] = { 0 }, n = 0, row, col, px, py, m = (gPcScreenW - GBA_W) / 2, lo = -1, hi = -1, acc;
+                float sd[3] = { 0 }, sl[3] = { 0 }, cd = 0, cl = 0;
+                static unsigned char lum[GBA_H][PC_MAX_W];
+                for (row = 0; field && row < PC_GRID_H; row++)
+                    for (col = 0; col < PC_GRID_W; col++)
+                    {
+                        if (!(gPcFieldFx.grid[row][col] & 4)) continue;
+                        for (py = 1; py < 16; py += 2)
+                            for (px = 1; px < 16; px += 2)
+                            {
+                                int x = gPcFieldFx.gridX + col * 16 + px + m, y = gPcFieldFx.gridY + row * 16 + py, L, l;
+                                uint32_t c = 0;
+                                float rr, gg, bb;
+                                if (x < 0 || y < 0 || x >= gPcScreenW || y >= GBA_H) continue;
+                                for (L = 3; L >= 1; L--)
+                                    if (gPpuLayers.layer[L][y][x] >> 24) c = gPpuLayers.layer[L][y][x];
+                                if (!c) continue;
+                                rr = (c & 255) / 255.0f; gg = ((c >> 8) & 255) / 255.0f; bb = ((c >> 16) & 255) / 255.0f;
+                                if (gg < rr * 0.9f && gg < bb) continue;
+                                l = (int)((0.3f * rr + 0.59f * gg + 0.11f * bb) * 63.0f);
+                                lum[y][x] = (unsigned char)l;
+                                hist[l]++; n++;
+                            }
+                    }
+                if (n > 50)
+                {
+                    for (acc = 0, k = 0; k < 64; k++) { acc += hist[k]; if (lo < 0 && acc >= n / 5) lo = k; if (hi < 0 && acc >= n * 9 / 10) hi = k; }
+                    for (row = 0; row < PC_GRID_H; row++)
+                        for (col = 0; col < PC_GRID_W; col++)
+                        {
+                            if (!(gPcFieldFx.grid[row][col] & 4)) continue;
+                            for (py = 1; py < 16; py += 2)
+                                for (px = 1; px < 16; px += 2)
+                                {
+                                    int x = gPcFieldFx.gridX + col * 16 + px + m, y = gPcFieldFx.gridY + row * 16 + py, L;
+                                    uint32_t c = 0;
+                                    if (x < 0 || y < 0 || x >= gPcScreenW || y >= GBA_H) continue;
+                                    for (L = 3; L >= 1; L--)
+                                        if (gPpuLayers.layer[L][y][x] >> 24) c = gPpuLayers.layer[L][y][x];
+                                    if (!c) continue;
+                                    if (abs(lum[y][x] - lo) <= 2) { sd[0] += (c & 255); sd[1] += ((c >> 8) & 255); sd[2] += ((c >> 16) & 255); cd++; }
+                                    if (abs(lum[y][x] - hi) <= 2) { sl[0] += (c & 255); sl[1] += ((c >> 8) & 255); sl[2] += ((c >> 16) & 255); cl++; }
+                                }
+                        }
+                    for (k = 0; k < 3; k++)
+                    {
+                        if (cd > 0) dk[k] += (sd[k] / cd / 255.0f - dk[k]) * 0.2f;   // eased, so it never flickers
+                        if (cl > 0) lt[k] += (sl[k] / cl / 255.0f - lt[k]) * 0.2f;
+                    }
+                }
+                glUniform3f(glGetUniformLocation(sProgComp, "uGrassDark"), dk[0] * 0.7f + lt[0] * 0.3f, dk[1] * 0.7f + lt[1] * 0.3f, dk[2] * 0.7f + lt[2] * 0.3f);
+                glUniform3f(glGetUniformLocation(sProgComp, "uGrassLight"), lt[0], lt[1], lt[2]);
+            }
             {
                 int water = 0;
                 for (k = 0; k < cells; k++)
