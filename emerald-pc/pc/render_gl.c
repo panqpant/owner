@@ -656,6 +656,10 @@ static const char *kComposite =
     "  vec3 k = TexS(uFlat, vec2((g.x + uMargin) / uDim.x, g.y / uDim.y)).rgb;\n"
     "  return k.b > 0.6 && k.b - k.r > 0.18 && k.g > 0.5;\n"
     "}\n"
+    "float WaterArt(vec2 q) {\n"   // how much this pixel of the art is open water (blue)
+    "  vec3 k = TexS(uFlat, q).rgb;\n"
+    "  return smoothstep(0.06, 0.16, k.b - max(k.r, k.g * 0.9)) * smoothstep(0.25, 0.4, k.b);\n"
+    "}\n"
     "bool Green(vec4 c) { vec3 k = c.rgb / max(c.a, 1e-4); return c.a > 0.5 && k.g > k.r * 1.05 && k.g > k.b * 1.1; }\n"
     "vec3 C555(uint c) { return vec3(float(c & 31u), float((c >> 5) & 31u), float((c >> 10) & 31u)) / 31.0; }\n"
     "vec3 PalC(uint i) { return C555(texelFetch(uPal, ivec2(int(i), 0), 0).r); }\n"
@@ -818,11 +822,51 @@ static const char *kComposite =
     // Thin, mostly transparent fringes of map/sprite layers in front of the
     // top layer: added before lighting so they are lit like what they edge.
     "  for (int k = ti - 1; k >= 0; k--) if (order[k] != 0) { vec4 c = lay[order[k]]; res = res * (1.0 - c.a) + c.rgb; }\n"
+    // ---- Remade water: replaces the blue water pixels of the art (so the
+    // drawn shores, rocks and piers keep their exact shapes) with live
+    // waves, sky reflection, sun glints, shallow-to-deep colour and foam ----
+    "  float wm = 0.0;\n"
+    "  if (uFieldFx != 0 && top >= 1 && top <= 3) {\n"
+    "    ivec2 c0 = ivec2(floor(CellPos(gp)));\n"
+    "    bool nearWater = ((here | Cell(c0 + ivec2(1, 0)) | Cell(c0 - ivec2(1, 0)) | Cell(c0 + ivec2(0, 1)) | Cell(c0 - ivec2(0, 1))) & 2) != 0;\n"
+    "    if (nearWater) {\n"
+    "      wm = WaterArt(uv);\n"
+    "      if (wm > 0.0) {\n"
+    "        float shore = 0.0;\n"   // how close the nearest non-water art is (0 open water .. 1 at the shore)
+    "        for (int k = 0; k < 8; k++) {\n"
+    "          float a = float(k) * 0.785;\n"
+    "          vec2 o = vec2(cos(a), sin(a));\n"
+    "          shore += (1.0 - WaterArt(uv + o * 3.0 / uDim)) * 0.6 + (1.0 - WaterArt(uv + o * 7.0 / uDim)) * 0.4;\n"
+    "        }\n"
+    "        shore = clamp(shore / 8.0 * 1.6, 0.0, 1.0);\n"
+    "        vec3 art = TexS(uFlat, uv).rgb;\n"
+    // waves: a few travelling wave trains -> surface slope
+    "        vec2 q = wp;\n"
+    "        vec2 sl = vec2(0.0);\n"
+    "        sl += vec2(0.8, 0.6) * cos(dot(q, vec2(0.8, 0.6)) * 0.35 - uTime * 1.6) * 0.5;\n"
+    "        sl += vec2(-0.5, 0.85) * cos(dot(q, vec2(-0.5, 0.85)) * 0.55 - uTime * 2.1) * 0.3;\n"
+    "        sl += vec2(0.2, -1.0) * cos(dot(q, vec2(0.2, -1.0)) * 0.9 - uTime * 2.7 + Noise(q * 0.05) * 3.0) * 0.18;\n"
+    "        sl += (vec2(Noise(q * 0.18 + uTime * 0.4), Noise(q * 0.18 - uTime * 0.35 + 9.0)) - 0.5) * 0.2;\n"
+    "        vec3 deep = vec3(0.10, 0.30, 0.55), shallow = vec3(0.25, 0.62, 0.72);\n"
+    "        vec3 base = mix(deep, shallow, shore * 0.85);\n"
+    "        base = mix(base, art, 0.25);\n"   // keep a little of each area's own water colour
+    "        float facing = clamp(0.5 + dot(sl, vec2(-0.5, -0.7)) * 0.6, 0.0, 1.0);\n"
+    "        vec3 skyc = mix(vec3(0.62, 0.80, 1.0), vec3(1.0, 0.75, 0.5), clamp((uTint.r - uTint.b) * 3.0, 0.0, 1.0));\n"
+    "        vec3 wc = mix(base * (0.85 + 0.3 * facing), skyc, 0.18 + 0.22 * facing * facing);\n"
+    "        float spec = pow(clamp(dot(normalize(vec3(sl * 1.2, 1.0)), normalize(vec3(-0.35, -0.55, 0.75))), 0.0, 1.0), 240.0);\n"
+    "        wc += vec3(1.0, 0.97, 0.9) * spec * 0.6 * max(uSun.w, 0.15);\n"
+    "        float foamBand = smoothstep(0.55, 0.95, shore) * (0.55 + 0.45 * sin(uTime * 1.5 - shore * 9.0 + Noise(q * 0.2) * 4.0));\n"
+    "        float foam = foamBand * smoothstep(0.35, 0.65, Noise(q * 0.45 + vec2(uTime * 0.3, 0.0)));\n"
+    "        wc = mix(wc, vec3(0.93, 0.97, 1.0), clamp(foam, 0.0, 1.0) * 0.85);\n"
+    "        res = mix(res, wc, wm);\n"
+    "      }\n"
+    "    }\n"
+    "  }\n"
     // Per-pixel surface lighting: a normal for every pixel from the art's
     // shading (fine relief), sprite outlines (rounded characters) and depth
     // inside solid scenery (domed trees, roofs, cliffs); lit by the key light.
     "  vec3 N = vec3(0.0, 0.0, 1.0);\n"
-    "  if (uFieldFx != 0 && top >= 1 && top <= 4 && uKey.w > 0.0) {\n"
+    "  if (uFieldFx != 0 && top >= 1 && top <= 4 && uKey.w > 0.0 && wm < 0.5) {\n"
     "    float st = top == 4 ? 2.5 : 1.0;\n"
     "    vec2 du = vec2(st / uDim.x, 0.0), dv = vec2(0.0, st / uDim.y);\n"
     "    float hc = top == 4 ? 1.0 : dot(lay[top].rgb / max(lay[top].a, 1e-4), vec3(0.3, 0.59, 0.11));\n"
@@ -844,7 +888,7 @@ static const char *kComposite =
     "  if (uFieldFx != 0 && top >= 1 && top <= 3 && uKey.w > 0.0) {\n"
     "    vec2 gr = vec2(Solid(gp + vec2(6.0, 0.0)) - Solid(gp - vec2(6.0, 0.0)), Solid(gp + vec2(0.0, 6.0)) - Solid(gp - vec2(0.0, 6.0)));\n"
     "    float gl = length(gr);\n"
-    "    if (gl > 0.02 && Solid(gp) < 0.5) {\n"
+    "    if (gl > 0.02 && Solid(gp) < 0.5 && wm < 0.01) {\n"
     "      vec2 sp = gp + gr / gl * 9.0;\n"
     "      vec3 bc = TexS(uFlat, vec2((sp.x + uMargin) / uDim.x, sp.y / uDim.y)).rgb;\n"
     "      vec3 tintc = bc / max(dot(bc, vec3(0.333)), 0.08);\n"
@@ -853,7 +897,7 @@ static const char *kComposite =
     "  }\n"
     // Scenery lighting on the ground: ambient occlusion around solid
     // scenery, sun shadows that follow the time of day, drifting cloud shadows.
-    "  float recv = (uFieldFx != 0 && top >= 1 && top <= 3 && uMapType != 8 && uMapType != 9) ? 1.0 - Solid(gp) : 0.0;\n"   // how much this is open ground
+    "  float recv = (uFieldFx != 0 && top >= 1 && top <= 3 && uMapType != 8 && uMapType != 9) ? (1.0 - Solid(gp)) * (1.0 - wm) : 0.0;\n"   // how much this is open ground
     "  if (recv > 0.0) {\n"
     "    float ao = Solid(gp + vec2(0.0, -5.0)) * 0.55 + Solid(gp + vec2(-5.0, 0.0)) * 0.22\n"
     "             + Solid(gp + vec2(5.0, 0.0)) * 0.22 + Solid(gp + vec2(0.0, 5.0)) * 0.12;\n"
@@ -909,7 +953,7 @@ static const char *kComposite =
     "    int up = 0;\n"
     "    for (int i = 1; i <= 4; i++) { if ((Cell(c0 - ivec2(0, i)) & 2) == 0) break; up = i; }\n"
     "    float shore = uGridPos.y + float(c0.y - up) * 16.0;\n"
-    "    if ((Cell(c0 - ivec2(0, up + 1)) & 1) != 0) {\n"   // something solid on the shore
+    "    if (wm < 0.01 && (Cell(c0 - ivec2(0, up + 1)) & 1) != 0) {\n"   // something solid on the shore
     "      float dy = gp.y - shore;\n"
     "      vec2 m = vec2(gp.x + sin(wp.y * 0.5 + uTime * 2.0) * 0.6, shore - dy);\n"
     "      vec2 muv = vec2((m.x + uMargin) / uDim.x, m.y / uDim.y);\n"
@@ -925,7 +969,7 @@ static const char *kComposite =
     "    vec4 ch = MirrorChars(gp);\n"
     "    res = mix(res, ch.rgb / max(ch.a, 1e-3) * vec3(0.75, 0.85, 0.95), ch.a * 0.45);\n"
     "    vec3 sky = mix(vec3(0.55, 0.75, 1.0), vec3(1.0, 0.7, 0.45), clamp((uTint.r - uTint.b) * 3.0, 0.0, 1.0)) * (uTint.a > 0.5 ? uTint.rgb : vec3(1.0));\n"
-    "    res = mix(res, sky * max(dot(res, vec3(0.33)), 0.35) * 1.4, 0.12);\n"
+    "    res = mix(res, sky * max(dot(res, vec3(0.33)), 0.35) * 1.4, 0.12 * (1.0 - wm));\n"
     "  }\n"
     // Rain: wet ground darkens and puddles reflect buildings, trees,
     // characters and lights (streaks below lamps and doorways).
@@ -968,7 +1012,7 @@ static const char *kComposite =
     "    float glass = smoothstep(0.72, 0.88, k.b) * smoothstep(0.2, 0.32, k.b - k.r) * step(0.55, k.g);\n"
     "    if (facade && glass > 0.0) res = mix(res, vec3(1.0, 0.82, 0.5) * (0.75 + 0.25 * k.b), glass * min(uNight * 1.2, 1.0) * 0.85);\n"
     "  }\n"
-    "  if (uFieldFx != 0 && top >= 1 && top <= 3 && (here & 2) != 0) {\n"
+    "  if (uFieldFx != 0 && top >= 1 && top <= 3 && (here & 2) != 0 && wm < 0.01) {\n"
     "    float w = sin(wp.x * 0.42 + uTime * 1.6 + sin(wp.y * 0.31 + uTime * 0.9) * 1.7) * 0.5\n"
     "            + sin(wp.y * 0.57 - uTime * 1.2 + wp.x * 0.13) * 0.5;\n"
     "    float sp = smoothstep(0.82, 0.98, w) * (0.6 + 0.4 * Noise(wp * 0.7 + uTime));\n"
@@ -1052,13 +1096,13 @@ static const char *kComposite =
     "    bool outside = uMapType != 4 && uMapType != 8 && uMapType != 9;\n"
     "    float day = uSun.w;\n"
     // Falling leaves in wooded areas, drifting with the wind, with shadows.
-    "    if (outside && uForest > 0.32 && uWeather == 0) {\n"
+    "    if (uMapType == 3 && uForest > 0.32 && uWeather == 0) {\n"
     "      for (int L = 0; L < 2; L++) {\n"
     "        vec2 vel = vec2(-9.0, 13.0) * (L == 0 ? 1.0 : 0.7);\n"
     "        for (int S = 0; S < 2; S++) {\n"   // S = 0 shadow, 1 leaf
     "          vec2 q = gp - vel * uTime + (S == 0 ? vec2(-4.0, -7.0) : vec2(0.0)) + float(L) * 17.0;\n"
     "          vec2 c = floor(q / 30.0); float h = Hash(c + float(L) * 7.3);\n"
-    "          if (h > 0.12 + 0.3 * smoothstep(0.32, 0.6, uForest)) continue;\n"
+    "          if (h > 0.05 + 0.2 * smoothstep(0.4, 0.7, uForest)) continue;\n"
     "          vec2 ctr = (c + 0.5) * 30.0 + vec2(sin(uTime * 1.7 + h * 30.0) * 6.0, cos(uTime * 1.1 + h * 17.0) * 3.0);\n"
     "          float an = uTime * (1.5 + h * 3.0) + h * 20.0;\n"
     "          vec2 d = mat2(cos(an), -sin(an), sin(an), cos(an)) * (q - ctr);\n"
@@ -1103,7 +1147,7 @@ static const char *kComposite =
     "      res *= 1.0 - sh * 0.22 * day;\n"
     "    }\n"
     // Coast: seagulls circling overhead with shadows on the water, spray along the shore.
-    "    if (outside && uLife.x > 0.12) {\n"
+    "    if (false) {\n"   // seagulls: removed (looked crude up close)
     "      for (int g = 0; g < 3; g++) {\n"
     "        float gh = float(g) * 2.1 + 1.0;\n"
     "        vec2 p = vec2(120.0 + sin(uTime * 0.23 + gh) * 150.0, 50.0 + sin(uTime * 0.17 + gh * 1.7) * 40.0);\n"
