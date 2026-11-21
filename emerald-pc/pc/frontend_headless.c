@@ -4,6 +4,7 @@
 //   hold MASK N         hold key mask for N frames
 //   tap MASK COUNT [GAP] press MASK for 4 frames, then GAP (default 20) idle, COUNT times
 //   shot PATH           write the most recent frame as a PPM image
+//   call HOOK ARGS      run a test hook at this point (see testhooks.c)
 //   quit                exit
 // Usage: emerald_headless --script FILE [--save FILE] [--wav FILE]
 #include <stdio.h>
@@ -13,7 +14,8 @@
 
 #define MAX_EVENTS 200000
 
-struct Event { int frame; char *shot; };
+struct Event { int frame; char *shot; int isCall; };
+void TestHookRun(const char *cmd);
 
 static uint16_t *sKeys;
 static int sNumFrames;
@@ -84,6 +86,16 @@ static void LoadScript(const char *path)
             sShots[sNumShots].shot = strdup(arg);
             sNumShots++;
         }
+        else if (!strcmp(cmd, "call") && sNumShots < 4096)
+        {
+            char *p = line + 4;
+            while (*p == ' ' || *p == '\t') p++;
+            p[strcspn(p, "\r\n")] = 0;
+            sShots[sNumShots].frame = sNumFrames;
+            sShots[sNumShots].shot = strdup(p);
+            sShots[sNumShots].isCall = 1;
+            sNumShots++;
+        }
         else if (!strcmp(cmd, "quit"))
             sQuitAt = sNumFrames;
     }
@@ -146,7 +158,13 @@ uint16_t FrontendPollKeys(void)
 {
     uint16_t k;
     while (sNextShot < sNumShots && sShots[sNextShot].frame <= sFrame)
-        WritePpm(sShots[sNextShot++].shot);
+    {
+        struct Event *e = &sShots[sNextShot++];
+        if (e->isCall)
+            TestHookRun(e->shot);
+        else
+            WritePpm(e->shot);
+    }
     if (sFrame >= sQuitAt)
         sQuit = 1;
     k = sFrame < sNumFrames ? sKeys[sFrame] : 0;

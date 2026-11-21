@@ -40,6 +40,25 @@ index 2c82a42..fbc3a87 100644
          return TRUE;
      else
          return FALSE;
+diff --git a/src/dma3_manager.c b/src/dma3_manager.c
+index d774efe..4afb132 100644
+--- a/src/dma3_manager.c
++++ b/src/dma3_manager.c
+@@ -164,6 +164,14 @@ s16 CheckForSpaceForDma3Request(s16 index)
+ {
+     int i = 0;
+ 
++#ifdef PLATFORM_PC
++    // On the GBA, code that waits for a queued copy spins until the VBlank
++    // interrupt performs it. There are no asynchronous interrupts on PC, so
++    // perform any pending copies now: that is exactly what is being waited on.
++    while (!sDma3ManagerLocked && sDma3Requests[sDma3RequestCursor].size != 0)
++        ProcessDma3Requests();
++#endif
++
+     if (index == -1)  // check if all requests are free
+     {
+         while (i < MAX_DMA_REQUESTS)
 diff --git a/src/librfu_intr.c b/src/librfu_intr.c
 index 5ae53ab..36b7e5d 100644
 --- a/src/librfu_intr.c

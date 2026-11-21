@@ -72,7 +72,7 @@ endif
 headless: $(BUILD)/emerald_headless$(EXE)
 sdl: $(BUILD)/emerald$(EXE)
 
-$(BUILD)/emerald_headless$(EXE): $(ALL_GAME) $(OBJ)/pc/frontend_headless.o
+$(BUILD)/emerald_headless$(EXE): $(ALL_GAME) $(OBJ)/pc/frontend_headless.o $(OBJ)/pcgame/testhooks.o
 	$(HOST_CC) $(LDFLAGS) -o $@ $^ $(LIBS)
 
 $(BUILD)/emerald$(EXE): $(ALL_GAME) $(OBJ)/pc/frontend_sdl.o
