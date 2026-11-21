@@ -473,6 +473,7 @@ static const char *kPresent =
     "uniform vec2 uContentUv;\n" // content columns as u range; outside gets an ambient fill
     "uniform float uBloom;\n"
     "uniform vec2 uTexel;\n"
+    "uniform vec3 uSoftSides;\n"  // battles: x = left edge u, y = right edge u, z = message box top (v, from top)
     "void main() {\n"
     "  vec2 uv = vec2(vUv.x * uUScale, uFlip > 0.5 ? 1.0 - vUv.y : vUv.y);\n"
     "  vec3 c = texture(uTex, uv).rgb;\n"
@@ -488,6 +489,23 @@ static const char *kPresent =
     "    }\n"
     "    float fade = 1.0 - clamp(abs(uv.x - edge) / max(span * 1.5, 1e-4), 0.0, 1.0) * 0.35;\n"
     "    c = acc / n * 0.38 * fade;\n"
+    "  }\n"
+    // Battles: the mirrored scenery beside the original screen is shown out
+    // of focus (above the message box), so it doesn't look like stretched art.
+    "  if (uSoftSides.z > 0.0 && (uv.x < uSoftSides.x || uv.x > uSoftSides.y) && (1.0 - uv.y) < uSoftSides.z) {\n"
+    "    vec3 acc = vec3(0.0); float wsum = 0.0;\n"
+    "    for (int i = -4; i <= 4; i++) for (int j = -4; j <= 4; j++) {\n"
+    "      vec2 o = vec2(float(i), float(j)) * vec2(0.0042, 0.0075);\n"
+    "      vec2 q = uv + o;\n"
+    "      q.y = min(q.y, 1.0);\n"
+    "      q.y = max(q.y, 1.0 - uSoftSides.z + 0.004);\n"  // don't pull in the message box
+    "      float w = exp(-float(i * i + j * j) / 10.0);\n"
+    "      acc += texture(uTex, q).rgb * w; wsum += w;\n"
+    "    }\n"
+    "    float d = uv.x < uSoftSides.x ? (uSoftSides.x - uv.x) / max(uSoftSides.x, 1e-4) : (uv.x - uSoftSides.y) / max(1.0 - uSoftSides.y, 1e-4);\n"
+    "    vec3 b = acc / wsum;\n"
+    "    b = mix(b, vec3(dot(b, vec3(0.2126, 0.7152, 0.0722))), 0.25);\n"
+    "    c = b * (0.92 - 0.22 * d);\n"
     "  }\n"
     "  if (uBloom > 0.0) {\n"   // soft glow around bright areas
     "    vec3 b = vec3(0.0);\n"
@@ -945,6 +963,12 @@ static void DrawPresent(int hdMode, int winW, int winH)
         glUniform2f(glGetUniformLocation(sProgPresent, "uTexel"), 1.0f / (sCompW > 0 ? sCompW : 1), 1.0f / (sCompH > 0 ? sCompH : 1));
         glUniform2f(glGetUniformLocation(sProgPresent, "uContentUv"),
                     (float)gPpuContentX0 / gPcScreenW, (float)gPpuContentX1 / gPcScreenW);
+        {
+            float m = (float)(gPcScreenW - GBA_W) / 2 / gPcScreenW;
+            int battle = gPcBattleFrame && gPcScreenW > GBA_W;
+            glUniform3f(glGetUniformLocation(sProgPresent, "uSoftSides"), m, 1.0f - m,
+                        battle ? (float)gPpuBattleBoxTop / GBA_H : 0.0f);
+        }
     }
     else
     {
@@ -954,6 +978,7 @@ static void DrawPresent(int hdMode, int winW, int winH)
         glUniform1f(glGetUniformLocation(sProgPresent, "uUScale"), (float)gPcScreenW / PC_MAX_W);
         glUniform1f(glGetUniformLocation(sProgPresent, "uBloom"), 0.0f);
         glUniform2f(glGetUniformLocation(sProgPresent, "uContentUv"), -1.0f, 2.0f);
+        glUniform3f(glGetUniformLocation(sProgPresent, "uSoftSides"), 0.0f, 1.0f, 0.0f);
     }
     DrawQuad();
 }

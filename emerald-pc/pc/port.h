@@ -21,6 +21,7 @@ extern int gPcOutdoors; // overworld map is outdoors (time-of-day lighting appli
 extern int gPcBattleFrame; // the current frame belongs to a battle (widescreen battle rendering)
 extern int gPcMapPopup;    // the map-name sign window exists (top-left of BG0)
 extern int gPpuContentX0, gPpuContentX1;
+extern int gPpuBattleBoxTop; // battles: first line of the full-width message box (GBA_H if none)
 
 // GBA memory regions are mapped at their real addresses inside the
 // 32-bit process, so the game's hard-coded addresses keep working.

@@ -65,9 +65,13 @@ int PcFieldWideActive(void)
     return gPcFieldMap[1] || gPcFieldMap[2] || gPcFieldMap[3];
 }
 
+int gPpuBattleBoxTop = GBA_H;     // battles: first line where the message box reaches the screen edge
+static int sBoxTopThisFrame = GBA_H;
+
 void PpuBeginFrame(void)
 {
     int i;
+    sBoxTopThisFrame = GBA_H;
     HdPackBeginFrame();
     PcTextBeginFrame();
     for (i = 0; i < 2; i++)
@@ -255,24 +259,20 @@ static void RenderTextBg(int bg, int line)
             refInfo[x] = px | (py << 3) | ((entry & 0x400) ? 64 : 0) | ((entry & 0x800) ? 128 : 0);
     }
 
-    // Battle backgrounds: extend each row into the margins. Rows are uniform
-    // bands except where a platform touches an edge, so use the edge colour
-    // only if it matches the row's background (taken from the middle, which
-    // platforms never reach); otherwise use the background colour.
+    // Battle backgrounds: mirror the scene into the margins; the renderer
+    // blurs that area so it reads as out-of-focus scenery, not stretched art.
     if (sBattle && bg != 0)
     {
-        u16 ref = out[sMargin + GBA_W / 2];
-        u16 l = out[sMargin], rr = out[sMargin + GBA_W - 1];
-        u16 lf = (ref == TRANSPARENT || l == ref) ? l : ref;
-        u16 rf = (ref == TRANSPARENT || rr == ref) ? rr : ref;
         for (x = 0; x < sMargin; x++)
         {
-            out[x] = lf;
+            int src = 2 * sMargin - 1 - x;            // mirror about the left edge
+            out[x] = out[src < sMargin + GBA_W ? src : sMargin];
             if (sDoRefs) refSlot[x] = 0;
         }
         for (x = sMargin + GBA_W; x < sW; x++)
         {
-            out[x] = rf;
+            int src = 2 * (sMargin + GBA_W) - 1 - x;  // mirror about the right edge
+            out[x] = out[src >= sMargin ? src : sMargin + GBA_W - 1];
             if (sDoRefs) refSlot[x] = 0;
         }
     }
@@ -808,6 +808,11 @@ void PpuRenderLine(int line, u32 *out)
         sFinal[x] = top;
         out[x] = ToRgb(c);
     }
+
+    if (sBattle && bgOn[0] && sBg[0][0] != TRANSPARENT && line < sBoxTopThisFrame)
+        sBoxTopThisFrame = line;
+    if (line == GBA_H - 1)
+        gPpuBattleBoxTop = sBattle ? sBoxTopThisFrame : GBA_H;
 
     if (gPpuExportLayers)
         ExportLine(line, bgOn, bgPrio, 0, bldcnt, eva, evb, evy, effect);
