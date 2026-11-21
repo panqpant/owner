@@ -996,7 +996,7 @@ static void SynthSample(struct SynVoice *v, double hz, float *outL, float *outR)
             L += sw * (k == 0 ? 1.0f : 0.5f);
             R += sw * (k == 2 ? 1.0f : 0.5f);
         }
-        g = SvfG(hz * (2.5 + 7.0 * env) + 350);   // the "blat" opens the filter
+        g = SvfG(hz * (4.0 + 8.0 * env) + 600);   // bright, the "blat" opens the filter
         L = SvfRun(&v->f[0][0], L, g, 0.9f, NULL);
         R = SvfRun(&v->f[1][0], R, g, 0.9f, NULL);
         L = SvfRun(&v->f[0][1], L, g, 1.1f, NULL);
@@ -1205,6 +1205,11 @@ static void MixDirectSound(struct SoundInfo *si, int n)
             step = (double)c->frequency * si->divFreq / 8388608.0 * pcmFreq / OUT_RATE;
         vl = c->envelopeVolumeLeft / 256.0f;
         vr = c->envelopeVolumeRight / 256.0f;
+        if (gPcHdAudio && (c->type & TONEDATA_TYPE_FIX))
+        {
+            vl *= 1.2f;   // percussion sits forward, as in DS-era mixes
+            vr *= 1.2f;
+        }
         pos = sPos[i];
         {
         // HD: glide from last frame's volume (except on a new note, so attacks stay crisp).
@@ -1223,6 +1228,8 @@ static void MixDirectSound(struct SoundInfo *si, int n)
             SynthInit();
         if (gPcHdAudio && gPcSynthInstruments && !(c->type & (TONEDATA_TYPE_FIX | TONEDATA_TYPE_REV | TONEDATA_TYPE_CMP)))
             syn = SynthFor(w);
+        if (syn && syn->kind != SYN_BRASS && syn->kind != SYN_STRINGS && syn->kind != SYN_BASS)
+            syn = NULL;
         if (syn)
         {
             synHz = syn->f0 * step * OUT_RATE;
@@ -1250,14 +1257,13 @@ static void MixDirectSound(struct SoundInfo *si, int n)
             }
             if (syn)
             {
-                float a, b;
+                // A clean layer under the real sample: brass and bass get
+                // body and bite, strings a touch of width.
+                static const float sLayer[8] = { 0, 0.14f, 0.42f, 0, 0, 0, 0.38f, 0 };
+                float a, b, k = sLayer[syn->kind];
                 SynthSample(&sSyn[i], synHz, &a, &b);
-                sMixL[s] += a * syn->gain * vl;
-                sMixR[s] += b * syn->gain * vr;
-                vl += dvl;
-                vr += dvr;
-                pos += step;
-                continue;
+                sMixL[s] += a * syn->gain * k * vl;
+                sMixR[s] += b * syn->gain * k * vr;
             }
             if (gPcHdAudio && step <= 1.0)
             {
@@ -1562,7 +1568,7 @@ static float Reverb(int side, float in)
 {
     float out = 0;
     int i;
-    const float fb = 0.83f, damp = 0.28f;
+    const float fb = 0.74f, damp = 0.18f;   // shorter, brighter room
     for (i = 0; i < NCOMB; i++)
     {
         int len = sCombLen[i] + side * STEREO_SPREAD;
@@ -1603,6 +1609,14 @@ static void ShelfInit(struct Biquad *q, int high, double f0, double gainDb)
         a0 = (A + 1) - (A - 1) * cw + sq; a1 = 2 * ((A - 1) - (A + 1) * cw); a2 = (A + 1) - (A - 1) * cw - sq;
     }
     q->b0 = b0 / a0; q->b1 = b1 / a0; q->b2 = b2 / a0; q->a1 = a1 / a0; q->a2 = a2 / a0;
+}
+static struct Biquad sPresence;
+static void PeakInit(struct Biquad *q, double f0, double qv, double gainDb)
+{
+    double A = pow(10, gainDb / 40), w = 2 * M_PI * f0 / OUT_RATE, al = sin(w) / (2 * qv), cw = cos(w);
+    double a0 = 1 + al / A;
+    q->b0 = (1 + al * A) / a0; q->b1 = -2 * cw / a0; q->b2 = (1 - al * A) / a0;
+    q->a1 = -2 * cw / a0; q->a2 = (1 - al / A) / a0;
 }
 static inline float Biq(struct Biquad *q, int ch, float x)
 {
@@ -1673,11 +1687,12 @@ void SoundMain(void)
         if (gPcHdAudio)
         {
             static int init;
-            float wet = 0.10f + (si->reverb & 0x7F) / 127.0f * 0.14f;
+            float wet = 0.08f + (si->reverb & 0x7F) / 127.0f * 0.10f;
             if (!init)
             {
-                ShelfInit(&sLowShelf, 0, 140, 2.0);
-                ShelfInit(&sHighShelf, 1, 7000, 2.0);
+                ShelfInit(&sLowShelf, 0, 120, 1.5);
+                ShelfInit(&sHighShelf, 1, 5500, 3.5);
+                PeakInit(&sPresence, 2600, 0.9, 2.0);
                 init = 1;
             }
             for (i = 0; i < n; i++)
@@ -1693,8 +1708,19 @@ void SoundMain(void)
                 r += Reverb(1, rin) * wet * 4.5f;
                 m = (l + r) * 0.5f; sd = (l - r) * 0.5f * 1.2f;   // a little wider
                 l = m + sd; r = m - sd;
-                l = Biq(&sHighShelf, 0, Biq(&sLowShelf, 0, l));
-                r = Biq(&sHighShelf, 1, Biq(&sLowShelf, 1, r));
+                l = Biq(&sPresence, 0, Biq(&sHighShelf, 0, Biq(&sLowShelf, 0, l)));
+                r = Biq(&sPresence, 1, Biq(&sHighShelf, 1, Biq(&sLowShelf, 1, r)));
+                {
+                    // Gentle bus compression (2.5:1 above about -16 dBFS) to glue the mix.
+                    static float env = 0;
+                    float lvl = fmaxf(fabsf(l), fabsf(r)) * 48.0f / 32768.0f, gdb, gain;
+                    env += (lvl - env) * (lvl > env ? 0.01f : 0.0004f);
+                    gdb = 20.0f * log10f(env + 1e-6f) + 16.0f;
+                    gain = gdb > 0 ? powf(10.0f, -gdb * (1.0f - 1.0f / 2.5f) / 20.0f) : 1.0f;
+                    gain *= 1.25f;   // make-up
+                    l *= gain;
+                    r *= gain;
+                }
                 sOut[i * 2] = (s16)(SoftClip(l * 48.0f / 32768.0f) * 32767.0f);
                 sOut[i * 2 + 1] = (s16)(SoftClip(r * 48.0f / 32768.0f) * 32767.0f);
             }
