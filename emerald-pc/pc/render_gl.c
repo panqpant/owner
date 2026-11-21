@@ -294,7 +294,8 @@ static const char *kComposite =
     "uniform vec4 uKey;\n"
     "uniform float uFlash;\n"
     "uniform vec2 uPlayer;\n"
-    "uniform vec3 uLife;\n"         // x: water fraction on screen, y: volcanic ash, z: heat haze
+    "uniform vec3 uLife;\n"
+    "uniform vec4 uInSun;\n"        // indoors: direction sunlight travels from windows (x, y), strength, night         // x: water fraction on screen, y: volcanic ash, z: heat haze
     "uniform int uBattle;\n"        // battle scene lighting on
     "uniform vec4 uMon[4];\n"       // battler sprite rects x, y, w, h (w = 0: none)
     "uniform vec3 uMonFeet[4];\n"   // feet x, y; half width
@@ -643,6 +644,17 @@ static const char *kComposite =
     "    }\n"
     "  }\n"
     "  return c;\n"
+    "}\n"
+    "bool Glass(vec2 g) {\n"   // a window pane: pale blue pixel in a wall
+    "  ivec2 c = ivec2(floor(CellPos(g)));\n"
+    "  if ((Cell(c) & 1) == 0) return false;\n"
+    "  for (int k = 1; k < 16; k++) {\n"   // back wall: nothing but wall above it, up to the top of the room
+    "    ivec2 u = c - ivec2(0, k);\n"
+    "    if (u.y < 0) break;\n"
+    "    if ((Cell(u) & 1) == 0) return false;\n"
+    "  }\n"
+    "  vec3 k = TexS(uFlat, vec2((g.x + uMargin) / uDim.x, g.y / uDim.y)).rgb;\n"
+    "  return k.b > 0.6 && k.b - k.r > 0.18 && k.g > 0.5;\n"
     "}\n"
     "bool Green(vec4 c) { vec3 k = c.rgb / max(c.a, 1e-4); return c.a > 0.5 && k.g > k.r * 1.05 && k.g > k.b * 1.1; }\n"
     "vec3 C555(uint c) { return vec3(float(c & 31u), float((c >> 5) & 31u), float((c >> 10) & 31u)) / 31.0; }\n"
@@ -1010,6 +1022,48 @@ static const char *kComposite =
     "    float lamp = (1.0 - smoothstep(10.0, 95.0, dl)) * (1.0 - occ * 0.5);\n"
     "    float flick = 0.95 + 0.05 * sin(uTime * 9.0) * Noise(vec2(uTime * 3.0, 1.0));\n"
     "    res *= 0.72 + vec3(1.0, 0.82, 0.6) * lamp * 0.5 * flick;\n"
+    "  }\n"
+    // ---- Indoors: sunbeams from windows, glowing screens and lamps,
+    // soft furniture shadows, warm lamplight at night ----
+    "  if (uFieldFx != 0 && top != 0 && (uMapType == 8 || uMapType == 9)) {\n"
+    "    bool floor_ = top >= 1 && top <= 3 && (here & 1) == 0;\n"
+    "    if (floor_) {\n"   // furniture contact shadows (light from above and slightly behind)
+    "      float sh = Solid(gp - vec2(1.5, 4.0)) * 0.6 + Solid(gp - vec2(-1.5, 4.0)) * 0.4;\n"
+    "      sh = (sh + Solid(gp - vec2(0.0, 8.0)) * 0.5) / 1.5;\n"
+    "      res *= 1.0 - clamp(sh - Solid(gp), 0.0, 1.0) * 0.13;\n"
+    "    }\n"
+    "    if (top >= 1 && top <= 3 && uInSun.z > 0.0 && !Glass(gp)) {\n"   // trace back toward the window along the light
+    "      float beam = 0.0; vec2 dir = uInSun.xy;\n"
+    "      for (int k = 2; k <= 14; k++) {\n"
+    "        vec2 q = gp - dir * float(k) * 3.5;\n"
+    "        if (Glass(q)) { beam = 1.0 - float(k) / 15.0; break; }\n"
+    "      }\n"
+    "      if (beam > 0.0) {\n"
+    "        float dust = 0.85 + 0.15 * Noise(wp * 0.25 + vec2(uTime * 0.3, -uTime * 0.5));\n"
+    "        vec2 mc = floor(wp / 5.0); float mh = Hash(mc);\n"
+    "        vec2 mp = (mc + 0.5) * 5.0 + 1.5 * vec2(sin(uTime * 0.7 + mh * 30.0), cos(uTime * 0.5 + mh * 20.0));\n"
+    "        float mote = step(0.85, mh) * exp(-dot(wp - mp, wp - mp) * 3.0);\n"
+    "        float edge = smoothstep(0.0, 0.25, beam);\n"
+    "        res += vec3(1.0, 0.88, 0.65) * (edge * (0.22 + 0.3 * beam) * dust + mote * 0.6 * beam) * uInSun.z * (0.5 + 0.5 * res);\n"
+    "      }\n"
+    "    }\n"
+    "    {\n"   // screens and lamps: very bright pixels nearby glow onto their surroundings
+    "      vec3 glow = vec3(0.0);\n"
+    "      for (int k = 0; k < 8; k++) {\n"
+    "        float a = float(k) * 0.785 + 0.39;\n"
+    "        for (int rr = 1; rr <= 2; rr++) {\n"
+    "          vec2 q = gp + vec2(cos(a), sin(a)) * float(rr) * 5.0;\n"
+    "          vec3 c = TexS(uFlat, vec2((q.x + uMargin) / uDim.x, q.y / uDim.y)).rgb;\n"
+    "          float mx = max(c.r, max(c.g, c.b)), mn = min(c.r, min(c.g, c.b));\n"
+    "          glow += c * smoothstep(0.82, 0.97, mx) * smoothstep(0.25, 0.45, mx - mn) / float(rr);\n"
+    "        }\n"
+    "      }\n"
+    "      res += glow * (0.05 + 0.07 * uInSun.w);\n"
+    "    }\n"
+    "    if (uInSun.w > 0.0) {\n"   // night: dark windows, warm lamplight in the room
+    "      if (top >= 1 && top <= 3 && Glass(gp)) res = mix(res, vec3(0.08, 0.12, 0.28) + res * 0.2, uInSun.w * 0.8);\n"
+    "      else res *= mix(vec3(1.0), vec3(1.06, 0.97, 0.86), uInSun.w);\n"
+    "    }\n"
     "  }\n"
     // ---- Living world: particles drawn into the scene (not over menus) ----
     "  if (uFieldFx != 0 && top != 0) {\n"
@@ -1931,6 +1985,27 @@ static void RenderHd(const uint32_t *frame, int outW, int outH)
                     water += (g[k] & 2) != 0;
                 glUniform3f(glGetUniformLocation(sProgComp, "uLife"), (float)water / cells,
                             field && gPcFieldFx.ash ? 1.0f : 0.0f, field && gPcFieldFx.heat ? 1.0f : 0.0f);
+            }
+            {
+                // Indoor sunlight: falls into the room from the windows on
+                // the back wall, slanting with the hour; off at night.
+                float h = LocalHour(), a = (h - 6.5f) / 12.0f, str = 0, nightIn = 0;
+                float dx = 0, dy = 1;
+                if (a > 0 && a < 1)
+                {
+                    str = sinf(a * 3.14159f);
+                    str = str > 0.25f ? 1.0f : str / 0.25f;
+                    dx = (a - 0.5f) * 1.6f;
+                }
+                else
+                    nightIn = 1;
+                if (h > 18.0f && h < 19.5f) nightIn = (h - 18.0f) / 1.5f;
+                if (h > 5.0f && h < 6.5f) nightIn = 1.0f - (h - 5.0f) / 1.5f;
+                {
+                    float n = sqrtf(dx * dx + dy * dy);
+                    glUniform4f(glGetUniformLocation(sProgComp, "uInSun"), dx / n, dy / n,
+                                field && sLighting ? str * 0.9f : 0.0f, field && sLighting ? nightIn : 0.0f);
+                }
             }
             glUniform2f(glGetUniformLocation(sProgComp, "uPlayer"), (float)gPcFieldFx.playerX, (float)gPcFieldFx.playerY);
             SetBattleUniforms();
