@@ -678,6 +678,14 @@ void m4aSoundVSync(void)
 #define MAX_FRAME_SAMPLES 1024
 
 static double sSampleAcc;
+static double sFps = GBA_FPS;
+
+// Audio samples are generated per game frame; when the game is locked to the
+// display's refresh rate the frame rate changes slightly.
+void M4aPcSetFrameRate(double fps)
+{
+    sFps = fps > 1 ? fps : GBA_FPS;
+}
 static float sMixL[MAX_FRAME_SAMPLES], sMixR[MAX_FRAME_SAMPLES];
 static float sPrevL[MAX_FRAME_SAMPLES], sPrevR[MAX_FRAME_SAMPLES];
 static s16 sOut[MAX_FRAME_SAMPLES * 2];
@@ -1113,7 +1121,7 @@ void SoundMain(void)
         si->MPlayMainHead(si->musicPlayerHead);
     si->CgbSound();
 
-    sSampleAcc += OUT_RATE / GBA_FPS;
+    sSampleAcc += OUT_RATE / sFps;
     n = (int)sSampleAcc;
     sSampleAcc -= n;
     if (n > MAX_FRAME_SAMPLES)

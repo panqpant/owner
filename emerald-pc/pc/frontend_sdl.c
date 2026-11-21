@@ -30,6 +30,11 @@ static int sAutoShotFrame = -1;
 static int sFixedAspect;
 static int sInitW, sInitH;
 static int sStartFullscreen;
+// Display lock: on 60/120/180/240 Hz displays the game runs at refresh/N
+// (60 fps) and each frame is shown for exactly N refreshes, paced by vsync.
+static int sLockN, sLockDisabled, sLockChecks;
+static uint64_t sLockT0;
+static void UpdateDisplayLock(void);
 static int sDumpAtStart;   // --aspect given: don't follow the window shape
 
 // Match the game's visible width to the window's shape: wider screens show
@@ -141,6 +146,8 @@ int FrontendInit(int argc, char **argv)
             ScriptLoad(argv[++i]);
         else if (!strcmp(argv[i], "--dump-tiles"))
             sDumpAtStart = 1;
+        else if (!strcmp(argv[i], "--no-display-lock"))
+            sLockDisabled = 1;
         else if (!strcmp(argv[i], "--fullscreen"))
             sStartFullscreen = 1;
         else if (!strcmp(argv[i], "--autoshot") && i + 2 < argc)
@@ -247,10 +254,38 @@ int FrontendInit(int argc, char **argv)
 
     if (sStartFullscreen)
         SDL_SetWindowFullscreen(sWindow, SDL_WINDOW_FULLSCREEN_DESKTOP);
+    UpdateDisplayLock();
     FitWidthToWindow();
     OpenPad();
     sNextFrame = SDL_GetPerformanceCounter();
     return 0;
+}
+
+static void UpdateDisplayLock(void)
+{
+    SDL_DisplayMode dm;
+    int n = 0;
+    if (!sUseGl || sLockDisabled || SDL_GL_GetSwapInterval() == 0)
+    {
+        sLockN = 0;
+        M4aPcSetFrameRate(0);
+        return;
+    }
+    if (SDL_GetCurrentDisplayMode(SDL_GetWindowDisplayIndex(sWindow), &dm) == 0 && dm.refresh_rate > 0)
+    {
+        int r = dm.refresh_rate;
+        if (r >= 59 && r <= 61) n = 1;
+        else if (r >= 119 && r <= 121) n = 2;
+        else if (r >= 179 && r <= 181) n = 3;
+        else if (r >= 239 && r <= 241) n = 4;
+        if (n)
+            M4aPcSetFrameRate((double)r / n);
+    }
+    if (!n)
+        M4aPcSetFrameRate(0);
+    sLockN = n;
+    sLockChecks = 0;
+    sLockT0 = SDL_GetPerformanceCounter();
 }
 
 static void ToggleFullscreen(void)
@@ -299,6 +334,8 @@ static void PumpEvents(void)
         case SDL_WINDOWEVENT:
             if (e.window.event == SDL_WINDOWEVENT_SIZE_CHANGED)
                 FitWidthToWindow();
+            if (e.window.event == SDL_WINDOWEVENT_MOVED || e.window.event == SDL_WINDOWEVENT_DISPLAY_CHANGED)
+                UpdateDisplayLock();
             break;
         case SDL_CONTROLLERDEVICEADDED:
             OpenPad();
@@ -339,6 +376,16 @@ void FrontendPresent(const uint32_t *fb)
                     sShotW = 0;
             }
             SDL_GL_SwapWindow(sWindow);
+            // High-refresh displays: show the same image for the remaining refreshes.
+            if (sLockN > 1 && !sFastForward && !ScriptActive())
+            {
+                int k;
+                for (k = 1; k < sLockN; k++)
+                {
+                    HdPresentAgain(w, h);
+                    SDL_GL_SwapWindow(sWindow);
+                }
+            }
             if (sWantShot)
             {
                 sWantShot = 0;
@@ -373,6 +420,23 @@ void FrontendPresent(const uint32_t *fb)
 
     if (sFastForward)
     {
+        sNextFrame = SDL_GetPerformanceCounter();
+        return;
+    }
+
+    if (sLockN && !ScriptActive())
+    {
+        // Paced by vsync. Make sure the driver really waits for it: if 120
+        // frames arrive much faster than the refresh rate, use the timer.
+        if (++sLockChecks == 120)
+        {
+            double secs = (double)(SDL_GetPerformanceCounter() - sLockT0) / freq;
+            if (secs < 120.0 / 60.0 * 0.8)
+            {
+                sLockN = 0;
+                M4aPcSetFrameRate(0);
+            }
+        }
         sNextFrame = SDL_GetPerformanceCounter();
         return;
     }

@@ -960,6 +960,15 @@ static void DrawPresent(int hdMode, int winW, int winH)
 
 static int sLastHdMode;
 
+// Show the last rendered image again (for displays faster than 60 Hz).
+void HdPresentAgain(int winW, int winH)
+{
+    if (!sReady)
+        return;
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    DrawPresent(sLastHdMode, winW, winH);
+}
+
 void HdPresent(const uint32_t *frame, int hdMode, int winW, int winH)
 {
     int x, y, w, h;

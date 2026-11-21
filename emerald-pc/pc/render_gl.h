@@ -12,4 +12,5 @@ void HdSetLighting(int on);
 int  HdGetLighting(void);
 int  HdReadComposite(uint32_t *out, int *w, int *h);
 int  HdReadFrame(uint32_t *out, int *w, int *h, int maxPixels);
+void HdPresentAgain(int winW, int winH);
 #endif

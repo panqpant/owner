@@ -84,5 +84,6 @@ void FlashPcSetPath(const char *path);
 
 // m4a_pc.c
 void M4aPcMixFrame(int16_t *out, int frames);
+void M4aPcSetFrameRate(double fps);
 
 #endif // PC_PORT_H
