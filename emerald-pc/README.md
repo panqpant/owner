@@ -13,14 +13,38 @@ the game's assets.
 | Part | State |
 |---|---|
 | Decompilation builds a ROM identical to retail (SHA-1 `f3ae0881…`) | done |
-| All game C code and data compiled for 32-bit x86 | done |
+| All game C code and data compiled for 32-bit x86 (Linux and Windows) | done |
 | Platform layer: memory map, frame/scanline loop, interrupts, DMA, BIOS calls | done |
 | Graphics renderer (text and affine BGs, sprites, windows, blending, mosaic) | done, pixel-identical to mGBA on tested frames |
 | Sound engine (m4a sequencer, 48 kHz 16-bit mixer, GB PSG channels) | done, matches mGBA by spectrogram |
-| Flash saves (to a `.sav` file), real-time clock (host clock) | done |
-| New game → intro → naming screen | playable |
-| SDL2 window, keyboard/gamepad, Windows `.exe` | next |
-| Widescreen, HD renderer, HD asset packs | planned |
+| Flash saves (`emerald.sav`), real-time clock (host clock) | done |
+| SDL2 window, keyboard and gamepad, fullscreen, fast-forward, Windows `.exe` | done (Windows build not yet confirmed on real hardware) |
+| **HD renderer:** each layer upscaled with xBR on the GPU, composited at screen resolution | done |
+| **Widescreen:** overworld fills any aspect ratio (16:9, 21:9, any window); UI stays centred | done |
+| **HD texture packs:** dump tiles (F6), replace with hand-drawn art in `hd/tiles` | done, see [HDPACKS.md](HDPACKS.md) |
+| Day/night lighting outdoors, soft side fill for 3:2 screens, colour grade | done |
+| Verified: intro, new game, overworld, a full battle turn, all 518 maps load and render | done |
+| Full playthrough (late-game scenes, every menu, link features) | needs playtesting |
+
+## Controls
+
+| Key | Action |
+|---|---|
+| Arrows | D-pad |
+| X / Z | A / B |
+| Enter / Backspace | Start / Select |
+| A / S | L / R |
+| Tab (hold) | Fast-forward |
+| F1 | HD / original graphics |
+| F3 | Colour grade |
+| F4 | Day/night lighting |
+| F6 | Dump tiles for HD packs |
+| F11 or Alt+Enter | Fullscreen |
+| F12 | Screenshot |
+| Esc | Quit |
+
+Gamepads use the Xbox layout (bottom = A, right = B). Command-line options:
+`--fullscreen`, `--aspect 16:9` (fix the shape instead of following the window), `--original`.
 
 ## How it works
 
@@ -42,7 +66,12 @@ the game's assets.
   lines, all under `#ifdef PLATFORM_PC` or `UBFIX`). The GBA build still matches
   the retail ROM.
 
-## Building (Linux)
+## Building
+
+`./setup.sh win` cross-builds `emerald.exe` for Windows. `./setup.sh sdl` builds the
+windowed Linux version.
+
+### Linux
 
 ```sh
 sudo apt install build-essential gcc-multilib binutils-arm-none-eabi libpng-dev git python3

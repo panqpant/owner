@@ -11,6 +11,7 @@
 #include "overworld.h"
 #include "script_pokemon_util.h"
 #include "constants/items.h"
+#include "field_screen_effect.h"
 
 void TestHookRun(const char *cmd)
 {
@@ -35,6 +36,14 @@ void TestHookRun(const char *cmd)
     {
         // warp MAPGROUP MAPNUM X Y
         SetWarpDestination(a, b, WARP_ID_NONE, c, d);
+        DoWarp();
+        ResetInitialPlayerAvatarState();
+    }
+    else if (!strcmp(name, "warpto"))
+    {
+        // warpto MAPGROUP MAPNUM: arrive at the map's first warp point
+        fprintf(stderr, "[test] warp %d.%d\n", a, b);
+        SetWarpDestinationToMapWarp(a, b, 0);
         DoWarp();
         ResetInitialPlayerAvatarState();
     }
