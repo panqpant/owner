@@ -12,6 +12,7 @@
 #include "script_pokemon_util.h"
 #include "constants/items.h"
 #include "field_screen_effect.h"
+#include "field_weather.h"
 
 void TestHookRun(const char *cmd)
 {
@@ -38,6 +39,10 @@ void TestHookRun(const char *cmd)
         SetWarpDestination(a, b, WARP_ID_NONE, c, d);
         DoWarp();
         ResetInitialPlayerAvatarState();
+    }
+    else if (!strcmp(name, "weather"))
+    {
+        SetWeather(a);
     }
     else if (!strcmp(name, "warpto"))
     {

@@ -11,6 +11,7 @@
 #include "port.h"
 #include "hdpack.h"
 #include "texthd.h"
+#include "fieldfx.h"
 
 typedef uint8_t u8; typedef uint16_t u16; typedef uint32_t u32;
 typedef int16_t s16; typedef int32_t s32;
@@ -31,6 +32,7 @@ static u16 sObjColor[PC_MAX_W];
 static u8  sObjPrio[PC_MAX_W];
 static u8  sObjSemi[PC_MAX_W];
 static u8  sObjWin[PC_MAX_W];
+static u8  sObjHidden[PC_MAX_W]; // pixel comes from a weather sprite the HD renderer redraws
 static u8  sWinMask[PC_MAX_W];
 
 // HD pack tile references for the current line (see PpuLayers.tref).
@@ -38,6 +40,13 @@ static u16 sRefSlot[5][PC_MAX_W];
 static u8  sRefInfo[5][PC_MAX_W];
 static u16 sRefUnfaded[5][PC_MAX_W];
 static int sDoRefs;
+static int sHideThis;
+
+// Result of compositing each pixel of the current line (used by the layer
+// export to hide pixels the GBA never shows from the HD upscaler).
+static u8  sTopLayer[PC_MAX_W];   // L_BG0..L_BD
+static u8  sBlended[PC_MAX_W];    // pixel used a two-layer colour effect
+static u16 sFinal[PC_MAX_W];
 
 // Per-line geometry.
 static int sW, sMargin, sWide;
@@ -290,6 +299,7 @@ static void RenderSprites(int line)
         memset(sRefSlot[4], 0, sizeof(sRefSlot[4]));
     memset(sObjSemi, 0, sW);
     memset(sObjWin, 0, sW);
+    memset(sObjHidden, 0, sW);
     ClearRow(sObjColor);
 
     if (!(dispcnt & 0x1000))
@@ -327,6 +337,15 @@ static void RenderSprites(int line)
 
         if (bitmapMode && tile < 512)
             continue;
+        {
+            int hide = 0, k;
+            if (gPcHdEffects && sWide)
+                for (k = 0; k < 2; k++)
+                    if (gPcFieldFx.hideTileCount[k] && tile >= gPcFieldFx.hideTileStart[k]
+                     && tile < gPcFieldFx.hideTileStart[k] + gPcFieldFx.hideTileCount[k])
+                        hide = 1;
+            sHideThis = hide;
+        }
 
         if (affine)
         {
@@ -391,6 +410,7 @@ static void RenderSprites(int line)
             }
             if (sObjColor[px] == TRANSPARENT || prio < sObjPrio[px])
             {
+                sObjHidden[px] = sHideThis;
                 sObjColor[px] = Pal(c);
                 sObjPrio[px] = prio;
                 sObjSemi[px] = mode == 1;
@@ -548,15 +568,38 @@ static void ExportLine(int line, const int *bgOn, const int *bgPrio, int forcedB
             continue;
         }
         for (x = 0; x < sW; x++)
-            dst[x] = sBg[i][x] == TRANSPARENT ? 0 : ToRgba(sBg[i][x]);
+        {
+            u16 c = sBg[i][x];
+            if (c == TRANSPARENT)
+                dst[x] = 0;
+            else if (sTopLayer[x] != i && !sBlended[x])
+                dst[x] = ToRgba(sFinal[x]); // hidden: what is actually visible here
+            else
+                dst[x] = ToRgba(c);
+        }
     }
     {
         u32 *dst = gPpuLayers.layer[4][line];
         u32 *meta = gPpuLayers.meta[line];
         for (x = 0; x < sW; x++)
         {
-            dst[x] = sObjColor[x] == TRANSPARENT ? 0 : ToRgba(sObjColor[x]);
-            meta[x] = sWinMask[x] | ((u32)((sObjPrio[x] & 3) | (sObjSemi[x] ? 4 : 0)) << 8);
+            if (sObjColor[x] == TRANSPARENT || sObjHidden[x])
+                dst[x] = 0;
+            else if (sTopLayer[x] != L_OBJ && !sBlended[x])
+                dst[x] = ToRgba(sFinal[x]);
+            else
+                dst[x] = ToRgba(sObjColor[x]);
+            u32 opaque = 0;
+            int b;
+            // Which layers are opaque at this original pixel (B channel): the
+            // compositor keeps them fully opaque so upscaled edges can't let
+            // hidden pixels underneath show through.
+            for (b = 0; b < 4; b++)
+                if (bgOn[b] && sBg[b][x] != TRANSPARENT)
+                    opaque |= 1u << b;
+            if (sObjColor[x] != TRANSPARENT && !sObjHidden[x])
+                opaque |= 16;
+            meta[x] = sWinMask[x] | ((u32)((sObjPrio[x] & 3) | (sObjSemi[x] ? 4 : 0)) << 8) | (opaque << 16);
         }
     }
 }
@@ -639,8 +682,6 @@ void PpuRenderLine(int line, u32 *out)
 
     RenderSprites(line);
     BuildWindowMask(line);
-    if (gPpuExportLayers)
-        ExportLine(line, bgOn, bgPrio, 0, bldcnt, eva, evb, evy, effect);
 
     for (x = 0; x < sW; x++)
     {
@@ -649,9 +690,12 @@ void PpuRenderLine(int line, u32 *out)
         u16 top = backdrop, bot = backdrop;
         u16 c;
 
+        sTopLayer[x] = L_BD;
+        sBlended[x] = 0;
         if (x < cx0 || x >= cx1)
         {
             out[x] = 0xFF000000u; // pillarbox
+            sFinal[x] = 0;
             continue;
         }
 
@@ -682,17 +726,30 @@ void PpuRenderLine(int line, u32 *out)
             int botIs2nd = (bldcnt >> (8 + botL)) & 1;
 
             if (topL == L_OBJ && sObjSemi[x] && botIs2nd)
+            {
                 c = Blend(top, bot, eva, evb);
+                sBlended[x] = 1;
+            }
             else if (topIs1st)
             {
                 if (effect == 1 && botIs2nd)
+                {
                     c = Blend(top, bot, eva, evb);
+                    sBlended[x] = 1;
+                }
                 else if (effect == 2)
                     c = Brighten(top, evy);
                 else if (effect == 3)
                     c = Darken(top, evy);
             }
         }
+        sTopLayer[x] = topL;
+        // Keep the un-faded colour of the top layer: brightness fades are
+        // applied again by the HD compositor.
+        sFinal[x] = top;
         out[x] = ToRgb(c);
     }
+
+    if (gPpuExportLayers)
+        ExportLine(line, bgOn, bgPrio, 0, bldcnt, eva, evb, evy, effect);
 }

@@ -142,7 +142,7 @@ index 02e1fce..ea94a2b 100644
      if (y >= DISPLAY_HEIGHT + 16 || y2 < -16)
          sprite->invisible = TRUE;
 diff --git a/src/field_camera.c b/src/field_camera.c
-index e76ba3d..e50dac0 100644
+index e76ba3d..cc2d6a9 100644
 --- a/src/field_camera.c
 +++ b/src/field_camera.c
 @@ -16,7 +16,11 @@ EWRAM_DATA bool8 gUnusedBikeCameraAheadPanback = FALSE;
@@ -236,7 +236,7 @@ index e76ba3d..e50dac0 100644
  static void DrawMetatile(s32 metatileLayerType, const u16 *tiles, u16 offset)
  {
      switch (metatileLayerType)
-@@ -250,58 +292,58 @@ static void DrawMetatile(s32 metatileLayerType, const u16 *tiles, u16 offset)
+@@ -250,58 +292,68 @@ static void DrawMetatile(s32 metatileLayerType, const u16 *tiles, u16 offset)
          // Draw metatile's bottom layer to the bottom background layer.
          gOverworldTilemapBuffer_Bg3[offset] = tiles[0];
          gOverworldTilemapBuffer_Bg3[offset + 1] = tiles[1];
@@ -287,6 +287,15 @@ index e76ba3d..e50dac0 100644
 +        gOverworldTilemapBuffer_Bg1[offset + FIELD_ROW + 1] = 0;
          break;
      case METATILE_LAYER_TYPE_NORMAL:
++#ifdef PLATFORM_PC
++        // The GBA puts filler here because the middle layer always hides it.
++        // The HD renderer's smoothed edges can reveal slivers of it, so use
++        // the metatile's real bottom layer instead (identical at 1x).
++        gOverworldTilemapBuffer_Bg3[offset] = tiles[0];
++        gOverworldTilemapBuffer_Bg3[offset + 1] = tiles[1];
++        gOverworldTilemapBuffer_Bg3[offset + FIELD_ROW] = tiles[2];
++        gOverworldTilemapBuffer_Bg3[offset + FIELD_ROW + 1] = tiles[3];
++#else
          // Draw garbage to the bottom background layer.
          gOverworldTilemapBuffer_Bg3[offset] = 0x3014;
          gOverworldTilemapBuffer_Bg3[offset + 1] = 0x3014;
@@ -294,6 +303,7 @@ index e76ba3d..e50dac0 100644
 -        gOverworldTilemapBuffer_Bg3[offset + 0x21] = 0x3014;
 +        gOverworldTilemapBuffer_Bg3[offset + FIELD_ROW] = 0x3014;
 +        gOverworldTilemapBuffer_Bg3[offset + FIELD_ROW + 1] = 0x3014;
++#endif
  
          // Draw metatile's bottom layer to the middle background layer.
          gOverworldTilemapBuffer_Bg2[offset] = tiles[0];
@@ -313,7 +323,7 @@ index e76ba3d..e50dac0 100644
          break;
      }
      ScheduleBgCopyTilemapToVram(1);
-@@ -311,6 +353,17 @@ static void DrawMetatile(s32 metatileLayerType, const u16 *tiles, u16 offset)
+@@ -311,6 +363,17 @@ static void DrawMetatile(s32 metatileLayerType, const u16 *tiles, u16 offset)
  
  static s32 MapPosToBgTilemapOffset(struct FieldCameraOffset *cameraOffset, s32 x, s32 y)
  {

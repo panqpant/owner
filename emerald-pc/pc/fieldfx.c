@@ -7,9 +7,13 @@
 #include "fieldmap.h"
 #include "overworld.h"
 #include "sprite.h"
+#include "field_weather.h"
+#include "metatile_behavior.h"
+#include "constants/weather.h"
 #include "fieldfx.h"
 
 struct PcFieldFx gPcFieldFx;
+int gPcHdEffects;
 
 void PcUpdateFieldFx(void)
 {
@@ -19,6 +23,54 @@ void PcUpdateFieldFx(void)
     fx->outdoors = IsMapTypeOutdoors(gMapHeader.mapType);
     fx->numLights = 0;
     fx->numShadows = 0;
+    fx->hideTileCount[0] = fx->hideTileCount[1] = 0;
+
+    // Weather the renderer redraws at full resolution.
+    fx->weather = PC_WEATHER_NONE;
+    switch (gWeatherPtr->currWeather)
+    {
+    case WEATHER_RAIN:
+    case WEATHER_RAIN_THUNDERSTORM:
+        fx->weather = gWeatherPtr->rainSpriteCount ? PC_WEATHER_RAIN : PC_WEATHER_NONE;
+        break;
+    case WEATHER_DOWNPOUR:
+        fx->weather = gWeatherPtr->rainSpriteCount ? PC_WEATHER_DOWNPOUR : PC_WEATHER_NONE;
+        break;
+    case WEATHER_SANDSTORM:
+        fx->weather = gWeatherPtr->sandstormSpritesCreated ? PC_WEATHER_SANDSTORM : PC_WEATHER_NONE;
+        break;
+    }
+    if (fx->weather == PC_WEATHER_RAIN || fx->weather == PC_WEATHER_DOWNPOUR)
+    {
+        u16 t = GetSpriteTileStartByTag(GFXTAG_RAIN);
+        if (t != 0xFFFF) { fx->hideTileStart[0] = t; fx->hideTileCount[0] = 48 /* graphics/weather/rain.png */; }
+    }
+    else if (fx->weather == PC_WEATHER_SANDSTORM)
+    {
+        u16 t = GetSpriteTileStartByTag(GFXTAG_SANDSTORM);
+        if (t != 0xFFFF) { fx->hideTileStart[0] = t; fx->hideTileCount[0] = 80 /* graphics/weather/sandstorm.png */; }
+    }
+
+    // Water metatiles around the camera, for the shimmer effect.
+    {
+        int margin = (PcFieldMargin() + 15) / 16 + 1, row, col;
+        int mx0 = gSaveBlock1Ptr->pos.x - margin, my0 = gSaveBlock1Ptr->pos.y;
+        s16 sx, sy;
+        SetSpritePosToMapCoords(mx0, my0, &sx, &sy);
+        fx->waterX = sx + gSpriteCoordOffsetX;
+        fx->waterY = sy + gSpriteCoordOffsetY;
+        fx->waterCols = 17 + margin * 2;
+        if (fx->waterCols > 31)
+            fx->waterCols = 31;
+        for (row = 0; row < PC_WATER_ROWS; row++)
+        {
+            int bits = 0;
+            for (col = 0; col < fx->waterCols; col++)
+                if (MetatileBehavior_IsSurfableWaterOrUnderwater(MapGridGetMetatileBehaviorAt(mx0 + col, my0 + row)))
+                    bits |= 1 << col;
+            fx->water[row] = bits;
+        }
+    }
 
     // Doors and other entrances glow at night.
     if (gMapHeader.events)

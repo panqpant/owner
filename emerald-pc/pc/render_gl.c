@@ -91,6 +91,7 @@ typedef unsigned char GLboolean;
     X(void, glUniform2f, (GLint, GLfloat, GLfloat)) \
     X(void, glUniform4f, (GLint, GLfloat, GLfloat, GLfloat, GLfloat)) \
     X(void, glUniform3f, (GLint, GLfloat, GLfloat, GLfloat)) \
+    X(void, glUniform1iv, (GLint, GLsizei, const GLint *)) \
     X(void, glGenVertexArrays, (GLsizei, GLuint *)) \
     X(void, glBindVertexArray, (GLuint)) \
     X(void, glGenFramebuffers, (GLsizei, GLuint *)) \
@@ -140,6 +141,7 @@ GLFUNCS
 #define glUniform2f p_glUniform2f
 #define glUniform4f p_glUniform4f
 #define glUniform3f p_glUniform3f
+#define glUniform1iv p_glUniform1iv
 #define glGenVertexArrays p_glGenVertexArrays
 #define glBindVertexArray p_glBindVertexArray
 #define glGenFramebuffers p_glGenFramebuffers
@@ -260,6 +262,7 @@ static const char *kComposite =
     "in vec2 vUv;\n"
     "out vec4 oColor;\n"
     "uniform sampler2D uLayer[5];\n"   // premultiplied, upscaled (or native, nearest)
+    "uniform sampler2D uFlat;\n"       // the original flattened frame, upscaled
     "uniform usampler2D uMeta;\n"
     "uniform usampler2D uLine;\n"
     "uniform vec2 uDim;\n"        // native frame size (W, 160)
@@ -279,6 +282,24 @@ static const char *kComposite =
     "uniform int uNumLights, uNumShadows;\n"
     "uniform vec3 uLights[24];\n"   // x, y (GBA screen coords), radius
     "uniform vec3 uShadows[32];\n"  // feet x, y, width
+    "uniform int uWeather;\n"       // 1 rain, 2 downpour, 3 sandstorm
+    "uniform float uTime;\n"
+    "uniform vec3 uWaterGrid;\n"    // first metatile's screen x, y; number of columns
+    "uniform int uWater[13];\n"
+    "float Hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }\n"
+    "float Rain(vec2 p, float t, float scale, float speed, float density) {\n"
+    "  p.x += p.y * 0.22;\n"
+    "  vec2 q = vec2(p.x / scale, p.y / (scale * 7.0) - t * speed);\n"
+    "  vec2 cell = floor(q), f = fract(q);\n"
+    "  if (Hash(cell) > density) return 0.0;\n"
+    "  float x0 = 0.15 + 0.7 * Hash(cell + 7.31);\n"
+    "  float d = abs(f.x - x0) * scale;\n"
+    "  return (1.0 - smoothstep(0.0, 0.55, d)) * smoothstep(0.0, 0.35, f.y) * (1.0 - smoothstep(0.65, 1.0, f.y));\n"
+    "}\n"
+    "float Noise(vec2 p) {\n"
+    "  vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);\n"
+    "  return mix(mix(Hash(i), Hash(i + vec2(1, 0)), f.x), mix(Hash(i + vec2(0, 1)), Hash(i + vec2(1, 1)), f.x), f.y);\n"
+    "}\n"
     "vec3 C555(uint c) { return vec3(float(c & 31u), float((c >> 5) & 31u), float((c >> 10) & 31u)) / 31.0; }\n"
     "vec3 PalC(uint i) { return C555(texelFetch(uPal, ivec2(int(i), 0), 0).r); }\n"
     // Hand-made replacement tile, with the GBA's palette fade re-applied.
@@ -354,6 +375,11 @@ static const char *kComposite =
     // Colour of everything below the top layer (painter's algorithm, back to front).
     "  vec3 under = bd;\n"
     "  for (int k = n - 1; k > ti; k--) { vec4 c = lay[order[k]]; under = under * (1.0 - c.a) + c.rgb; }\n"
+    // A smoothed edge inside a pixel that was solid in the original would
+    // reveal what the GBA keeps hidden underneath; use the upscaled original
+    // frame there instead.
+    "  if (top != 5 && top != 0 && ((M.b >> uint(top)) & 1u) != 0u && lay[top].a < 0.999)\n"
+    "    under = texture(uFlat, uv).rgb;\n"
     "  vec3 botCol = bot == 5 ? bd : lay[bot].rgb / max(lay[bot].a, 1e-4);\n"
     "  vec3 res = under;\n"
     "  if (top != 5) {\n"
@@ -396,6 +422,16 @@ static const char *kComposite =
     "    float night = clamp((1.0 - uTint.b) * 0.0 + (uTint.b > uTint.r ? (uTint.b - uTint.r) * 2.0 : 0.0), 0.0, 1.0);\n"
     "    res = mix(res, vec3(l), night * 0.35) * uTint.rgb;\n"
     "  }\n"
+    // Water: moving sparkle and a gentle shimmer on water metatiles.
+    "  if (uFieldFx != 0 && top >= 2 && top <= 3 && uWaterGrid.z > 0.0) {\n"
+    "    ivec2 cell = ivec2(floor((gp - uWaterGrid.xy) / 16.0));\n"
+    "    if (cell.y >= 0 && cell.y < 13 && cell.x >= 0 && float(cell.x) < uWaterGrid.z && ((uWater[cell.y] >> cell.x) & 1) != 0) {\n"
+    "      float w = sin(gp.x * 0.42 + uTime * 1.6 + sin(gp.y * 0.31 + uTime * 0.9) * 1.7) * 0.5\n"
+    "              + sin(gp.y * 0.57 - uTime * 1.2 + gp.x * 0.13) * 0.5;\n"
+    "      float sp = smoothstep(0.82, 0.98, w) * (0.6 + 0.4 * Noise(gp * 0.7 + uTime));\n"
+    "      res = res * (1.0 + w * 0.035) + vec3(0.85, 0.95, 1.0) * sp * 0.22;\n"
+    "    }\n"
+    "  }\n"
     // Warm light around doors at night.
     "  if (uFieldFx != 0 && uNight > 0.0 && top != 0) {\n"
     "    float g = 0.0;\n"
@@ -406,6 +442,20 @@ static const char *kComposite =
     "    }\n"
     "    g = min(g, 1.2) * uNight;\n"
     "    res += vec3(1.0, 0.78, 0.48) * g * (0.35 + res * 0.6);\n"
+    "  }\n"
+    // Full-resolution weather over the whole widescreen frame (not over UI).
+    "  if (uFieldFx != 0 && uWeather != 0 && top != 0) {\n"
+    "    if (uWeather <= 2) {\n"
+    "      float heavy = uWeather == 2 ? 1.0 : 0.0;\n"
+    "      float r = Rain(gp, uTime, 5.0, 2.6, 0.30 + heavy * 0.25) * 0.55\n"
+    "              + Rain(gp + 37.0, uTime, 8.0, 2.0, 0.22 + heavy * 0.2) * 0.75;\n"
+    "      res = mix(res, vec3(0.80, 0.86, 0.95), clamp(r, 0.0, 1.0) * 0.55);\n"
+    "    } else {\n"
+    "      vec2 q = gp * vec2(0.035, 0.09) + vec2(uTime * 1.4, uTime * 0.15);\n"
+    "      float n = Noise(q) * 0.6 + Noise(q * 2.3 + 5.0) * 0.4;\n"
+    "      float grain = step(0.985, Hash(floor(gp * 2.0) + floor(uTime * 30.0)));\n"
+    "      res = mix(res, vec3(0.86, 0.72, 0.50), clamp(n * 0.45 + grain * 0.4, 0.0, 0.7));\n"
+    "    }\n"
     "  }\n"
     // Thin, mostly transparent fringes of layers in front of the top layer.
     "  for (int k = ti - 1; k >= 0; k--) { vec4 c = lay[order[k]]; res = res * (1.0 - c.a) + c.rgb; }\n"
@@ -464,7 +514,7 @@ static const char *kPresent =
 static int sReady;
 static GLuint sVao;
 static GLuint sProgXbr, sProgComp, sProgPresent;
-static GLuint sLayerTex[5], sUpTex[5], sUpFbo[5];
+static GLuint sLayerTex[5], sUpTex[6], sUpFbo[6]; // [5] = flattened original frame
 static GLuint sMetaTex, sLineTex, sFrameTex;
 static GLuint sCompTex, sCompFbo;
 static GLuint sTrefTex[5], sAtlasTex, sGlyphTex, sPalTex;
@@ -555,7 +605,7 @@ static GLuint MakeFbo(GLuint tex)
 static void AllocScaled(void)
 {
     int i, w = sW * sScale, h = GBA_H * sScale;
-    for (i = 0; i < 5; i++)
+    for (i = 0; i < 6; i++)
     {
         if (sUpTex[i])
             glDeleteTextures(1, &sUpTex[i]);
@@ -616,6 +666,7 @@ int HdInit(void)
         }
         (void)loc;
         glUniform1i(glGetUniformLocation(sProgComp, "uMeta"), 5);
+        glUniform1i(glGetUniformLocation(sProgComp, "uFlat"), 15);
         glUniform1i(glGetUniformLocation(sProgComp, "uLine"), 6);
         for (i = 0; i < 5; i++)
         {
@@ -706,7 +757,7 @@ static void DrawQuad(void)
 }
 
 // Render the HD composite into sCompFbo.
-static void RenderHd(int outW, int outH)
+static void RenderHd(const uint32_t *frame, int outW, int outH)
 {
     int i, w, h;
 
@@ -754,6 +805,11 @@ static void RenderHd(int outW, int outH)
         glBindTexture(GL_TEXTURE_2D, sLayerTex[i]);
         DrawQuad();
     }
+    // The flattened original frame, upscaled the same way.
+    glBindTexture(GL_TEXTURE_2D, sFrameTex);
+    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, sW, GBA_H, GL_BGRA, GL_UNSIGNED_BYTE, frame);
+    glBindFramebuffer(GL_FRAMEBUFFER, sUpFbo[5]);
+    DrawQuad();
 
     // Pass 2: composite at output resolution.
     EnsureComposite(outW, outH);
@@ -801,6 +857,12 @@ static void RenderHd(int outW, int outH)
         glUniform1f(glGetUniformLocation(sProgComp, "uMargin"), (gPcScreenW - GBA_W) / 2.0f);
         glUniform1i(glGetUniformLocation(sProgComp, "uNumLights"), field ? gPcFieldFx.numLights : 0);
         glUniform1i(glGetUniformLocation(sProgComp, "uNumShadows"), field ? gPcFieldFx.numShadows : 0);
+        gPcHdEffects = field && sLighting;
+        glUniform1i(glGetUniformLocation(sProgComp, "uWeather"), gPcHdEffects ? gPcFieldFx.weather : 0);
+        glUniform1f(glGetUniformLocation(sProgComp, "uTime"), (float)(PortFrameCount() % 36000) / 59.73f);
+        glUniform3f(glGetUniformLocation(sProgComp, "uWaterGrid"), gPcFieldFx.waterX, gPcFieldFx.waterY,
+                    field ? (float)gPcFieldFx.waterCols : 0.0f);
+        glUniform1iv(glGetUniformLocation(sProgComp, "uWater"), PC_WATER_ROWS, gPcFieldFx.water);
         for (k = 0; field && k < gPcFieldFx.numLights; k++)
         {
             snprintf(name, sizeof(name), "uLights[%d]", k);
@@ -825,6 +887,8 @@ static void RenderHd(int outW, int outH)
     glBindTexture(GL_TEXTURE_2D, sGlyphTex);
     glActiveTexture(GL_TEXTURE0 + 14);
     glBindTexture(GL_TEXTURE_2D, sPalTex);
+    glActiveTexture(GL_TEXTURE0 + 15);
+    glBindTexture(GL_TEXTURE_2D, sUpTex[5]);
     for (i = 0; i < 5; i++)
     {
         glActiveTexture(GL_TEXTURE0 + i);
@@ -908,7 +972,7 @@ void HdPresent(const uint32_t *frame, int hdMode, int winW, int winH)
     sLastHdMode = hdMode;
     Letterbox(winW, winH, &x, &y, &w, &h);
     if (hdMode)
-        RenderHd(w, h);
+        RenderHd(frame, w, h);
     else
     {
         glBindTexture(GL_TEXTURE_2D, sFrameTex);
