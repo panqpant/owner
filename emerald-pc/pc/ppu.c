@@ -10,6 +10,7 @@
 #include <string.h>
 #include "port.h"
 #include "hdpack.h"
+#include "texthd.h"
 
 typedef uint8_t u8; typedef uint16_t u16; typedef uint32_t u32;
 typedef int16_t s16; typedef int32_t s32;
@@ -56,6 +57,7 @@ void PpuBeginFrame(void)
 {
     int i;
     HdPackBeginFrame();
+    PcTextBeginFrame();
     for (i = 0; i < 2; i++)
     {
         u32 base = 0x28 + i * 0x10;
@@ -191,6 +193,16 @@ static void RenderTextBg(int bg, int line)
             out[x] = c ? Pal((entry >> 12) * 16 + c) : TRANSPARENT;
             if (sDoRefs && c)
             {
+                u32 tag = gPcTextHd ? gPcTextTags[(addr << 1) | (px & 1)] : 0;
+                if (tag && PcTextExpected(tag) == c && PcTextTileOk(addr >> 5))
+                {
+                    // High-resolution text: glyph slot, position in glyph, colours.
+                    refSlot[x] = 0x8000 | PC_TEXT_TAG_SLOT(tag);
+                    refInfo[x] = PC_TEXT_TAG_LX(tag) | (PC_TEXT_TAG_LY(tag) << 4);
+                    refU[x] = PC_TEXT_TAG_FG(tag) | (PC_TEXT_TAG_SH(tag) << 4)
+                            | (PC_TEXT_TAG_BG(tag) << 8) | ((entry >> 12) << 12);
+                    continue;
+                }
                 refSlot[x] = HdPackLookup(charBase + tile * 32, 0, (entry >> 12) * 16);
                 refU[x] = HdPackUnfaded((entry >> 12) * 16 + c);
             }
@@ -505,7 +517,7 @@ static void ExportLine(int line, const int *bgOn, const int *bgPrio, int forcedB
     if (forcedBlank)
         return;
 
-    if (gHdPackActive)
+    if (gHdPackActive || gPcTextHd)
     {
         for (i = 0; i < 5; i++)
         {
@@ -573,7 +585,7 @@ void PpuRenderLine(int line, u32 *out)
     sW = gPcScreenW;
     sMargin = (sW - GBA_W) / 2;
     sWide = sMargin > 0 && PcFieldWideActive();
-    sDoRefs = gHdPackActive || gHdDumpEnabled;
+    sDoRefs = gHdPackActive || gHdDumpEnabled || gPcTextHd;
     if (sDoRefs)
         for (i = 0; i < 4; i++)
             memset(sRefSlot[i], 0, sW * sizeof(u16));

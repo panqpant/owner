@@ -23,10 +23,10 @@ index 8566762..097e815 100644
  #if MODERN
  // NOTE: Assumes 16-bit DMAs.
 diff --git a/include/global.h b/include/global.h
-index f624850..a0d6b44 100644
+index f624850..5233a93 100644
 --- a/include/global.h
 +++ b/include/global.h
-@@ -17,6 +17,17 @@
+@@ -17,6 +17,26 @@
  #include "constants/easy_chat.h"
  #include "constants/trainer_hill.h"
  
@@ -39,6 +39,15 @@ index f624850..a0d6b44 100644
 +int PcFieldMargin(void);
 +void PcSetFieldMaps(u16 *bg1, u16 *bg2, u16 *bg3, int base1, int base2, int base3);
 +void PcSetOutdoors(int outdoors); // enables time-of-day lighting on the overworld
++// High-resolution text (pc/texthd.c): keep per-pixel glyph tags in step with windows.
++struct TextPrinter;
++void PcTextGlyph(struct TextPrinter *printer);
++void PcTextClear(u8 windowId, int x, int y, int w, int h);
++void PcTextClearAll(u8 windowId);
++void PcTextScroll(u8 windowId, int direction, int distance);
++void PcTextFree(u8 windowId);
++void PcTextToVram(u8 windowId, int tileX, int tileY, int tileW, int tileH);
++void PcTextToVramRange(u8 windowId, int firstTile, int numTiles);
 +#endif
 +
  // Prevent cross-jump optimization.
@@ -505,3 +514,113 @@ index 1d6b81c..537a6be 100644
      if (fading)
          SetVBlankCallback(NULL);
      OverworldBasic();
+diff --git a/src/text.c b/src/text.c
+index 398aaba..a3a2af2 100644
+--- a/src/text.c
++++ b/src/text.c
+@@ -644,6 +644,9 @@ void CopyGlyphToWindow(struct TextPrinter *textPrinter)
+             GLYPH_COPY(windowTiles, widthOffset, currX + 8, currY + 8, glyphPixels + 24, glyphWidth - 8, glyphHeight - 8);
+         }
+     }
++#ifdef PLATFORM_PC
++    PcTextGlyph(textPrinter);
++#endif
+ }
+ 
+ void ClearTextSpan(struct TextPrinter *textPrinter, u32 width)
+diff --git a/src/window.c b/src/window.c
+index 644048f..6f153a1 100644
+--- a/src/window.c
++++ b/src/window.c
+@@ -218,6 +218,9 @@ int AddWindowWithoutTileMap(const struct WindowTemplate *template)
+ void RemoveWindow(u8 windowId)
+ {
+     u8 bgLayer = gWindows[windowId].window.bg;
++#ifdef PLATFORM_PC
++    PcTextFree(windowId);
++#endif
+ 
+     if (gWindowTileAutoAllocEnabled == TRUE)
+         BgTileAllocOp(bgLayer, gWindows[windowId].window.baseBlock, gWindows[windowId].window.width * gWindows[windowId].window.height, 2);
+@@ -255,6 +258,9 @@ void FreeAllWindowBuffers(void)
+ 
+     for (i = 0; i < WINDOWS_MAX; ++i)
+     {
++#ifdef PLATFORM_PC
++        PcTextFree(i);
++#endif
+         if (gWindows[i].tileData != NULL)
+         {
+             Free(gWindows[i].tileData);
+@@ -281,6 +287,10 @@ void CopyWindowToVram(u8 windowId, u8 mode)
+         CopyBgTilemapBufferToVram(windowLocal.window.bg);
+         break;
+     }
++#ifdef PLATFORM_PC
++    if (mode == COPYWIN_GFX || mode == COPYWIN_FULL)
++        PcTextToVram(windowId, 0, 0, 0, 0);
++#endif
+ }
+ 
+ void CopyWindowRectToVram(u32 windowId, u32 mode, u32 x, u32 y, u32 w, u32 h)
+@@ -313,6 +323,10 @@ void CopyWindowRectToVram(u32 windowId, u32 mode, u32 x, u32 y, u32 w, u32 h)
+             CopyBgTilemapBufferToVram(windowLocal.window.bg);
+             break;
+         }
++#ifdef PLATFORM_PC
++        if (mode == COPYWIN_GFX || mode == COPYWIN_FULL)
++            PcTextToVramRange(windowId, rectPos, rectSize / 32);
++#endif
+     }
+ }
+ 
+@@ -400,6 +414,9 @@ void BlitBitmapRectToWindow(u8 windowId, const u8 *pixels, u16 srcX, u16 srcY, u
+     struct Bitmap sourceRect;
+     struct Bitmap destRect;
+ 
++#ifdef PLATFORM_PC
++    PcTextClear(windowId, destX, destY, rectWidth, rectHeight);
++#endif
+     sourceRect.pixels = (u8 *)pixels;
+     sourceRect.width = srcWidth;
+     sourceRect.height = srcHeight;
+@@ -431,6 +448,9 @@ void FillWindowPixelRect(u8 windowId, u8 fillValue, u16 x, u16 y, u16 width, u16
+ {
+     struct Bitmap pixelRect;
+ 
++#ifdef PLATFORM_PC
++    PcTextClear(windowId, x, y, width, height);
++#endif
+     pixelRect.pixels = gWindows[windowId].tileData;
+     pixelRect.width = 8 * gWindows[windowId].window.width;
+     pixelRect.height = 8 * gWindows[windowId].window.height;
+@@ -440,6 +460,9 @@ void FillWindowPixelRect(u8 windowId, u8 fillValue, u16 x, u16 y, u16 width, u16
+ 
+ void CopyToWindowPixelBuffer(u8 windowId, const void *src, u16 size, u16 tileOffset)
+ {
++#ifdef PLATFORM_PC
++    PcTextClearAll(windowId);
++#endif
+     if (size != 0)
+         CpuCopy16(src, gWindows[windowId].tileData + (32 * tileOffset), size);
+     else
+@@ -450,6 +473,9 @@ void CopyToWindowPixelBuffer(u8 windowId, const void *src, u16 size, u16 tileOff
+ void FillWindowPixelBuffer(u8 windowId, u8 fillValue)
+ {
+     int fillSize = gWindows[windowId].window.width * gWindows[windowId].window.height;
++#ifdef PLATFORM_PC
++    PcTextClearAll(windowId);
++#endif
+     CpuFastFill8(fillValue, gWindows[windowId].tileData, 32 * fillSize);
+ }
+ 
+@@ -486,6 +512,9 @@ void ScrollWindow(u8 windowId, u8 direction, u8 distance, u8 fillValue)
+     s32 srcOffset, destOffset;
+     u32 distanceLoop;
+ 
++#ifdef PLATFORM_PC
++    PcTextScroll(windowId, direction, distance);
++#endif
+     switch (direction)
+     {
+     case 0:

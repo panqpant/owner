@@ -58,7 +58,7 @@ SONG_OBJS := $(patsubst sound/songs/midi/%.s,$(OBJ)/songs/%.o,$(SONG_SRCS))
 
 PORT_COMMON := platform bios ppu flash_pc rtc_pc stubs nullguard script hdpack
 # Port files that use the game's own headers and structures.
-PORT_GAME := m4a_pc
+PORT_GAME := m4a_pc texthd
 PORT_OBJS := $(patsubst %,$(OBJ)/pc/%.o,$(PORT_COMMON)) $(patsubst %,$(OBJ)/pcgame/%.o,$(PORT_GAME))
 
 ALL_GAME := $(GAME_OBJS) $(DATA_OBJS) $(SONG_OBJS) $(PORT_OBJS)
@@ -86,7 +86,7 @@ $(OBJ)/game/%.o: src/%.c
 	@echo "cc  $<"
 	@$(HOST_CC) -E $(CPPFLAGS) $< | $(PREPROC) -i -g build/assets $< charmap.txt | $(HOST_CC) -x c $(CFLAGS) -c - -o $@
 
-$(OBJ)/pc/%.o: pc/%.c pc/port.h pc/render_gl.h pc/script.h pc/hdpack.h
+$(OBJ)/pc/%.o: pc/%.c pc/port.h pc/render_gl.h pc/script.h pc/hdpack.h pc/texthd.h
 	@mkdir -p $(@D)
 	@echo "cc  $<"
 	@$(HOST_CC) $(PC_CFLAGS) $(if $(filter frontend_sdl render_gl,$*),$(SDL_CFLAGS)) -c $< -o $@

@@ -16,6 +16,7 @@
 #include "port.h"
 #include "render_gl.h"
 #include "hdpack.h"
+#include "texthd.h"
 
 typedef unsigned int GLenum, GLuint, GLbitfield;
 typedef int GLint, GLsizei;
@@ -37,6 +38,10 @@ typedef unsigned char GLboolean;
 #define GL_RGBA8UI 0x8D7C
 #define GL_RGBA16UI 0x8D76
 #define GL_UNSIGNED_SHORT 0x1403
+#define GL_RG8 0x822B
+#define GL_RG 0x8227
+#define GL_R16UI 0x8234
+#define GL_RED_INTEGER 0x8D94
 #define GL_RGBA_INTEGER 0x8D99
 #define GL_UNSIGNED_BYTE 0x1401
 #define GL_FRAGMENT_SHADER 0x8B30
@@ -261,12 +266,28 @@ static const char *kComposite =
     "uniform int uHasPack;\n"
     "uniform float uPackScale;\n"
     "uniform int uPerRow;\n"
+    "uniform sampler2D uGlyphs;\n"   // high-resolution glyph coverage: R = text, G = shadow
+    "uniform usampler2D uPal;\n"     // live palette (BGR555), 512 entries
+    "uniform float uGlyphScale;\n"
     "uniform vec4 uTint;\n"   // rgb multiplier, a = 1 to apply (outdoor overworld)
     "vec3 C555(uint c) { return vec3(float(c & 31u), float((c >> 5) & 31u), float((c >> 10) & 31u)) / 31.0; }\n"
+    "vec3 PalC(uint i) { return C555(texelFetch(uPal, ivec2(int(i), 0), 0).r); }\n"
     // Hand-made replacement tile, with the GBA's palette fade re-applied.
     "vec4 Pack(usampler2D tr, vec4 base, ivec2 np, vec2 sub) {\n"
     "  uvec4 t = texelFetch(tr, np, 0);\n"
     "  if (t.r == 0u) return base;\n"
+    "  if ((t.r & 0x8000u) != 0u) {\n"   // high-resolution text
+    "    uint slot = t.r & 1023u;\n"
+    "    int cell = int(16.0 * uGlyphScale);\n"
+    "    vec2 local = (vec2(float(t.g & 15u), float((t.g >> 4) & 15u)) + sub) * uGlyphScale;\n"
+    "    ivec2 org = ivec2(int(slot % 16u), int(slot / 16u)) * cell;\n"
+    "    vec2 cov = texelFetch(uGlyphs, org + clamp(ivec2(floor(local)), ivec2(0), ivec2(cell - 1)), 0).rg;\n"
+    "    uint bank = (t.b >> 12) & 15u, bgi = (t.b >> 8) & 15u;\n"
+    "    vec4 col = bgi == 0u ? vec4(0.0) : vec4(PalC(bank * 16u + bgi), 1.0);\n"
+    "    col = mix(col, vec4(PalC(bank * 16u + ((t.b >> 4) & 15u)), 1.0), cov.g);\n"
+    "    col = mix(col, vec4(PalC(bank * 16u + (t.b & 15u)), 1.0), cov.r);\n"
+    "    return vec4(col.rgb * col.a, col.a);\n"
+    "  }\n"
     "  uint slot = t.r - 1u;\n"
     "  int tile = int(8.0 * uPackScale + 0.5);\n"
     "  float fx = (t.g & 64u) != 0u ? 1.0 - sub.x : sub.x;\n"
@@ -402,8 +423,8 @@ static GLuint sProgXbr, sProgComp, sProgPresent;
 static GLuint sLayerTex[5], sUpTex[5], sUpFbo[5];
 static GLuint sMetaTex, sLineTex, sFrameTex;
 static GLuint sCompTex, sCompFbo;
-static GLuint sTrefTex[5], sAtlasTex;
-static int sPackScale, sPackPerRow;
+static GLuint sTrefTex[5], sAtlasTex, sGlyphTex, sPalTex;
+static int sPackScale, sPackPerRow, sGlyphScale;
 static int sScale = 4;
 static int sW = GBA_W;
 static int sCompW, sCompH; // composite size = on-screen size of the game image
@@ -558,23 +579,33 @@ int HdInit(void)
             glUniform1i(glGetUniformLocation(sProgComp, name), 7 + i);
         }
         glUniform1i(glGetUniformLocation(sProgComp, "uAtlas"), 12);
+        glUniform1i(glGetUniformLocation(sProgComp, "uGlyphs"), 13);
+        glUniform1i(glGetUniformLocation(sProgComp, "uPal"), 14);
     }
     {
         const uint32_t *px;
         int aw, ah;
+        int gw, gh;
+        for (i = 0; i < 5; i++)
+        {
+            glGenTextures(1, &sTrefTex[i]);
+            glBindTexture(GL_TEXTURE_2D, sTrefTex[i]);
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16UI, PC_MAX_W, GBA_H, 0, GL_RGBA_INTEGER, GL_UNSIGNED_SHORT, NULL);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        }
         if (HdPackAtlas(&px, &aw, &ah, &sPackScale, &sPackPerRow))
         {
-            for (i = 0; i < 5; i++)
-            {
-                glGenTextures(1, &sTrefTex[i]);
-                glBindTexture(GL_TEXTURE_2D, sTrefTex[i]);
-                glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16UI, PC_MAX_W, GBA_H, 0, GL_RGBA_INTEGER, GL_UNSIGNED_SHORT, NULL);
-                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-            }
             sAtlasTex = MakeTex(aw, ah, GL_RGBA8, GL_RGBA, GL_NEAREST);
             glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, aw, ah, GL_RGBA, GL_UNSIGNED_BYTE, px);
         }
+        sGlyphScale = PcTextAtlasSize(&gw, &gh);
+        sGlyphTex = MakeTex(gw, gh, GL_RG8, GL_RG, GL_NEAREST);
+        glGenTextures(1, &sPalTex);
+        glBindTexture(GL_TEXTURE_2D, sPalTex);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_R16UI, 512, 1, 0, GL_RED_INTEGER, GL_UNSIGNED_SHORT, NULL);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     }
     gPpuExportLayers = 1;
     sReady = 1;
@@ -650,7 +681,7 @@ static void RenderHd(int outW, int outH)
     }
     glBindTexture(GL_TEXTURE_2D, sMetaTex);
     glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, sW, GBA_H, GL_RGBA_INTEGER, GL_UNSIGNED_BYTE, gPpuLayers.meta);
-    if (sAtlasTex)
+    if (sAtlasTex || gPcTextHd)
     {
         glPixelStorei(GL_UNPACK_ALIGNMENT, 2);
         for (i = 0; i < 5; i++)
@@ -686,7 +717,24 @@ static void RenderHd(int outW, int outH)
     glUseProgram(sProgComp);
     glUniform2f(glGetUniformLocation(sProgComp, "uDim"), sW, GBA_H);
     glUniform2f(glGetUniformLocation(sProgComp, "uContent"), gPpuContentX0, gPpuContentX1);
-    glUniform1i(glGetUniformLocation(sProgComp, "uHasPack"), sAtlasTex ? 1 : 0);
+    glUniform1i(glGetUniformLocation(sProgComp, "uHasPack"), (sAtlasTex || gPcTextHd) ? 1 : 0);
+    glUniform1f(glGetUniformLocation(sProgComp, "uGlyphScale"), (float)sGlyphScale);
+    if (gPcTextHd)
+    {
+        const uint8_t *gp;
+        int gx, gy, gw, gh, gstride;
+        glBindTexture(GL_TEXTURE_2D, sGlyphTex);
+        glPixelStorei(GL_UNPACK_ALIGNMENT, 2);
+        while (PcTextNextPending(&gp, &gx, &gy, &gw, &gh, &gstride))
+        {
+            glPixelStorei(GL_UNPACK_ROW_LENGTH, gstride);
+            glTexSubImage2D(GL_TEXTURE_2D, 0, gx, gy, gw, gh, GL_RG, GL_UNSIGNED_BYTE, gp);
+        }
+        glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+        glBindTexture(GL_TEXTURE_2D, sPalTex);
+        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 512, 1, GL_RED_INTEGER, GL_UNSIGNED_SHORT, (const void *)(uintptr_t)PC_PLTT);
+        glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+    }
     {
         float tint[3] = { 1, 1, 1 };
         int on = sLighting && gPcOutdoors && PcFieldWideActive();
@@ -696,16 +744,17 @@ static void RenderHd(int outW, int outH)
     }
     glUniform1f(glGetUniformLocation(sProgComp, "uPackScale"), (float)sPackScale);
     glUniform1i(glGetUniformLocation(sProgComp, "uPerRow"), sPackPerRow > 0 ? sPackPerRow : 1);
-    if (sAtlasTex)
+    for (i = 0; i < 5; i++)
     {
-        for (i = 0; i < 5; i++)
-        {
-            glActiveTexture(GL_TEXTURE0 + 7 + i);
-            glBindTexture(GL_TEXTURE_2D, sTrefTex[i]);
-        }
-        glActiveTexture(GL_TEXTURE0 + 12);
-        glBindTexture(GL_TEXTURE_2D, sAtlasTex);
+        glActiveTexture(GL_TEXTURE0 + 7 + i);
+        glBindTexture(GL_TEXTURE_2D, sTrefTex[i]);
     }
+    glActiveTexture(GL_TEXTURE0 + 12);
+    glBindTexture(GL_TEXTURE_2D, sAtlasTex);
+    glActiveTexture(GL_TEXTURE0 + 13);
+    glBindTexture(GL_TEXTURE_2D, sGlyphTex);
+    glActiveTexture(GL_TEXTURE0 + 14);
+    glBindTexture(GL_TEXTURE_2D, sPalTex);
     for (i = 0; i < 5; i++)
     {
         glActiveTexture(GL_TEXTURE0 + i);
