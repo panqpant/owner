@@ -8,5 +8,8 @@ void HdSetScale(int scale);
 int  HdGetScale(void);
 void HdSetGrade(int on);
 int  HdGetGrade(void);
+void HdSetLighting(int on);
+int  HdGetLighting(void);
 int  HdReadComposite(uint32_t *out, int *w, int *h);
+int  HdReadFrame(uint32_t *out, int *w, int *h, int maxPixels);
 #endif

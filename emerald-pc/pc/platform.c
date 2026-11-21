@@ -268,6 +268,9 @@ void PcSetFieldMaps(uint16_t *bg1, uint16_t *bg2, uint16_t *bg3, int base1, int 
     gPcFieldMap[3] = bg3; gPcFieldMapBase[3] = base3;
 }
 
+int gPcOutdoors;
+void PcSetOutdoors(int outdoors) { gPcOutdoors = outdoors; }
+
 // Extra pixels visible on each side of the GBA screen on the overworld.
 int PcFieldMargin(void)
 {

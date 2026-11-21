@@ -4,7 +4,7 @@
 //           A = L, S = R, Tab (hold) = fast-forward, F11 / Alt+Enter = fullscreen,
 //           F12 = screenshot, Esc = quit.
 //           F1 = HD / original graphics, F2 = HD internal scale, F3 = colour grade,
-//           F6 = dump tiles for HD packs (hd/dump).
+//           F4 = time-of-day lighting, F6 = dump tiles for HD packs (hd/dump).
 // Gamepad:  south button = A, east = B, Start, Back = Select, shoulders = L/R,
 //           D-pad or left stick to move.
 #include <stdio.h>
@@ -16,6 +16,8 @@
 #include "render_gl.h"
 #include "script.h"
 #include "hdpack.h"
+
+void TestHookRun(const char *cmd);
 
 #define AUDIO_RATE 48000
 #define FRAME_SECONDS (280896.0 / 16777216.0)
@@ -75,14 +77,16 @@ static void OpenPad(void)
     }
 }
 
+#define MAX_SHOT_PIXELS (7680 * 4320)
+static uint32_t *sShot;          // last frame as shown on screen
+static int sShotW, sShotH, sWantShot;
+
 static void SaveScreenshot(const char *path)
 {
     SDL_Surface *s;
-    static uint32_t hd[3840 * 2400]; // up to 4K-class displays
-    int w, h;
 
-    if (sUseGl && sHdMode && HdReadComposite(hd, &w, &h) == 0)
-        s = SDL_CreateRGBSurfaceWithFormatFrom(hd, w, h, 32, w * 4, SDL_PIXELFORMAT_ABGR8888);
+    if (sUseGl && sShot && sShotW > 0)
+        s = SDL_CreateRGBSurfaceWithFormatFrom(sShot, sShotW, sShotH, 32, sShotW * 4, SDL_PIXELFORMAT_ABGR8888);
     else
         s = SDL_CreateRGBSurfaceWithFormatFrom(sLastFrame, gPcScreenW, GBA_H, 32, gPcScreenW * 4,
                                                SDL_PIXELFORMAT_ARGB8888);
@@ -199,7 +203,10 @@ int FrontendInit(int argc, char **argv)
         if (sGl && HdInit() == 0)
         {
             sUseGl = 1;
-            SDL_GL_SetSwapInterval(0);
+            // Vsync (adaptive where supported) to avoid tearing; frame pacing
+            // to the GBA's 59.73 Hz is still done by the timer below.
+            if (SDL_GL_SetSwapInterval(-1) != 0)
+                SDL_GL_SetSwapInterval(1);
         }
         else
         {
@@ -267,13 +274,20 @@ static void PumpEvents(void)
              || (e.key.keysym.sym == SDLK_RETURN && (e.key.keysym.mod & KMOD_ALT)))
                 ToggleFullscreen();
             else if (e.key.keysym.sym == SDLK_F12)
-                Screenshot();
+            {
+                if (sUseGl)
+                    sWantShot = 1; // captured after the next frame is drawn
+                else
+                    Screenshot();
+            }
             else if (e.key.keysym.sym == SDLK_F1)
                 sHdMode = !sHdMode;
             else if (e.key.keysym.sym == SDLK_F2 && sUseGl)
                 HdSetScale(HdGetScale() >= 6 ? 2 : HdGetScale() + 1);
             else if (e.key.keysym.sym == SDLK_F3 && sUseGl)
                 HdSetGrade(!HdGetGrade());
+            else if (e.key.keysym.sym == SDLK_F4 && sUseGl)
+                HdSetLighting(!HdGetLighting());
             else if (e.key.keysym.sym == SDLK_F6)
             {
                 HdPackSetDump(!gHdDumpEnabled);
@@ -317,7 +331,19 @@ void FrontendPresent(const uint32_t *fb)
             int w, h;
             SDL_GL_GetDrawableSize(sWindow, &w, &h);
             HdPresent(fb, sHdMode, w, h);
+            if (sWantShot || (ScriptActive() && ScriptShotDue()))
+            {
+                if (!sShot)
+                    sShot = malloc((size_t)MAX_SHOT_PIXELS * 4);
+                if (sShot && HdReadFrame(sShot, &sShotW, &sShotH, MAX_SHOT_PIXELS) != 0)
+                    sShotW = 0;
+            }
             SDL_GL_SwapWindow(sWindow);
+            if (sWantShot)
+            {
+                sWantShot = 0;
+                Screenshot();
+            }
         }
         else
         {
@@ -331,6 +357,16 @@ void FrontendPresent(const uint32_t *fb)
 
     if (sAutoShotFrame >= 0 && (int)PortFrameCount() >= sAutoShotFrame)
     {
+        if (sUseGl)
+        {
+            int w, h;
+            if (!sShot)
+                sShot = malloc((size_t)MAX_SHOT_PIXELS * 4);
+            SDL_GL_GetDrawableSize(sWindow, &w, &h);
+            HdPresent(fb, sHdMode, w, h);
+            if (sShot && HdReadFrame(sShot, &sShotW, &sShotH, MAX_SHOT_PIXELS) != 0)
+                sShotW = 0;
+        }
         SaveScreenshot(sAutoShotPath);
         sQuit = 1;
     }
@@ -363,7 +399,7 @@ uint16_t FrontendPollKeys(void)
     if (ScriptActive())
     {
         sFastForward = 1; // scripted runs go as fast as possible
-        return ScriptStep(SaveScreenshot, NULL, &sQuit);
+        return ScriptStep(SaveScreenshot, TestHookRun, &sQuit);
     }
 
     if (k[SDL_SCANCODE_X]) keys |= PC_KEY_A;

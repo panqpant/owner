@@ -17,6 +17,7 @@ extern int gPcScreenW;
 extern uint16_t *gPcFieldMap[4];
 extern uint8_t gPcFieldMapBase[4];
 int PcFieldWideActive(void);
+extern int gPcOutdoors; // overworld map is outdoors (time-of-day lighting applies)
 extern int gPpuContentX0, gPpuContentX1;
 
 // GBA memory regions are mapped at their real addresses inside the

@@ -75,7 +75,7 @@ sdl: $(BUILD)/emerald$(EXE)
 $(BUILD)/emerald_headless$(EXE): $(ALL_GAME) $(OBJ)/pc/frontend_headless.o $(OBJ)/pcgame/testhooks.o
 	$(HOST_CC) $(LDFLAGS) -o $@ $^ $(LIBS)
 
-$(BUILD)/emerald$(EXE): $(ALL_GAME) $(OBJ)/pc/frontend_sdl.o $(OBJ)/pc/render_gl.o
+$(BUILD)/emerald$(EXE): $(ALL_GAME) $(OBJ)/pc/frontend_sdl.o $(OBJ)/pc/render_gl.o $(OBJ)/pcgame/testhooks.o
 	$(HOST_CC) $(LDFLAGS) -o $@ $^ $(LIBS) $(SDL_LIBS)
 ifeq ($(PLATFORM),win)
 	cp $(SDL_MINGW)/bin/SDL2.dll $(BUILD)/

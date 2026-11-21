@@ -23,10 +23,10 @@ index 8566762..097e815 100644
  #if MODERN
  // NOTE: Assumes 16-bit DMAs.
 diff --git a/include/global.h b/include/global.h
-index f624850..808d2fc 100644
+index f624850..a0d6b44 100644
 --- a/include/global.h
 +++ b/include/global.h
-@@ -17,6 +17,16 @@
+@@ -17,6 +17,17 @@
  #include "constants/easy_chat.h"
  #include "constants/trainer_hill.h"
  
@@ -38,6 +38,7 @@ index f624850..808d2fc 100644
 +#define PC_FIELD_MARGIN_MT 8
 +int PcFieldMargin(void);
 +void PcSetFieldMaps(u16 *bg1, u16 *bg2, u16 *bg3, int base1, int base2, int base3);
++void PcSetOutdoors(int outdoors); // enables time-of-day lighting on the overworld
 +#endif
 +
  // Prevent cross-jump optimization.
@@ -461,7 +462,7 @@ index ca3be25..0cd0de9 100644
      BuildOamBuffer();
      UpdatePaletteFade();
 diff --git a/src/overworld.c b/src/overworld.c
-index 1d6b81c..c352560 100644
+index 1d6b81c..537a6be 100644
 --- a/src/overworld.c
 +++ b/src/overworld.c
 @@ -1404,9 +1404,19 @@ static void InitOverworldBgs(void)
@@ -494,3 +495,13 @@ index 1d6b81c..c352560 100644
      TRY_FREE_AND_SET_NULL(gOverworldTilemapBuffer_Bg3);
      TRY_FREE_AND_SET_NULL(gOverworldTilemapBuffer_Bg2);
      TRY_FREE_AND_SET_NULL(gOverworldTilemapBuffer_Bg1);
+@@ -1484,6 +1497,9 @@ void CB2_OverworldBasic(void)
+ void CB2_Overworld(void)
+ {
+     bool32 fading = (gPaletteFade.active != 0);
++#ifdef PLATFORM_PC
++    PcSetOutdoors(IsMapTypeOutdoors(gMapHeader.mapType));
++#endif
+     if (fading)
+         SetVBlankCallback(NULL);
+     OverworldBasic();

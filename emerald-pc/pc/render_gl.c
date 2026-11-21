@@ -10,6 +10,8 @@
 // nearest-neighbour scaling.
 #include <stdio.h>
 #include <string.h>
+#include <time.h>
+#include <stdlib.h>
 #include <SDL.h>
 #include "port.h"
 #include "render_gl.h"
@@ -259,6 +261,7 @@ static const char *kComposite =
     "uniform int uHasPack;\n"
     "uniform float uPackScale;\n"
     "uniform int uPerRow;\n"
+    "uniform vec4 uTint;\n"   // rgb multiplier, a = 1 to apply (outdoor overworld)
     "vec3 C555(uint c) { return vec3(float(c & 31u), float((c >> 5) & 31u), float((c >> 10) & 31u)) / 31.0; }\n"
     // Hand-made replacement tile, with the GBA's palette fade re-applied.
     "vec4 Pack(usampler2D tr, vec4 base, ivec2 np, vec2 sub) {\n"
@@ -346,6 +349,12 @@ static const char *kComposite =
     "      else if (effect == 3u) res = res - res * evy;\n"
     "    }\n"
     "  }\n"
+    // Time-of-day lighting on the overworld, not on text boxes/menus (BG0).
+    "  if (uTint.a > 0.5 && top != 0) {\n"
+    "    float l = dot(res, vec3(0.2126, 0.7152, 0.0722));\n"
+    "    float night = clamp((1.0 - uTint.b) * 0.0 + (uTint.b > uTint.r ? (uTint.b - uTint.r) * 2.0 : 0.0), 0.0, 1.0);\n"
+    "    res = mix(res, vec3(l), night * 0.35) * uTint.rgb;\n"
+    "  }\n"
     // Thin, mostly transparent fringes of layers in front of the top layer.
     "  for (int k = ti - 1; k >= 0; k--) { vec4 c = lay[order[k]]; res = res * (1.0 - c.a) + c.rgb; }\n"
     "  oColor = vec4(res, 1.0);\n"
@@ -359,9 +368,23 @@ static const char *kPresent =
     "uniform float uGrade;\n"
     "uniform float uFlip;\n"
     "uniform float uUScale;\n"
+    "uniform vec2 uContentUv;\n" // content columns as u range; outside gets an ambient fill
     "void main() {\n"
     "  vec2 uv = vec2(vUv.x * uUScale, uFlip > 0.5 ? 1.0 - vUv.y : vUv.y);\n"
     "  vec3 c = texture(uTex, uv).rgb;\n"
+    "  if (uv.x < uContentUv.x || uv.x > uContentUv.y) {\n"
+    // Blurred, dimmed copy of the nearest strip of the picture.
+    "    float edge = uv.x < uContentUv.x ? uContentUv.x : uContentUv.y;\n"
+    "    float dir = uv.x < uContentUv.x ? 1.0 : -1.0;\n"
+    "    float span = (uContentUv.y - uContentUv.x) * 0.18;\n"
+    "    vec3 acc = vec3(0.0); float n = 0.0;\n"
+    "    for (int i = 0; i < 6; i++) for (int j = -4; j <= 4; j++) {\n"
+    "      vec2 q = vec2(edge + dir * span * (float(i) + 0.5) / 6.0, clamp(uv.y + float(j) * 0.035, 0.0, 1.0));\n"
+    "      acc += texture(uTex, q).rgb; n += 1.0;\n"
+    "    }\n"
+    "    float fade = 1.0 - clamp(abs(uv.x - edge) / max(span * 1.5, 1e-4), 0.0, 1.0) * 0.35;\n"
+    "    c = acc / n * 0.38 * fade;\n"
+    "  }\n"
     "  if (uGrade > 0.0) {\n"
     "    float l = dot(c, vec3(0.2126, 0.7152, 0.0722));\n"
     "    vec3 sat = mix(vec3(l), c, 1.10);\n"                       // gentle vibrance
@@ -384,7 +407,9 @@ static int sPackScale, sPackPerRow;
 static int sScale = 4;
 static int sW = GBA_W;
 static int sCompW, sCompH; // composite size = on-screen size of the game image
+static int sLastWinW, sLastWinH;
 static int sGrade = 1;
+static int sLighting = 1;
 
 static int LoadGl(void)
 {
@@ -570,6 +595,34 @@ void HdSetScale(int scale)
 int HdGetScale(void) { return sScale; }
 void HdSetGrade(int on) { sGrade = on; }
 int HdGetGrade(void) { return sGrade; }
+void HdSetLighting(int on) { sLighting = on; }
+int HdGetLighting(void) { return sLighting; }
+
+// Outdoor lighting colour for the local time: neutral by day, warm at dawn
+// and dusk, cool and dim at night, blended smoothly between.
+static void TimeOfDayTint(float *rgb)
+{
+    static const float k[][4] = {
+        { 0.0f, 0.52f, 0.58f, 0.86f }, { 4.5f, 0.52f, 0.58f, 0.86f },
+        { 6.0f, 1.02f, 0.88f, 0.80f }, { 7.5f, 1.00f, 1.00f, 1.00f },
+        { 16.5f, 1.00f, 1.00f, 1.00f }, { 18.0f, 1.06f, 0.86f, 0.70f },
+        { 19.5f, 0.72f, 0.68f, 0.88f }, { 21.0f, 0.52f, 0.58f, 0.86f },
+        { 24.0f, 0.52f, 0.58f, 0.86f },
+    };
+    time_t t = time(NULL);
+    struct tm *lt = localtime(&t);
+    float h = lt->tm_hour + lt->tm_min / 60.0f, f;
+    const char *force = getenv("EMERALD_HOUR"); // testing: pretend it is this hour
+    int i;
+    if (force)
+        h = (float)atof(force);
+    for (i = 0; i < 8 && h >= k[i + 1][0]; i++)
+        ;
+    f = (h - k[i][0]) / (k[i + 1][0] - k[i][0]);
+    rgb[0] = k[i][1] + (k[i + 1][1] - k[i][1]) * f;
+    rgb[1] = k[i][2] + (k[i + 1][2] - k[i][2]) * f;
+    rgb[2] = k[i][3] + (k[i + 1][3] - k[i][3]) * f;
+}
 
 static void DrawQuad(void)
 {
@@ -634,6 +687,13 @@ static void RenderHd(int outW, int outH)
     glUniform2f(glGetUniformLocation(sProgComp, "uDim"), sW, GBA_H);
     glUniform2f(glGetUniformLocation(sProgComp, "uContent"), gPpuContentX0, gPpuContentX1);
     glUniform1i(glGetUniformLocation(sProgComp, "uHasPack"), sAtlasTex ? 1 : 0);
+    {
+        float tint[3] = { 1, 1, 1 };
+        int on = sLighting && gPcOutdoors && PcFieldWideActive();
+        if (on)
+            TimeOfDayTint(tint);
+        glUniform4f(glGetUniformLocation(sProgComp, "uTint"), tint[0], tint[1], tint[2], on ? 1.0f : 0.0f);
+    }
     glUniform1f(glGetUniformLocation(sProgComp, "uPackScale"), (float)sPackScale);
     glUniform1i(glGetUniformLocation(sProgComp, "uPerRow"), sPackPerRow > 0 ? sPackPerRow : 1);
     if (sAtlasTex)
@@ -678,26 +738,16 @@ static void Letterbox(int winW, int winH, int *x, int *y, int *w, int *h)
     *y = (winH - *h) / 2;
 }
 
-void HdPresent(const uint32_t *frame, int hdMode, int winW, int winH)
+static GLuint sCapTex, sCapFbo;
+static int sCapW, sCapH;
+
+static void DrawPresent(int hdMode, int winW, int winH)
 {
     int x, y, w, h;
-
-    if (!sReady)
-        return;
-
-    Letterbox(winW, winH, &x, &y, &w, &h);
-    if (hdMode)
-        RenderHd(w, h);
-    else
-    {
-        glBindTexture(GL_TEXTURE_2D, sFrameTex);
-        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, gPcScreenW, GBA_H, GL_BGRA, GL_UNSIGNED_BYTE, frame);
-    }
-
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
     glViewport(0, 0, winW, winH);
     glClearColor(0, 0, 0, 1);
     glClear(GL_COLOR_BUFFER_BIT);
+    Letterbox(winW, winH, &x, &y, &w, &h);
     glViewport(x, y, w, h);
     glUseProgram(sProgPresent);
     glUniform1i(glGetUniformLocation(sProgPresent, "uTex"), 0);
@@ -708,6 +758,8 @@ void HdPresent(const uint32_t *frame, int hdMode, int winW, int winH)
         glUniform1f(glGetUniformLocation(sProgPresent, "uGrade"), sGrade ? 1.0f : 0.0f);
         glUniform1f(glGetUniformLocation(sProgPresent, "uFlip"), 0.0f);
         glUniform1f(glGetUniformLocation(sProgPresent, "uUScale"), 1.0f);
+        glUniform2f(glGetUniformLocation(sProgPresent, "uContentUv"),
+                    (float)gPpuContentX0 / gPcScreenW, (float)gPpuContentX1 / gPcScreenW);
     }
     else
     {
@@ -715,8 +767,67 @@ void HdPresent(const uint32_t *frame, int hdMode, int winW, int winH)
         glUniform1f(glGetUniformLocation(sProgPresent, "uGrade"), 0.0f);
         glUniform1f(glGetUniformLocation(sProgPresent, "uFlip"), 1.0f);
         glUniform1f(glGetUniformLocation(sProgPresent, "uUScale"), (float)gPcScreenW / PC_MAX_W);
+        glUniform2f(glGetUniformLocation(sProgPresent, "uContentUv"), -1.0f, 2.0f);
     }
     DrawQuad();
+}
+
+static int sLastHdMode;
+
+void HdPresent(const uint32_t *frame, int hdMode, int winW, int winH)
+{
+    int x, y, w, h;
+
+    if (!sReady)
+        return;
+
+    sLastWinW = winW;
+    sLastWinH = winH;
+    sLastHdMode = hdMode;
+    Letterbox(winW, winH, &x, &y, &w, &h);
+    if (hdMode)
+        RenderHd(w, h);
+    else
+    {
+        glBindTexture(GL_TEXTURE_2D, sFrameTex);
+        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, gPcScreenW, GBA_H, GL_BGRA, GL_UNSIGNED_BYTE, frame);
+    }
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    DrawPresent(hdMode, winW, winH);
+}
+
+// Read back exactly what was drawn to the window (top row first). Call after
+// HdPresent and before swapping buffers.
+int HdReadFrame(uint32_t *out, int *w, int *h, int maxPixels)
+{
+    int y, W = sLastWinW, H = sLastWinH;
+    uint32_t *tmp;
+    if (!sReady || W <= 0 || H <= 0 || W * H > maxPixels)
+        return -1;
+    tmp = SDL_malloc((size_t)W * H * 4);
+    if (!tmp)
+        return -1;
+    // Redraw the final pass into an offscreen buffer: reading the window's
+    // own framebuffer is unreliable on some drivers.
+    if (!sCapTex || sCapW != W || sCapH != H)
+    {
+        if (sCapTex)
+            glDeleteTextures(1, &sCapTex);
+        sCapTex = MakeTex(W, H, GL_RGBA8, GL_RGBA, GL_NEAREST);
+        sCapFbo = MakeFbo(sCapTex);
+        sCapW = W;
+        sCapH = H;
+    }
+    glBindFramebuffer(GL_FRAMEBUFFER, sCapFbo);
+    DrawPresent(sLastHdMode, W, H);
+    glReadPixels(0, 0, W, H, GL_RGBA, GL_UNSIGNED_BYTE, tmp);
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    for (y = 0; y < H; y++)
+        memcpy(out + (size_t)y * W, tmp + (size_t)(H - 1 - y) * W, (size_t)W * 4);
+    SDL_free(tmp);
+    *w = W;
+    *h = H;
+    return 0;
 }
 
 // Read back the HD composite (top row first) for screenshots/tests.
