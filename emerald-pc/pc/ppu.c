@@ -359,6 +359,66 @@ static u16 Darken(u16 c, int evy)
     return r | (g << 5) | (b << 10);
 }
 
+struct PpuLayers gPpuLayers;
+int gPpuExportLayers;
+
+static inline u32 ToRgba(u16 c)
+{
+    u32 r = c & 31, g = (c >> 5) & 31, b = (c >> 10) & 31;
+    r = (r << 3) | (r >> 2);
+    g = (g << 3) | (g >> 2);
+    b = (b << 3) | (b >> 2);
+    return 0xFF000000u | (b << 16) | (g << 8) | r;
+}
+
+// line[y][0]: backdrop colour (RGBA)
+// line[y][1]: byte0 layer enables (bits 0-3 BG, bit 4 OBJ), byte1 BG priorities
+//             (2 bits each), byte2 flags (bit 0 forced blank)
+// line[y][2]: BLDCNT (low 16 bits), EVA (byte 2), EVB (byte 3)
+// line[y][3]: EVY (byte 0), effect mode (byte 1)
+static void ExportLine(int line, const int *bgOn, const int *bgPrio, int forcedBlank,
+                       u16 bldcnt, int eva, int evb, int evy, int effect)
+{
+    u32 *L = gPpuLayers.line[line];
+    u32 en = 0, pr = 0;
+    int i, x;
+
+    for (i = 0; i < 4; i++)
+    {
+        if (bgOn[i]) en |= 1u << i;
+        pr |= (u32)(bgPrio[i] & 3) << (i * 2);
+    }
+    if (R16(0x00) & 0x1000) en |= 1u << 4;
+    L[0] = ToRgba(Pal(0));
+    L[1] = en | (pr << 8) | ((u32)(forcedBlank ? 1 : 0) << 16);
+    L[2] = bldcnt | ((u32)eva << 16) | ((u32)evb << 24);
+    L[3] = (u32)evy | ((u32)effect << 8);
+
+    if (forcedBlank)
+        return;
+
+    for (i = 0; i < 4; i++)
+    {
+        u32 *dst = gPpuLayers.layer[i][line];
+        if (!bgOn[i])
+        {
+            memset(dst, 0, GBA_W * 4);
+            continue;
+        }
+        for (x = 0; x < GBA_W; x++)
+            dst[x] = sBg[i][x] == TRANSPARENT ? 0 : ToRgba(sBg[i][x]);
+    }
+    {
+        u32 *dst = gPpuLayers.layer[4][line];
+        u32 *meta = gPpuLayers.meta[line];
+        for (x = 0; x < GBA_W; x++)
+        {
+            dst[x] = sObjColor[x] == TRANSPARENT ? 0 : ToRgba(sObjColor[x]);
+            meta[x] = sWinMask[x] | ((u32)((sObjPrio[x] & 3) | (sObjSemi[x] ? 4 : 0)) << 8);
+        }
+    }
+}
+
 static inline u32 ToRgb(u16 c)
 {
     u32 r = c & 31, g = (c >> 5) & 31, b = (c >> 10) & 31;
@@ -390,6 +450,8 @@ void PpuRenderLine(int line, u32 *out)
     {
         for (x = 0; x < GBA_W; x++)
             out[x] = 0xFFFFFFFFu;
+        if (gPpuExportLayers)
+            ExportLine(line, bgOn, bgOn, 1, 0, 0, 0, 0, 0);
         return;
     }
 
@@ -423,6 +485,8 @@ void PpuRenderLine(int line, u32 *out)
 
     RenderSprites(line);
     BuildWindowMask(line);
+    if (gPpuExportLayers)
+        ExportLine(line, bgOn, bgPrio, 0, bldcnt, eva, evb, evy, effect);
 
     for (x = 0; x < GBA_W; x++)
     {

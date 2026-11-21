@@ -1,28 +1,14 @@
-// Headless front end for automated testing: replays a scripted input
-// sequence and writes screenshots. Script commands, one per line:
-//   wait N              N frames with no keys
-//   hold MASK N         hold key mask for N frames
-//   tap MASK COUNT [GAP] press MASK for 4 frames, then GAP (default 20) idle, COUNT times
-//   shot PATH           write the most recent frame as a PPM image
-//   call HOOK ARGS      run a test hook at this point (see testhooks.c)
-//   quit                exit
+// Headless front end for automated testing: replays a script (see script.c),
+// writes screenshots as PPM and optionally the audio as WAV.
 // Usage: emerald_headless --script FILE [--save FILE] [--wav FILE]
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include "port.h"
+#include "script.h"
 
-#define MAX_EVENTS 200000
-
-struct Event { int frame; char *shot; int isCall; };
 void TestHookRun(const char *cmd);
 
-static uint16_t *sKeys;
-static int sNumFrames;
-static struct Event sShots[4096];
-static int sNumShots, sNextShot;
-static int sFrame;
-static int sQuitAt = -1;
 static int sQuit;
 static uint32_t sLast[GBA_W * GBA_H];
 static FILE *sWav;
@@ -50,60 +36,6 @@ static void CloseWav(void)
     }
 }
 
-static void Push(uint16_t keys, int n)
-{
-    while (n-- > 0 && sNumFrames < MAX_EVENTS)
-        sKeys[sNumFrames++] = keys;
-}
-
-static void LoadScript(const char *path)
-{
-    FILE *f = fopen(path, "r");
-    char line[1024];
-    if (!f)
-    {
-        fprintf(stderr, "cannot open script %s\n", path);
-        exit(1);
-    }
-    while (fgets(line, sizeof(line), f))
-    {
-        char cmd[32], arg[900];
-        int a = 0, b = 0, c = 20;
-        if (sscanf(line, "%31s", cmd) != 1 || cmd[0] == '#')
-            continue;
-        if (!strcmp(cmd, "wait") && sscanf(line, "%*s %d", &a) == 1)
-            Push(0, a);
-        else if (!strcmp(cmd, "hold") && sscanf(line, "%*s %i %d", &a, &b) == 2)
-            Push(a, b);
-        else if (!strcmp(cmd, "tap") && sscanf(line, "%*s %i %d %d", &a, &b, &c) >= 2)
-        {
-            int i;
-            for (i = 0; i < b; i++) { Push(a, 4); Push(0, c); }
-        }
-        else if (!strcmp(cmd, "shot") && sscanf(line, "%*s %899s", arg) == 1 && sNumShots < 4096)
-        {
-            sShots[sNumShots].frame = sNumFrames;
-            sShots[sNumShots].shot = strdup(arg);
-            sNumShots++;
-        }
-        else if (!strcmp(cmd, "call") && sNumShots < 4096)
-        {
-            char *p = line + 4;
-            while (*p == ' ' || *p == '\t') p++;
-            p[strcspn(p, "\r\n")] = 0;
-            sShots[sNumShots].frame = sNumFrames;
-            sShots[sNumShots].shot = strdup(p);
-            sShots[sNumShots].isCall = 1;
-            sNumShots++;
-        }
-        else if (!strcmp(cmd, "quit"))
-            sQuitAt = sNumFrames;
-    }
-    fclose(f);
-    if (sQuitAt < 0)
-        sQuitAt = sNumFrames;
-}
-
 static void WritePpm(const char *path)
 {
     FILE *f = fopen(path, "wb");
@@ -123,7 +55,6 @@ int FrontendInit(int argc, char **argv)
 {
     int i;
     const char *script = NULL;
-    sKeys = calloc(MAX_EVENTS, sizeof(uint16_t));
     for (i = 1; i < argc; i++)
     {
         if (!strcmp(argv[i], "--script") && i + 1 < argc)
@@ -140,12 +71,11 @@ int FrontendInit(int argc, char **argv)
             }
         }
     }
-    if (!script)
+    if (!script || ScriptLoad(script) != 0)
     {
-        fprintf(stderr, "usage: %s --script FILE [--save FILE]\n", argv[0]);
+        fprintf(stderr, "usage: %s --script FILE [--save FILE] [--wav FILE]\n", argv[0]);
         return 1;
     }
-    LoadScript(script);
     return 0;
 }
 
@@ -156,20 +86,7 @@ void FrontendPresent(const uint32_t *fb)
 
 uint16_t FrontendPollKeys(void)
 {
-    uint16_t k;
-    while (sNextShot < sNumShots && sShots[sNextShot].frame <= sFrame)
-    {
-        struct Event *e = &sShots[sNextShot++];
-        if (e->isCall)
-            TestHookRun(e->shot);
-        else
-            WritePpm(e->shot);
-    }
-    if (sFrame >= sQuitAt)
-        sQuit = 1;
-    k = sFrame < sNumFrames ? sKeys[sFrame] : 0;
-    sFrame++;
-    return k;
+    return ScriptStep(WritePpm, TestHookRun, &sQuit);
 }
 
 int FrontendShouldQuit(void)

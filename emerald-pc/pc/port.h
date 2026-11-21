@@ -41,6 +41,17 @@ void PortDmaRunTiming(int timing); // 1 = VBlank, 2 = HBlank
 uint32_t PortFrameCount(void);
 
 // ppu.c
+// Per-layer output for the HD renderer: each background and the sprite layer
+// are kept separate so they can be upscaled independently, together with the
+// per-pixel and per-scanline state needed to composite them like the GBA.
+struct PpuLayers {
+    uint32_t layer[5][GBA_H][GBA_W]; // BG0-3, OBJ: 0xAABBGGRR, A = 255 opaque / 0 empty
+    uint32_t meta[GBA_H][GBA_W];     // R: window mask (bits 0-5)  G: OBJ priority (0-1), semi-transparent (2)
+    uint32_t line[GBA_H][4];         // see ppu.c: backdrop, enables/priorities, blend state
+};
+extern struct PpuLayers gPpuLayers;
+extern int gPpuExportLayers;
+
 void PpuBeginFrame(void);
 void PpuRenderLine(int line, uint32_t *out);  // out: GBA_W pixels, 0xAARRGGBB
 void PpuEndHBlank(int line);                 // advance affine reference points
