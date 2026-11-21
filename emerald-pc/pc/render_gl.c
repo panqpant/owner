@@ -291,6 +291,15 @@ static const char *kComposite =
     "uniform vec4 uSun;\n"          // xy: shadow vector (GBA px), z: shadow strength, w: daylight
     "uniform int uMapType;\n"
     "uniform float uForest;\n"      // fraction of scenery around: light shafts
+    "vec2 gUpSize, gUpFw;\n"
+    // Sharp magnification of the upscaled layers: each upscaled pixel stays
+    // solid and only the 1-output-pixel seam between neighbours is blended.
+    "vec2 SharpUv(vec2 uv) {\n"
+    "  vec2 p = uv * gUpSize, seam = floor(p + 0.5);\n"
+    "  p = seam + clamp((p - seam) / max(gUpFw, vec2(1e-4)), -0.5, 0.5);\n"
+    "  return p / gUpSize;\n"
+    "}\n"
+    "vec4 TexS(sampler2D t, vec2 uv) { return texture(t, SharpUv(uv)); }\n"
     "float Hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }\n"
     "float Rain(vec2 p, float t, float scale, float speed, float density) {\n"
     "  p.x += p.y * 0.22;\n"
@@ -368,6 +377,8 @@ static const char *kComposite =
     "  np.y = 159 - np.y;\n"
     "  if (float(np.x) < uContent.x || float(np.x) >= uContent.y) { oColor = vec4(0.0, 0.0, 0.0, 1.0); return; }\n"
     "  vec2 uv = vec2(vUv.x, 1.0 - vUv.y);\n"
+    "  gUpSize = vec2(textureSize(uLayer[0], 0));\n"
+    "  gUpFw = fwidth(uv * gUpSize);\n"
     "  uvec4 L0 = texelFetch(uLine, ivec2(0, np.y), 0);\n"
     "  uvec4 L1 = texelFetch(uLine, ivec2(1, np.y), 0);\n"
     "  uvec4 L2 = texelFetch(uLine, ivec2(2, np.y), 0);\n"
@@ -380,9 +391,9 @@ static const char *kComposite =
     "  float eva = float(L2.b) / 16.0, evb = float(L2.a) / 16.0, evy = float(L3.r) / 16.0;\n"
     "  uint effect = L3.g;\n"
     "  vec4 lay[5];\n"
-    "  lay[0] = texture(uLayer[0], uv); lay[1] = texture(uLayer[1], uv);\n"
-    "  lay[2] = texture(uLayer[2], uv); lay[3] = texture(uLayer[3], uv);\n"
-    "  lay[4] = texture(uLayer[4], uv);\n"
+    "  lay[0] = TexS(uLayer[0], uv); lay[1] = TexS(uLayer[1], uv);\n"
+    "  lay[2] = TexS(uLayer[2], uv); lay[3] = TexS(uLayer[3], uv);\n"
+    "  lay[4] = TexS(uLayer[4], uv);\n"
     "  vec2 gp = vec2(vUv.x * uDim.x - uMargin, (1.0 - vUv.y) * uDim.y);\n"
     "  vec2 wp = gp - uGridPos.xy + uGridPos.zw * 16.0;\n"   // world position (map pixels)
     "  int here = uFieldFx != 0 ? Cell(ivec2(floor(CellPos(gp)))) : 0;\n"
@@ -393,9 +404,9 @@ static const char *kComposite =
     "    float amp = ((here & 4) != 0 ? 0.55 : 0.3) * gust * sin(3.14159 * fy);\n"
     "    vec2 o = vec2(sin(uTime * 2.1 + wp.x * 0.045 + wp.y * 0.11) * amp / uDim.x, 0.0);\n"
     "    vec4 s2;\n"
-    "    if (Green(lay[1])) { s2 = texture(uLayer[1], uv + o); if (Green(s2)) lay[1] = s2; }\n"
-    "    if (Green(lay[2])) { s2 = texture(uLayer[2], uv + o); if (Green(s2)) lay[2] = s2; }\n"
-    "    if (Green(lay[3])) { s2 = texture(uLayer[3], uv + o); if (Green(s2)) lay[3] = s2; }\n"
+    "    if (Green(lay[1])) { s2 = TexS(uLayer[1], uv + o); if (Green(s2)) lay[1] = s2; }\n"
+    "    if (Green(lay[2])) { s2 = TexS(uLayer[2], uv + o); if (Green(s2)) lay[2] = s2; }\n"
+    "    if (Green(lay[3])) { s2 = TexS(uLayer[3], uv + o); if (Green(s2)) lay[3] = s2; }\n"
     "  }\n"
     "  if (uHasPack != 0) {\n"
     "    vec2 sub = vec2(fract(vUv.x * uDim.x), 1.0 - fract(vUv.y * uDim.y));\n"
@@ -424,7 +435,7 @@ static const char *kComposite =
     // reveal what the GBA keeps hidden underneath; use the upscaled original
     // frame there instead.
     "  if (top != 5 && top != 0 && ((M.b >> uint(top)) & 1u) != 0u && lay[top].a < 0.999)\n"
-    "    under = texture(uFlat, uv).rgb;\n"
+    "    under = TexS(uFlat, uv).rgb;\n"
     "  vec3 botCol = bot == 5 ? bd : lay[bot].rgb / max(lay[bot].a, 1e-4);\n"
     "  vec3 res = under;\n"
     "  if (top != 5) {\n"
@@ -499,6 +510,35 @@ static const char *kComposite =
     "    res = mix(res, vec3(l), night * 0.35) * uTint.rgb;\n"
     "  }\n"
     // Water: moving sparkle and a gentle shimmer on water metatiles.
+    // Reflections: scenery standing on the shore mirrored in the water.
+    "  if (uFieldFx != 0 && top >= 1 && top <= 3 && (here & 2) != 0) {\n"
+    "    ivec2 c0 = ivec2(floor(CellPos(gp)));\n"
+    "    int up = 0;\n"
+    "    for (int i = 1; i <= 4; i++) { if ((Cell(c0 - ivec2(0, i)) & 2) == 0) break; up = i; }\n"
+    "    float shore = uGridPos.y + float(c0.y - up) * 16.0;\n"
+    "    if ((Cell(c0 - ivec2(0, up + 1)) & 1) != 0) {\n"   // something solid on the shore
+    "      float dy = gp.y - shore;\n"
+    "      vec2 m = vec2(gp.x + sin(wp.y * 0.5 + uTime * 2.0) * 0.6, shore - dy);\n"
+    "      vec2 muv = vec2((m.x + uMargin) / uDim.x, m.y / uDim.y);\n"
+    "      vec4 a = TexS(uLayer[1], muv), b = TexS(uLayer[2], muv);\n"
+    "      vec3 refl = a.rgb + b.rgb * (1.0 - a.a);\n"
+    "      float ra = clamp(a.a + b.a * (1.0 - a.a), 0.0, 1.0) * (1.0 - smoothstep(0.0, 40.0, dy));\n"
+    "      ra *= Solid(m);\n"   // only objects (trees, rocks, buildings), not ground
+    "      ivec2 mnp = clamp(ivec2(floor(vec2(m.x + uMargin, m.y))), ivec2(0), ivec2(uDim) - 1);\n"
+    "      uint mm = texelFetch(uMeta, mnp, 0).r;\n"
+    "      if ((mm & 6u) != 6u || TexS(uLayer[0], muv).a > 0.0) ra = 0.0;\n"   // hidden by a window or under a text box
+    "      res = mix(res, refl / max(ra, 1e-3) * vec3(0.7, 0.8, 0.9), ra * 0.4);\n"
+    "    }\n"
+    "  }\n"
+    // Windows light up at night: pale glass on building fronts (solid tiles
+    // just above open ground) glows warm.
+    "  if (uFieldFx != 0 && uNight > 0.15 && top >= 1 && top <= 3 && (here & 1) != 0 && uMapType != 4) {\n"
+    "    ivec2 c0 = ivec2(floor(CellPos(gp)));\n"
+    "    bool facade = (Cell(c0 + ivec2(0, 1)) & 1) == 0 || (Cell(c0 + ivec2(0, 2)) & 1) == 0;\n"
+    "    vec3 k = lay[top].rgb / max(lay[top].a, 1e-4);\n"
+    "    float glass = smoothstep(0.72, 0.88, k.b) * smoothstep(0.2, 0.32, k.b - k.r) * step(0.55, k.g);\n"
+    "    if (facade && glass > 0.0) res = mix(res, vec3(1.0, 0.82, 0.5) * (0.75 + 0.25 * k.b), glass * min(uNight * 1.2, 1.0) * 0.85);\n"
+    "  }\n"
     "  if (uFieldFx != 0 && top >= 1 && top <= 3 && (here & 2) != 0) {\n"
     "    float w = sin(wp.x * 0.42 + uTime * 1.6 + sin(wp.y * 0.31 + uTime * 0.9) * 1.7) * 0.5\n"
     "            + sin(wp.y * 0.57 - uTime * 1.2 + wp.x * 0.13) * 0.5;\n"
@@ -515,7 +555,10 @@ static const char *kComposite =
     "      g += f * f;\n"
     "    }\n"
     "    g = min(g, 1.2) * uNight;\n"
-    "    res += vec3(1.0, 0.78, 0.48) * g * (0.35 + res * 0.6);\n"
+    "    vec3 warm = vec3(1.0, 0.78, 0.48);\n"
+    "    vec3 lit = res * (1.0 + warm * g * 0.55) + warm * g * 0.22 * (1.0 - res);\n"
+    // Soft shoulder: bright surfaces (white hair, signs) roll off instead of clipping.
+    "    res = mix(lit, 0.8 + 0.2 * (1.0 - exp(-(lit - 0.8) / 0.2)), step(0.8, lit));\n"
     "  }\n"
     // Fireflies over grass and trees on summer nights.
     "  if (uFieldFx != 0 && top != 0 && uNight > 0.3 && uMapType != 4 && uMapType != 8 && uWeather == 0) {\n"
@@ -544,8 +587,9 @@ static const char *kComposite =
     // Sunlight shafts through dense trees.
     "  if (uFieldFx != 0 && top != 0 && uForest > 0.25 && uSun.w > 0.2 && uMapType != 4 && uMapType != 8) {\n"
     "    float x = (gp.x + gp.y * 0.6) * 0.03;\n"
-    "    float ray = pow(Noise(vec2(x + uTime * 0.02, uTime * 0.04)), 3.0) * Noise(vec2(x * 0.3, 7.0));\n"
-    "    res += vec3(1.0, 0.92, 0.7) * ray * 0.22 * smoothstep(0.25, 0.5, uForest) * uSun.w;\n"
+    "    float ray = smoothstep(0.55, 0.85, Noise(vec2(x + uTime * 0.02, uTime * 0.03))) * (0.5 + 0.5 * Noise(vec2(x * 0.35, 7.0)));\n"
+    "    ray *= 0.6 + 0.4 * Noise(gp * 0.02 + vec2(0.0, uTime * 0.1));\n"   // dust drifting through the beams
+    "    res += vec3(1.0, 0.9, 0.65) * ray * 0.16 * smoothstep(0.25, 0.45, uForest) * uSun.w * (1.0 - 0.5 * res);\n"
     "  }\n"
     // Caves: slow drifting mist and floating dust.
     "  if (uFieldFx != 0 && top != 0 && uMapType == 4) {\n"
@@ -585,6 +629,7 @@ static const char *kPresent =
     "uniform float uUScale;\n"
     "uniform vec2 uContentUv;\n" // content columns as u range; outside gets an ambient fill
     "uniform float uBloom;\n"
+    "uniform float uSharpen;\n"
     "uniform vec2 uTexel;\n"
     "uniform vec3 uSoftSides;\n"  // battles: x = left edge u, y = right edge u, z = message box top (v, from top)
     "void main() {\n"
@@ -620,13 +665,23 @@ static const char *kPresent =
     "    b = mix(b, vec3(dot(b, vec3(0.2126, 0.7152, 0.0722))), 0.25);\n"
     "    c = b * (0.92 - 0.22 * d);\n"
     "  }\n"
+    // Contrast-adaptive sharpening: restores crispness lost to scaling
+    // without halos (less sharpening where local contrast is already high).
+    "  if (uSharpen > 0.0) {\n"
+    "    vec3 n = texture(uTex, uv + vec2(0.0, uTexel.y)).rgb, s = texture(uTex, uv - vec2(0.0, uTexel.y)).rgb;\n"
+    "    vec3 e = texture(uTex, uv + vec2(uTexel.x, 0.0)).rgb, w = texture(uTex, uv - vec2(uTexel.x, 0.0)).rgb;\n"
+    "    vec3 mn = min(c, min(min(n, s), min(e, w))), mx = max(c, max(max(n, s), max(e, w)));\n"
+    "    vec3 amp = sqrt(clamp(min(mn, 1.0 - mx) / max(mx, vec3(1e-4)), 0.0, 1.0));\n"
+    "    vec3 wgt = -amp * mix(0.125, 0.2, uSharpen);\n"
+    "    c = clamp((c + (n + s + e + w) * wgt) / (1.0 + 4.0 * wgt), 0.0, 1.0);\n"
+    "  }\n"
     "  if (uBloom > 0.0) {\n"   // soft glow around bright areas
     "    vec3 b = vec3(0.0);\n"
     "    for (int i = 0; i < 12; i++) {\n"
     "      float a = float(i) * 0.5236;\n"
     "      for (int r = 1; r <= 2; r++) {\n"
     "        vec3 t = texture(uTex, uv + vec2(cos(a), sin(a)) * uTexel * float(r) * 6.0).rgb;\n"
-    "        b += max(t - vec3(0.72), vec3(0.0));\n"
+    "        b += max(t - vec3(0.82), vec3(0.0));\n"
     "      }\n"
     "    }\n"
     "    c += b / 24.0 * uBloom;\n"
@@ -1136,7 +1191,8 @@ static void DrawPresent(int hdMode, int winW, int winH)
         glUniform1f(glGetUniformLocation(sProgPresent, "uGrade"), sGrade ? 1.0f : 0.0f);
         glUniform1f(glGetUniformLocation(sProgPresent, "uFlip"), 0.0f);
         glUniform1f(glGetUniformLocation(sProgPresent, "uUScale"), 1.0f);
-        glUniform1f(glGetUniformLocation(sProgPresent, "uBloom"), sGrade ? 0.9f + sNight * 1.6f : 0.0f);
+        glUniform1f(glGetUniformLocation(sProgPresent, "uBloom"), sGrade ? 0.25f + sNight * 0.9f : 0.0f);
+        glUniform1f(glGetUniformLocation(sProgPresent, "uSharpen"), sGrade ? 1.0f : 0.0f);
         glUniform2f(glGetUniformLocation(sProgPresent, "uTexel"), 1.0f / (sCompW > 0 ? sCompW : 1), 1.0f / (sCompH > 0 ? sCompH : 1));
         glUniform2f(glGetUniformLocation(sProgPresent, "uContentUv"),
                     (float)gPpuContentX0 / gPcScreenW, (float)gPpuContentX1 / gPcScreenW);
@@ -1154,6 +1210,7 @@ static void DrawPresent(int hdMode, int winW, int winH)
         glUniform1f(glGetUniformLocation(sProgPresent, "uFlip"), 1.0f);
         glUniform1f(glGetUniformLocation(sProgPresent, "uUScale"), (float)gPcScreenW / PC_MAX_W);
         glUniform1f(glGetUniformLocation(sProgPresent, "uBloom"), 0.0f);
+        glUniform1f(glGetUniformLocation(sProgPresent, "uSharpen"), 0.0f);
         glUniform2f(glGetUniformLocation(sProgPresent, "uContentUv"), -1.0f, 2.0f);
         glUniform3f(glGetUniformLocation(sProgPresent, "uSoftSides"), 0.0f, 1.0f, 0.0f);
     }
