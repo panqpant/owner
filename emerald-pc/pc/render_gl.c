@@ -320,6 +320,9 @@ static const char *kComposite =
     "uniform float uGiOn;\n"
     "uniform int uMenu;\n"          // menu screen kind (0 none)
     "uniform vec3 uMenuBg1, uMenuBg2;\n"
+    "uniform int uPanels;\n"        // HD window panels (frames the game no longer draws)
+    "uniform vec4 uPanel[16];\n"    // window rect x, y, w, h (native px incl. margin)
+    "uniform vec4 uPanelT[16];\n"   // window fill colour (follows screen fades), dialogue style
     "uniform int uCards;\n"         // party screen: slot cards drawn by the renderer (0 none)
     "uniform vec4 uCard[6];\n"      // x, y, w, h (native px incl. margin)
     "uniform vec4 uCardBar[6];\n"   // HP bar x, y, w (0: none), HP fraction
@@ -688,7 +691,7 @@ static const char *kComposite =
     "float WaterArt(vec2 q) {\n"   // how much this pixel of the art is open water (blue)
     "  if (gZoomField) return 0.0;\n"
     "  vec3 k = TexS(uFlat, q).rgb;\n"
-    "  return smoothstep(0.06, 0.16, k.b - max(k.r, k.g * 0.9)) * smoothstep(0.25, 0.4, k.b);\n"
+    "  return smoothstep(0.13, 0.22, k.b - max(k.r, k.g * 0.9)) * smoothstep(0.25, 0.4, k.b);\n"   // strongly blue only: lavender walls and grey stone are not water
     "}\n"
     "float Caustic(vec2 p, float t) {\n"   // sunlight focused by the waves onto the seabed: a bright moving net
     "  vec2 i = p; float c = 1.0;\n"
@@ -1146,10 +1149,11 @@ static const char *kComposite =
     "      float yel = smoothstep(0.82, 0.7, fk.b / max(min(fk.r, fk.g), 0.05)) * step(0.25, fk.g);\n"   // the stripes are yellow-olive; box frames and buttons are not
     "      bm = (lay[0].a < 0.5 && lay[2].a < 0.5 && lay[4].a < 0.5) ? (keep ? yel : 1.0) : 0.0;\n"
     "    }\n"
+    "    if (uMenu == 5 && !side) bm = (lay[0].a < 0.5 && lay[1].a < 0.5 && lay[2].a < 0.5 && lay[4].a < 0.5) ? 1.0 : 0.0;\n"   // PC boxes: the scrolling pattern is the bottom layer
     "    vec3 mbg = vec3(0.0);\n"
     "    if (bm > 0.0 || uCards > 0) {\n"
     "      vec3 a = mix(uMenuBg1, uMenuBg2, 0.5);\n"
-    "      if (uCards > 0) a = vec3(0.16, 0.22, 0.34);\n"   // party: a calm deep blue behind the cards
+    "      a = vec3(0.16, 0.22, 0.34);\n"   // every menu screen: one calm deep blue, so they read as one game
     "      vec3 c1 = a * 0.55 + vec3(0.05, 0.06, 0.12), c2 = a * 0.9 + vec3(0.08);\n"
     "      float g = mp.y / uDim.y + 0.15 * sin(mp.x * 0.02 + uTime * 0.3);\n"
     "      vec3 b = mix(c2, c1, clamp(g, 0.0, 1.0));\n"
@@ -1160,7 +1164,7 @@ static const char *kComposite =
     "      }\n"
     "      float sh = 0.0;\n"   // shadow cast by panels above and to the left
     "      for (int k = 1; k <= 3; k++) sh = max(sh, (1.0 - MenuMask(mp - vec2(float(k) * 1.3))) * (1.0 - float(k) / 4.0));\n"
-    "      if (!side && uCards == 0) b *= 1.0 - sh * 0.4;\n"
+    "      if (!side && uCards == 0 && uMenu != 5) b *= 1.0 - sh * 0.4;\n"
     "      mbg = b;\n"
     "      if (side) { oColor = vec4(b, 1.0); return; }\n"
     "      res = mix(res, b, bm);\n"
@@ -1291,7 +1295,7 @@ static const char *kComposite =
     "    int up = 0;\n"
     "    for (int i = 1; i <= 4; i++) { if ((Cell(c0 - ivec2(0, i)) & 2) == 0) break; up = i; }\n"
     "    float shore = uGridPos.y + float(c0.y - up) * 16.0;\n"
-    "    if (wm < 0.01 && (Cell(c0 - ivec2(0, up + 1)) & 1) != 0) {\n"   // something solid on the shore
+    "    if (wm > 0.5 && (Cell(c0 - ivec2(0, up + 1)) & 1) != 0) {\n"   // something solid on the shore
     "      float dy = gp.y - shore;\n"
     "      vec2 m = vec2(gp.x + sin(wp.y * 0.5 + uTime * 2.0) * 0.6, shore - dy);\n"
     "      vec2 muv = vec2((m.x + uMargin) / uDim.x, m.y / uDim.y);\n"
@@ -1304,10 +1308,9 @@ static const char *kComposite =
     "      if ((mm & 6u) != 6u || TexS(uLayer[0], muv).a > 0.0) ra = 0.0;\n"   // hidden by a window or under a text box
     "      res = mix(res, refl / max(ra, 1e-3) * vec3(0.7, 0.8, 0.9), ra * 0.4);\n"
     "    }\n"
-    "    vec4 ch = MirrorChars(gp);\n"
+    "    vec4 ch = MirrorChars(gp) * wm;\n"   // reflections only on the water itself, never on scenery standing in water tiles
     "    res = mix(res, ch.rgb / max(ch.a, 1e-3) * vec3(0.75, 0.85, 0.95), ch.a * 0.45);\n"
-    "    vec3 sky = mix(vec3(0.55, 0.75, 1.0), vec3(1.0, 0.7, 0.45), clamp((uTint.r - uTint.b) * 3.0, 0.0, 1.0)) * (uTint.a > 0.5 ? uTint.rgb : vec3(1.0));\n"
-    "    res = mix(res, sky * max(dot(res, vec3(0.33)), 0.35) * 1.4, 0.12 * (1.0 - wm));\n"
+
     "  }\n"
     // Rain: wet ground darkens and puddles reflect buildings, trees,
     // characters and lights (streaks below lamps and doorways).
@@ -1349,13 +1352,6 @@ static const char *kComposite =
     "    vec3 k = lay[top].rgb / max(lay[top].a, 1e-4);\n"
     "    float glass = smoothstep(0.72, 0.88, k.b) * smoothstep(0.2, 0.32, k.b - k.r) * step(0.55, k.g);\n"
     "    if (facade && glass > 0.0) res = mix(res, vec3(1.0, 0.82, 0.5) * (0.75 + 0.25 * k.b), glass * min(uNight * 1.2, 1.0) * 0.85);\n"
-    "  }\n"
-    "  if (uFieldFx != 0 && top >= 1 && top <= 3 && (here & 2) != 0 && wm < 0.01) {\n"
-    "    float w = sin(wp.x * 0.42 + uTime * 1.6 + sin(wp.y * 0.31 + uTime * 0.9) * 1.7) * 0.5\n"
-    "            + sin(wp.y * 0.57 - uTime * 1.2 + wp.x * 0.13) * 0.5;\n"
-    "    float sp = smoothstep(0.82, 0.98, w) * (0.6 + 0.4 * Noise(wp * 0.7 + uTime));\n"
-    "    vec3 glint = mix(vec3(0.75, 0.85, 1.0), vec3(1.0, 0.95, 0.8), uSun.w);\n"
-    "    res = res * (1.0 + w * 0.04) + glint * sp * (0.12 + 0.16 * uSun.w);\n"
     "  }\n"
     // Warm light around doors at night.
     "  if (uFieldFx != 0 && uNight > 0.0 && top != 0) {\n"
@@ -1519,7 +1515,7 @@ static const char *kComposite =
     "        }\n"
     "      }\n"
     "    }\n"
-    "    if ((here & 2) != 0 && top >= 1 && top <= 3) {\n"
+    "    if ((here & 2) != 0 && top >= 1 && top <= 3 && wm > 0.5) {\n"
     "      ivec2 c0 = ivec2(floor(CellPos(gp)));\n"
     "      vec2 f = fract(CellPos(gp)) * 16.0;\n"   // distance (px) to the nearest land edge of this water tile
     "      float de = 99.0;\n"
@@ -1764,6 +1760,37 @@ static const char *kComposite =
     "    if (uTint.a > 0.5) hz *= uTint.rgb;\n"
     "    if (uMapType == 4) hz = vec3(0.2, 0.18, 0.17);\n"
     "    res = mix(res, hz, smoothstep(0.42, 0.0, uvScreen.y) * 0.30 * uTilt / 0.4);\n"
+    "  }\n"
+    // ---- Window panels: rounded frosted frames with a soft shadow around the
+    // game's framed windows (message box, menus, yes/no...) ----
+    "  {\n"
+    "    vec2 sp = vec2(vUv.x * uDim.x, (1.0 - vUv.y) * uDim.y);\n"
+    "    for (int k = 0; k < 16; k++) {\n"
+    "      if (k >= uPanels) break;\n"
+    "      vec4 r = uPanel[k]; vec4 t = uPanelT[k];\n"
+    "      int wbg = int(t.w) / 2;\n"
+    "      if (all(greaterThanEqual(sp, r.xy)) && all(lessThan(sp, r.xy + r.zw))) {\n"   // the window itself: the game's pixels,
+    "        vec2 e = min(sp - r.xy, r.xy + r.zw - sp);\n"                             // with its soft upscaled edge laid on the panel
+    "        if (min(e.x, e.y) < 1.5 && wbg == 0) { float a = lay[0].a; res = mix(vec3(0.99, 0.995, 1.0) * t.rgb, res, a); }\n"
+    "        continue;\n"
+    "      }\n"
+    "      vec2 mg = mod(t.w, 2.0) > 0.5 ? vec2(11.0, 6.0) : vec2(6.0);\n"
+    "      vec2 ce = r.xy + r.zw * 0.5, hs = r.zw * 0.5 + mg;\n"
+    "      float rad = 6.0;\n"
+    "      vec2 dq = abs(sp - ce) - (hs - rad);\n"
+    "      float sd = length(max(dq, 0.0)) + min(max(dq.x, dq.y), 0.0) - rad;\n"
+    "      vec2 ds = abs(sp - ce - vec2(1.0, 2.0)) - (hs - rad);\n"
+    "      float sds = length(max(ds, 0.0)) + min(max(ds.x, ds.y), 0.0) - rad;\n"
+    "      if (sd > 1.0 && sds > 5.0) continue;\n"
+    "      float aa = max(fwidth(sd), 0.02);\n"
+    "      float inside = 1.0 - smoothstep(-aa, aa, sd);\n"
+    "      float fy = clamp((sp.y - (ce.y - hs.y)) / (hs.y * 2.0), 0.0, 1.0);\n"
+    "      vec3 fill = mix(vec3(0.99, 0.995, 1.0), vec3(0.90, 0.93, 0.98), fy);\n"
+    "      fill = mix(fill, vec3(0.72, 0.80, 0.95), (1.0 - smoothstep(0.0, 2.5, -sd)) * 0.55);\n"   // cool rim just inside the edge
+    "      vec3 pc = res * (1.0 - (1.0 - inside) * (1.0 - smoothstep(-1.0, 5.0, sds)) * 0.35);\n"   // drop shadow
+    "      pc = mix(pc, fill * t.rgb, inside);\n"
+    "      res = pc;\n"
+    "    }\n"
     "  }\n"
     "  for (int k = ti - 1; k >= 0; k--) if (order[k] == 0) { vec4 c = lay[0]; res = res * (1.0 - c.a) + c.rgb; }\n"
     "  oColor = vec4(res, 1.0);\n"
@@ -2364,6 +2391,27 @@ static void SetMenuUniforms(void)
     if (getenv("EMERALD_MENUDEBUG")) fprintf(stderr, "menu=%d light=%d\n", gPcMenuFrame, sLighting);
     gPcHdMenus = sLighting && !getenv("EMERALD_NOMENU");
     {
+        // Window panels: rect and the window's fill colour (so they fade with the screen).
+        struct PcPanel pn[16];
+        float pr[16][4], pt[16][4];
+        int np2 = gPcHdMenus ? PcPanels(pn) : 0, k;
+        for (k = 0; k < np2; k++)
+        {
+            int px = pn[k].x + 2 + m, py = pn[k].y + 2;   // windows sit in the centred 240 px screen
+            uint32_t c = px >= 0 && px < gPcScreenW && py >= 0 && py < GBA_H ? gPpuLayers.layer[pn[k].bg][py][px] : 0;
+            pr[k][0] = pn[k].x + m; pr[k][1] = pn[k].y; pr[k][2] = pn[k].w; pr[k][3] = pn[k].h;
+            if (c >> 24) { pt[k][0] = (c & 255) / 255.0f; pt[k][1] = ((c >> 8) & 255) / 255.0f; pt[k][2] = ((c >> 16) & 255) / 255.0f; }
+            else { pt[k][0] = pt[k][1] = pt[k][2] = 1.0f; }
+            pt[k][3] = (float)(pn[k].dialogue + pn[k].bg * 2);
+        }
+        glUniform1i(glGetUniformLocation(sProgComp, "uPanels"), np2);
+        if (np2)
+        {
+            glUniform4fv(glGetUniformLocation(sProgComp, "uPanel"), np2, &pr[0][0]);
+            glUniform4fv(glGetUniformLocation(sProgComp, "uPanelT"), np2, &pt[0][0]);
+        }
+    }
+    {
         // Party screen cards: slot rects and states from the game, HP eased so bars glide.
         struct PcPartyCard pc[6];
         static float shown[6];
@@ -2391,9 +2439,11 @@ static void SetMenuUniforms(void)
     }
     if (!on)
         return;
-    // Sample the background pattern: the left edge, or on the party screen the
-    // open area below the first card (its stripes reach no edge).
-    int sx0 = gPcMenuFrame == 1 ? m + 40 : m, sy0 = gPcMenuFrame == 1 ? 90 : 4, sy1 = gPcMenuFrame == 1 ? 140 : GBA_H - 4;
+    // Sample the background pattern: the left edge, or where a screen's
+    // pattern shows clear of panels.
+    // PC boxes: the cream strip under the box.
+    int sx0 = gPcMenuFrame == 1 ? m + 40 : gPcMenuFrame == 5 ? m + 130 : m;
+    int sy0 = gPcMenuFrame == 1 ? 90 : gPcMenuFrame == 5 ? 157 : 4, sy1 = gPcMenuFrame == 1 ? 140 : gPcMenuFrame == 5 ? 160 : GBA_H - 4;
     for (y = sy0; y < sy1; y += 2)
         for (x = sx0; x < sx0 + 6; x++)
             for (l = 0; l < 4; l++)

@@ -23,10 +23,10 @@ index 8566762fe..097e81577 100644
  #if MODERN
  // NOTE: Assumes 16-bit DMAs.
 diff --git a/include/global.h b/include/global.h
-index f62485065..70eae0a43 100644
+index f62485065..fcfb2c1bd 100644
 --- a/include/global.h
 +++ b/include/global.h
-@@ -17,6 +17,34 @@
+@@ -17,6 +17,36 @@
  #include "constants/easy_chat.h"
  #include "constants/trainer_hill.h"
  
@@ -45,6 +45,8 @@ index f62485065..70eae0a43 100644
 +void PcBattleIntro(void);
 +void PcMarkMenuFrame(int kind);   // this frame is a menu screen (1 = party)         // a battle transition starts: the PC renderer shatters the screen      // battler positions for battle lighting (pc/fieldfx.c)
 +extern int gPcHdMenus;            // HD menus on: the PC renderer draws party slot cards and HP bars
++void PcPanelAdd(u8 windowId, int dialogue); // HD menus: a framed window the renderer draws a panel around
++void PcPanelRemove(u8 windowId);
 +extern unsigned char gPcPartyBars; // party slots whose HP bar is shown (bit per window)
 +void PcSetMapPopup(int shown);    // map-name sign: drawn at the widescreen corner
 +// High-resolution text (pc/texthd.c): keep per-pixel glyph tags in step with windows.
@@ -526,7 +528,7 @@ index 2a47ec51a..1b21f1e38 100644
  
  void SetTrainerHillVBlankCounter(u32 *counter)
 diff --git a/src/menu.c b/src/menu.c
-index 094ccd7aa..e79fbe9f0 100644
+index 094ccd7aa..7dda93f62 100644
 --- a/src/menu.c
 +++ b/src/menu.c
 @@ -145,6 +145,9 @@ void InitStandardTextBoxWindows(void)
@@ -539,7 +541,47 @@ index 094ccd7aa..e79fbe9f0 100644
  }
  
  void FreeAllOverworldWindowBuffers(void)
-@@ -522,6 +525,9 @@ u8 AddMapNamePopUpWindow(void)
+@@ -215,6 +218,9 @@ void LoadMessageBoxAndBorderGfx(void)
+ 
+ void DrawDialogueFrame(u8 windowId, bool8 copyToVram)
+ {
++#ifdef PLATFORM_PC
++    if (gPcHdMenus) PcPanelAdd(windowId, 1); else   // HD menus: the PC renderer draws the frame
++#endif
+     CallWindowFunction(windowId, WindowFunc_DrawDialogueFrame);
+     FillWindowPixelBuffer(windowId, PIXEL_FILL(1));
+     PutWindowTilemap(windowId);
+@@ -224,6 +230,9 @@ void DrawDialogueFrame(u8 windowId, bool8 copyToVram)
+ 
+ void DrawStdWindowFrame(u8 windowId, bool8 copyToVram)
+ {
++#ifdef PLATFORM_PC
++    if (gPcHdMenus) PcPanelAdd(windowId, 0); else   // HD menus: the PC renderer draws the frame
++#endif
+     CallWindowFunction(windowId, WindowFunc_DrawStandardFrame);
+     FillWindowPixelBuffer(windowId, PIXEL_FILL(1));
+     PutWindowTilemap(windowId);
+@@ -234,6 +243,9 @@ void DrawStdWindowFrame(u8 windowId, bool8 copyToVram)
+ void ClearDialogWindowAndFrame(u8 windowId, bool8 copyToVram)
+ {
+     CallWindowFunction(windowId, WindowFunc_ClearDialogWindowAndFrame);
++#ifdef PLATFORM_PC
++    PcPanelRemove(windowId);
++#endif
+     FillWindowPixelBuffer(windowId, PIXEL_FILL(1));
+     ClearWindowTilemap(windowId);
+     if (copyToVram == TRUE)
+@@ -243,6 +255,9 @@ void ClearDialogWindowAndFrame(u8 windowId, bool8 copyToVram)
+ void ClearStdWindowAndFrame(u8 windowId, bool8 copyToVram)
+ {
+     CallWindowFunction(windowId, WindowFunc_ClearStdWindowAndFrame);
++#ifdef PLATFORM_PC
++    PcPanelRemove(windowId);
++#endif
+     FillWindowPixelBuffer(windowId, PIXEL_FILL(1));
+     ClearWindowTilemap(windowId);
+     if (copyToVram == TRUE)
+@@ -522,6 +537,9 @@ u8 AddMapNamePopUpWindow(void)
  {
      if (sMapNamePopupWindowId == WINDOW_NONE)
          sMapNamePopupWindowId = AddWindowParameterized(0, 1, 1, 10, 3, 14, 0x107);
@@ -549,7 +591,7 @@ index 094ccd7aa..e79fbe9f0 100644
      return sMapNamePopupWindowId;
  }
  
-@@ -537,6 +543,9 @@ void RemoveMapNamePopUpWindow(void)
+@@ -537,6 +555,9 @@ void RemoveMapNamePopUpWindow(void)
          RemoveWindow(sMapNamePopupWindowId);
          sMapNamePopupWindowId = WINDOW_NONE;
      }
@@ -559,6 +601,66 @@ index 094ccd7aa..e79fbe9f0 100644
  }
  
  void AddTextPrinterWithCallbackForMessage(bool8 canSpeedUp, TextPrinterCallback callback)
+@@ -556,6 +577,9 @@ void DrawDialogFrameWithCustomTileAndPalette(u8 windowId, bool8 copyToVram, u16
+ {
+     sTileNum = tileNum;
+     sPaletteNum = paletteNum;
++#ifdef PLATFORM_PC
++    if (gPcHdMenus) PcPanelAdd(windowId, 1); else   // HD menus: the PC renderer draws the frame
++#endif
+     CallWindowFunction(windowId, WindowFunc_DrawDialogFrameWithCustomTileAndPalette);
+     FillWindowPixelBuffer(windowId, PIXEL_FILL(1));
+     PutWindowTilemap(windowId);
+@@ -567,6 +591,9 @@ static void UNUSED DrawDialogFrameWithCustomTile(u8 windowId, bool8 copyToVram,
+ {
+     sTileNum = tileNum;
+     sPaletteNum = GetWindowAttribute(windowId, WINDOW_PALETTE_NUM);
++#ifdef PLATFORM_PC
++    if (gPcHdMenus) PcPanelAdd(windowId, 1); else   // HD menus: the PC renderer draws the frame
++#endif
+     CallWindowFunction(windowId, WindowFunc_DrawDialogFrameWithCustomTileAndPalette);
+     FillWindowPixelBuffer(windowId, PIXEL_FILL(1));
+     PutWindowTilemap(windowId);
+@@ -673,6 +700,9 @@ void ClearDialogWindowAndFrameToTransparent(u8 windowId, bool8 copyToVram)
+ {
+     // The palette slot doesn't matter, since the tiles are transparent.
+     CallWindowFunction(windowId, WindowFunc_ClearDialogWindowAndFrameNullPalette);
++#ifdef PLATFORM_PC
++    PcPanelRemove(windowId);
++#endif
+     FillWindowPixelBuffer(windowId, PIXEL_FILL(0));
+     ClearWindowTilemap(windowId);
+     if (copyToVram == TRUE)
+@@ -688,6 +718,9 @@ void DrawStdFrameWithCustomTileAndPalette(u8 windowId, bool8 copyToVram, u16 bas
+ {
+     sTileNum = baseTileNum;
+     sPaletteNum = paletteNum;
++#ifdef PLATFORM_PC
++    if (gPcHdMenus) PcPanelAdd(windowId, 0); else   // HD menus: the PC renderer draws the frame
++#endif
+     CallWindowFunction(windowId, WindowFunc_DrawStdFrameWithCustomTileAndPalette);
+     FillWindowPixelBuffer(windowId, PIXEL_FILL(1));
+     PutWindowTilemap(windowId);
+@@ -700,6 +733,9 @@ void DrawStdFrameWithCustomTile(u8 windowId, bool8 copyToVram, u16 baseTileNum)
+ {
+     sTileNum = baseTileNum;
+     sPaletteNum = GetWindowAttribute(windowId, WINDOW_PALETTE_NUM);
++#ifdef PLATFORM_PC
++    if (gPcHdMenus) PcPanelAdd(windowId, 0); else   // HD menus: the PC renderer draws the frame
++#endif
+     CallWindowFunction(windowId, WindowFunc_DrawStdFrameWithCustomTileAndPalette);
+     FillWindowPixelBuffer(windowId, PIXEL_FILL(1));
+     PutWindowTilemap(windowId);
+@@ -770,6 +806,9 @@ static void WindowFunc_DrawStdFrameWithCustomTileAndPalette(u8 bg, u8 tilemapLef
+ void ClearStdWindowAndFrameToTransparent(u8 windowId, bool8 copyToVram)
+ {
+     CallWindowFunction(windowId, WindowFunc_ClearStdWindowAndFrameToTransparent);
++#ifdef PLATFORM_PC
++    PcPanelRemove(windowId);
++#endif
+     FillWindowPixelBuffer(windowId, PIXEL_FILL(0));
+     ClearWindowTilemap(windowId);
+     if (copyToVram == TRUE)
 diff --git a/src/multiboot.c b/src/multiboot.c
 index 15b062ed6..fa904f80a 100644
 --- a/src/multiboot.c
@@ -727,6 +829,20 @@ index 626ee304e..dccdcc3a0 100644
      RunTasks();
      AnimateSprites();
      BuildOamBuffer();
+diff --git a/src/pokemon_storage_system.c b/src/pokemon_storage_system.c
+index 6ff9ec867..bcdab4298 100644
+--- a/src/pokemon_storage_system.c
++++ b/src/pokemon_storage_system.c
+@@ -1987,6 +1987,9 @@ static void VBlankCB_PokeStorage(void)
+ 
+ static void CB2_PokeStorage(void)
+ {
++#ifdef PLATFORM_PC
++    PcMarkMenuFrame(5);
++#endif
+     RunTasks();
+     DoScheduledBgTilemapCopiesToVram();
+     ScrollBackground();
 diff --git a/src/pokemon_summary_screen.c b/src/pokemon_summary_screen.c
 index 96407787b..148e4565d 100644
 --- a/src/pokemon_summary_screen.c

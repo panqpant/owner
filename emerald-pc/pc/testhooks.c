@@ -27,6 +27,7 @@ void TestHookRun(const char *cmd)
     {
         ScriptGiveMon(a, b ? b : 5, ITEM_NONE, 0, 0, 0);
         FlagSet(FLAG_SYS_POKEMON_GET);   // start menu shows POKéMON
+        FlagSet(FLAG_SYS_POKEDEX_GET);   // and POKéDEX
     }
     else if (!strcmp(name, "battle"))
     {
@@ -48,6 +49,11 @@ void TestHookRun(const char *cmd)
         extern void PpuRequestCapture(const char *path);
         if (sscanf(cmd, "%*s %511s", path) == 1)
             PpuRequestCapture(path);
+    }
+    else if (!strcmp(name, "pc"))
+    {
+        void ShowPokemonStorageSystemPC(void);
+        ShowPokemonStorageSystemPC();   // the PC's box menu, as from a Pokémon Center PC
     }
     else if (!strcmp(name, "map"))
     {

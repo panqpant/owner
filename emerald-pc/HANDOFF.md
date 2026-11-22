@@ -64,8 +64,11 @@ M / pad X opens the game's own Hoenn region map; camera tilt now off by default
 (owner: tilt looks bad with 2D sprites; it also disabled the water remake).
 HD menus, step 1: party screen redrawn (glass cards, glowing cursor, smooth HP
 bars, calm background). The game skips its own slot art/HP bars when
-`gPcHdMenus` is on; `PcPartyUi()` (fieldfx.c) feeds the renderer. Next screens:
-summary, bag, Pokédex, PC boxes, start menu.
+`gPcHdMenus` is on; `PcPartyUi()` (fieldfx.c) feeds the renderer. Step 2: every framed
+window (dialogue, start menu, PC menus, yes/no, shops) gets a rounded frosted
+panel: menu.c records windows (`PcPanelAdd/Remove`) instead of drawing frames;
+`PcPanels()` checks each is still on screen. All menu screens (party, bag,
+summary, Pokédex, PC boxes = menu kind 5) share one deep-blue background.
 
 ## The owner's preferences (important)
 
@@ -92,6 +95,7 @@ summary, bag, Pokédex, PC boxes, start menu.
   -> 3D world from the tiles with sprites standing up (no new 3D models).
 - Surf Pokémon sprite renders with a black lower half (seen before session 2's changes).
 - A thin strip of the original water art shows right against boat hulls (Slateport).
+- Water art test is strongly-blue only (lavender walls were half-turned to water).
 
 - Real Windows play-testing of recent builds (only screenshot-tested here).
 - Settings screen entries for seasons, live weather, cinematics, minimap, moods.

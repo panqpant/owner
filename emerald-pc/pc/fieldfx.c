@@ -13,6 +13,8 @@
 #include "field_weather.h"
 #include "port.h"
 #include "window.h"
+#include "bg.h"
+#include "gpu_regs.h"
 #include "party_menu.h"
 #include "constants/party_menu.h"
 #include "palette.h"
@@ -715,6 +717,62 @@ int PcPartyUi(struct PcPartyCard out[6])
             c->barW = 0;   // this screen hides HP (eggs, TM compatibility)
         if (gPartyMenu.slotId == i) c->state |= 2;
         if (gPartyMenu.action == PARTY_ACTION_SWITCHING && gPartyMenu.slotId2 == i) c->state |= 8;
+        n++;
+    }
+    return n;
+}
+
+// HD window panels: the game records framed windows instead of drawing their
+// frames; a panel stays while its window is allocated and its tilemap is
+// still on the BG (a cleared or reused window drops it).
+static struct { u8 used, windowId, dialogue; struct WindowTemplate t; } sPanels[16];
+
+void PcPanelAdd(u8 windowId, int dialogue)
+{
+    int i, free = -1;
+    for (i = 0; i < 16; i++)
+    {
+        if (sPanels[i].used && sPanels[i].windowId == windowId) { free = i; break; }
+        if (!sPanels[i].used && free < 0) free = i;
+    }
+    if (free < 0)
+        return;
+    sPanels[free].used = 1;
+    sPanels[free].windowId = windowId;
+    sPanels[free].dialogue = dialogue;
+    sPanels[free].t = gWindows[windowId].window;
+}
+
+void PcPanelRemove(u8 windowId)
+{
+    int i;
+    for (i = 0; i < 16; i++)
+        if (sPanels[i].used && sPanels[i].windowId == windowId)
+            sPanels[i].used = 0;
+}
+
+int PcPanels(struct PcPanel out[16])
+{
+    int i, n = 0;
+    u16 dispcnt = GetGpuReg(REG_OFFSET_DISPCNT);
+    for (i = 0; i < 16; i++)
+    {
+        const struct WindowTemplate *t = &sPanels[i].t, *w = &gWindows[sPanels[i].windowId].window;
+        const u16 *map;
+        if (!sPanels[i].used)
+            continue;
+        if (gWindows[sPanels[i].windowId].tileData == NULL || w->bg != t->bg || w->tilemapLeft != t->tilemapLeft
+         || w->tilemapTop != t->tilemapTop || w->width != t->width || w->height != t->height || w->baseBlock != t->baseBlock)
+        {
+            sPanels[i].used = 0;   // the window was removed or its id reused
+            continue;
+        }
+        map = GetBgTilemapBuffer(t->bg);
+        if (!map || (map[t->tilemapTop * 32 + t->tilemapLeft] & 0x3FF) != (t->baseBlock & 0x3FF) || !(dispcnt & (DISPCNT_BG0_ON << t->bg)))
+            continue;   // not on screen right now (tilemap cleared or BG hidden)
+        out[n].x = t->tilemapLeft * 8; out[n].y = t->tilemapTop * 8;
+        out[n].w = t->width * 8; out[n].h = t->height * 8;
+        out[n].bg = t->bg; out[n].dialogue = sPanels[i].dialogue;
         n++;
     }
     return n;
