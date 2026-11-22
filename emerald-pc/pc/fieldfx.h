@@ -34,6 +34,16 @@ struct PcFieldFx {
 };
 extern struct PcFieldFx gPcFieldFx;
 
+// Ambient soundscape inputs (fieldfx.c), read by the audio mixer.
+struct PcAmbient {
+    float waterL, waterR;   // nearby water on each side (0-1)
+    float trees;            // nearby trees and bushes
+    float open;             // open outdoor area (wind)
+    float rain, lava, cave, town;
+    int active;             // overworld visible
+};
+extern struct PcAmbient gPcAmbient;
+
 enum { PC_BSCENE_ROUTE, PC_BSCENE_TOWN, PC_BSCENE_SEA, PC_BSCENE_POND, PC_BSCENE_SAND,
        PC_BSCENE_MOUNTAIN, PC_BSCENE_CAVE, PC_BSCENE_INDOOR, PC_BSCENE_UNDERWATER, PC_BSCENE_TALLGRASS };
 // Battle scene data for the renderer (fieldfx.c, filled each battle frame).

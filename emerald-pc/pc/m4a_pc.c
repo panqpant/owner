@@ -906,7 +906,7 @@ static inline float SvfRun(struct Svf *f, float in, float g, float q, float *bpO
 }
 static inline float SvfG(double fc)
 {
-    double g = 2.0 * sin(M_PI * (fc < OUT_RATE * 0.2 ? fc : OUT_RATE * 0.2) / OUT_RATE);
+    double g = 2.0 * sin(M_PI * (fc < OUT_RATE * 0.1 ? fc : OUT_RATE * 0.1) / OUT_RATE);   // kept low: the filter is unstable near Nyquist
     return (float)g;
 }
 
@@ -1262,6 +1262,11 @@ static void MixDirectSound(struct SoundInfo *si, int n)
                 static const float sLayer[8] = { 0, 0.14f, 0.42f, 0, 0, 0, 0.38f, 0 };
                 float a, b, k = sLayer[syn->kind];
                 SynthSample(&sSyn[i], synHz, &a, &b);
+                if (!isfinite(a) || !isfinite(b) || fabsf(a) > 50 || fabsf(b) > 50)
+                {
+                    ResetVoice(&sSyn[i], syn->kind);
+                    a = b = 0;
+                }
                 sMixL[s] += a * syn->gain * k * vl;
                 sMixR[s] += b * syn->gain * k * vr;
             }
@@ -1634,6 +1639,151 @@ static inline float SoftClip(float x)
     return x < 0 ? -a : a;
 }
 
+
+// ---------------------------------------------------------------------------
+// Ambient soundscape (HD audio): synthesised waves, wind, birds, crickets,
+// rain, lava and cave drips, placed left/right by where they are, eased in
+// and out as the player moves, and silent in battles and menus.
+#include "fieldfx.h"
+#include <time.h>
+extern int gPcBattleFrame;
+int gPcAmbientOn = 1;
+static u32 sARng = 0x1234567;
+static inline float ARnd(void) { sARng = sARng * 1664525u + 1013904223u; return (float)((sARng >> 9) & 0xFFFF) / 32768.0f - 1.0f; }
+struct OnePole { float z; };
+static inline float LP(struct OnePole *f, float x, float k) { f->z += (x - f->z) * k; return f->z; }
+static float sAmbLevel[9];   // eased levels: waterL, waterR, wind, birds, crickets, rain, lava, cave, town
+static float AmbHour(void)
+{
+    const char *force = getenv("EMERALD_HOUR");
+    time_t t = time(NULL);
+    struct tm *lt = localtime(&t);
+    return force ? (float)atof(force) : lt->tm_hour + lt->tm_min / 60.0f;
+}
+static void MixAmbient(float *outL, float *outR, int n)
+{
+    static struct OnePole wv[2][3], wd[3], rn[2], lv[2], cv;
+    static float swell[2], swellT[2] = { 1, 3 }, windPh, cricketPh, cricketGate;
+    static float chirpT = 1.0f, chirpF, chirpA, chirpPan, chirpN;
+    static float dripT = 2.0f, dripF, dripA, dripPh, dripPan;
+    static float crackA, crackPan;
+    static float dt = 1.0f / OUT_RATE;
+    float target[9], h = AmbHour(), day, night;
+    int i, k;
+    const struct PcAmbient *a = &gPcAmbient;
+    int on = gPcHdAudio && gPcAmbientOn && a->active && !gPcBattleFrame;
+    day = (h > 6.0f && h < 19.0f) ? 1.0f : 0.0f;
+    night = (h > 20.0f || h < 5.0f) ? 1.0f : 0.0f;
+    target[0] = on ? a->waterL : 0; target[1] = on ? a->waterR : 0;
+    target[2] = on ? a->open * (0.35f + 0.65f * (1 - a->town)) : 0;
+    target[3] = on ? a->trees * day * (1 - a->rain) : 0;
+    target[4] = on ? (a->trees * 0.7f + a->open * 0.3f) * night * (1 - a->rain) : 0;
+    target[5] = on ? a->rain : 0; target[6] = on ? a->lava : 0; target[7] = on ? a->cave : 0;
+    target[8] = 0;
+    for (k = 0; k < 9; k++)
+        sAmbLevel[k] += (target[k] - sAmbLevel[k]) * 0.02f;   // ease over ~1 s of frames
+    for (i = 0; i < n; i++)
+    {
+        float L = 0, R = 0, nz;
+        // Waves: low rolling noise with slow, irregular swells on each side.
+        for (k = 0; k < 2; k++)
+        {
+            float lvl = sAmbLevel[k], w, e;
+            if (lvl < 0.002f) continue;
+            swellT[k] -= dt;
+            if (swellT[k] <= 0) swellT[k] = 4.0f + 3.0f * (ARnd() + 1);
+            e = sinf(3.14159f * fminf(1.0f, swellT[k] / 3.0f));
+            swell[k] += (e * e - swell[k]) * 0.0005f;
+            nz = ARnd();
+            w = LP(&wv[k][0], nz, 0.02f) * 3.0f + (LP(&wv[k][1], nz, 0.25f) - LP(&wv[k][2], nz, 0.05f)) * 0.5f * swell[k];
+            w *= (0.35f + 0.65f * swell[k]) * lvl * 0.22f;
+            if (k == 0) L += w; else R += w;
+        }
+        // Wind: band-limited noise that gusts slowly.
+        if (sAmbLevel[2] > 0.002f)
+        {
+            float g;
+            windPh += dt * 0.13f;
+            g = 0.45f + 0.35f * sinf(windPh * 6.283f) + 0.2f * sinf(windPh * 17.0f);
+            nz = LP(&wd[0], ARnd(), 0.04f + 0.03f * g) - LP(&wd[1], ARnd(), 0.004f);
+            L += nz * g * sAmbLevel[2] * 0.22f;
+            R += LP(&wd[2], nz, 0.5f) * g * sAmbLevel[2] * 0.22f;
+        }
+        // Birds: short chirp phrases from random directions.
+        if (sAmbLevel[3] > 0.01f)
+        {
+            chirpT -= dt;
+            if (chirpT <= 0)
+            {
+                if (chirpN <= 0) { chirpN = 2 + (int)((ARnd() + 1) * 2); chirpPan = ARnd() * 0.8f; chirpF = 2600 + 1400 * ARnd(); }
+                chirpN--;
+                chirpA = 1.0f;
+                chirpT = chirpN > 0 ? 0.09f + 0.05f * (ARnd() + 1) : 1.5f + 3.0f * (ARnd() + 1);
+            }
+            if (chirpA > 0.0005f)
+            {
+                static float ph;
+                float f = chirpF * (0.75f + 0.5f * chirpA);
+                ph += f * dt;
+                if (ph > 1) ph -= 1;
+                nz = sinf(ph * 6.283f) * chirpA * (1 - chirpA) * 4.0f * sAmbLevel[3] * 0.12f;
+                L += nz * (1 - chirpPan) * 0.5f; R += nz * (1 + chirpPan) * 0.5f;
+                chirpA *= 0.9993f;
+            }
+        }
+        // Crickets at night: a pulsed high tone in bursts.
+        if (sAmbLevel[4] > 0.01f)
+        {
+            static float ph;
+            cricketPh += dt;
+            cricketGate = fmodf(cricketPh, 1.1f) < 0.45f ? 1.0f : 0.0f;
+            ph += 4700 * dt; if (ph > 1) ph -= 1;
+            nz = sinf(ph * 6.283f) * (sinf(cricketPh * 6.283f * 28) > 0.3f ? 1.0f : 0.0f) * cricketGate;
+            L += nz * sAmbLevel[4] * 0.03f; R += nz * sAmbLevel[4] * 0.025f;
+        }
+        // Rain: dense hiss plus drops.
+        if (sAmbLevel[5] > 0.002f)
+        {
+            float hL = ARnd() - LP(&rn[0], ARnd(), 0.2f), hR = ARnd() - LP(&rn[1], ARnd(), 0.2f);
+            L += hL * sAmbLevel[5] * 0.1f; R += hR * sAmbLevel[5] * 0.1f;
+            if (ARnd() > 0.9993f) { float d = ARnd() * 0.08f * sAmbLevel[5]; L += d; R += d * 0.7f; }
+        }
+        // Lava: deep rumble and crackles.
+        if (sAmbLevel[6] > 0.002f)
+        {
+            nz = LP(&lv[0], ARnd(), 0.004f) * 9.0f;
+            L += nz * sAmbLevel[6] * 0.08f; R += nz * sAmbLevel[6] * 0.08f;
+            if (ARnd() > 0.9996f) { crackA = 1.0f; crackPan = ARnd(); }
+            if (crackA > 0.001f) { float c = ARnd() * crackA * 0.12f * sAmbLevel[6]; L += c * (1 - crackPan); R += c * (1 + crackPan); crackA *= 0.995f; }
+        }
+        // Caves: echoing drips over a faint room tone.
+        if (sAmbLevel[7] > 0.002f)
+        {
+            dripT -= dt;
+            if (dripT <= 0) { dripT = 0.8f + 2.5f * (ARnd() + 1); dripA = 1.0f; dripF = 900 + 500 * ARnd(); dripPh = 0; dripPan = ARnd() * 0.9f; }
+            if (dripA > 0.0005f)
+            {
+                float f = dripF * (1.0f + 0.6f * dripA);
+                dripPh += f * dt;
+                nz = sinf(dripPh * 6.283f) * dripA * 0.1f * sAmbLevel[7];
+                L += nz * (1 - dripPan); R += nz * (1 + dripPan);
+                dripA *= 0.9992f;
+            }
+            nz = LP(&cv, ARnd(), 0.01f) * 2.0f;
+            L += nz * sAmbLevel[7] * 0.012f; R += nz * sAmbLevel[7] * 0.012f;
+        }
+        if (!isfinite(L) || !isfinite(R))
+        {
+            static int told;
+            if (!told++) fprintf(stderr, "ambient NaN: lv %g %g %g %g %g %g %g %g\n", sAmbLevel[0], sAmbLevel[1], sAmbLevel[2], sAmbLevel[3], sAmbLevel[4], sAmbLevel[5], sAmbLevel[6], sAmbLevel[7]);
+            L = R = 0;
+        }
+        outL[i] = L * 1.6f;
+        outR[i] = R * 1.6f;
+    }
+}
+
+static float *sAmbBufL, *sAmbBufR;
 void M4aPcSetHdAudio(int on) { gPcHdAudio = on; }
 
 // SoundMain: called from the game's VBlank handler.
@@ -1695,11 +1845,17 @@ void SoundMain(void)
                 PeakInit(&sPresence, 2600, 0.9, 2.0);
                 init = 1;
             }
+            {
+                static float aL[MAX_FRAME_SAMPLES], aR[MAX_FRAME_SAMPLES];
+                MixAmbient(aL, aR, n);
+                sAmbBufL = aL; sAmbBufR = aR;
+            }
             for (i = 0; i < n; i++)
             {
                 float l = dsL[i] * 4.0f + sMixL[i] * 4.0f;
                 float r = dsR[i] * 4.0f + sMixR[i] * 4.0f;
                 static float hp, hpx;
+                if (getenv("EMERALD_AMB_ONLY")) l = r = 0;
                 float rin = (l + r) * 0.5f * 0.015f;
                 hp = 0.974f * (hp + rin - hpx); hpx = rin;   // keep bass out of the reverb (~200 Hz high-pass)
                 rin = hp;
@@ -1721,8 +1877,10 @@ void SoundMain(void)
                     l *= gain;
                     r *= gain;
                 }
-                sOut[i * 2] = (s16)(SoftClip(l * 48.0f / 32768.0f) * 32767.0f);
-                sOut[i * 2 + 1] = (s16)(SoftClip(r * 48.0f / 32768.0f) * 32767.0f);
+                if (!isfinite(l)) l = 0;
+                if (!isfinite(r)) r = 0;
+                sOut[i * 2] = (s16)(SoftClip(l * 48.0f / 32768.0f + sAmbBufL[i]) * 32767.0f);
+                sOut[i * 2 + 1] = (s16)(SoftClip(r * 48.0f / 32768.0f + sAmbBufR[i]) * 32767.0f);
             }
             FrontendAudio(sOut, n);
             si->ident = ID_NUMBER;

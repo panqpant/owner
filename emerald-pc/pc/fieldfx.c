@@ -27,6 +27,7 @@
 #include "fieldfx.h"
 
 struct PcFieldFx gPcFieldFx;
+struct PcAmbient gPcAmbient;
 struct PcBattleFx gPcBattleFx;
 int gPcHdEffects;
 
@@ -107,6 +108,33 @@ void PcUpdateFieldFx(void)
                     f |= PC_CELL_PUDDLE;
                 fx->grid[row][col] = f;
             }
+    }
+
+    // Ambient sound: what is around the player, and on which side.
+    {
+        struct PcAmbient *a = &gPcAmbient;
+        int margin = (PcFieldMargin() + 15) / 16 + 1, row, col;
+        float wl = 0, wr = 0, tr = 0, sum = 0;
+        for (row = 0; row < PC_GRID_H; row++)
+            for (col = 0; col < PC_GRID_W; col++)
+            {
+                float dx = col - margin, dy = row - 2, w = 1.0f / (1.0f + (dx * dx + dy * dy) / 20.0f);
+                u8 f = fx->grid[row][col];
+                sum += w;
+                if (f & PC_CELL_WATER) { float p = dx / 6.0f; p = p < -1 ? -1 : p > 1 ? 1 : p; wl += w * (1 - p) * 0.5f; wr += w * (1 + p) * 0.5f; }
+                if ((f & PC_CELL_SOLID) || (f & PC_CELL_GRASS)) tr += w;
+            }
+        a->waterL = wl / sum * 3.0f; a->waterR = wr / sum * 3.0f;
+        if (a->waterL > 1) a->waterL = 1;
+        if (a->waterR > 1) a->waterR = 1;
+        a->trees = tr / sum * 1.5f; if (a->trees > 1) a->trees = 1;
+        a->open = fx->outdoors ? 1.0f - a->trees * 0.6f : 0.0f;
+        a->rain = fx->weather == PC_WEATHER_RAIN ? 0.6f : fx->weather == PC_WEATHER_DOWNPOUR ? 1.0f : 0.0f;
+        a->lava = fx->heat ? 1.0f : 0.0f;
+        a->cave = gMapHeader.mapType == MAP_TYPE_UNDERGROUND ? 1.0f : 0.0f;
+        a->town = (gMapHeader.mapType == MAP_TYPE_TOWN || gMapHeader.mapType == MAP_TYPE_CITY) ? 1.0f : 0.0f;
+        if (!fx->outdoors) { a->trees = 0; a->waterL *= 0.3f; a->waterR *= 0.3f; }
+        a->active = 1;
     }
 
     // Doors and other entrances glow at night.
