@@ -49,6 +49,7 @@ the game's assets.
 | F8 | Camera tilt presets |
 | Page Up/Down, I/K, mouse wheel, right-drag, right stick | Tilt the camera |
 | F11 or Alt+Enter | Fullscreen |
+| F10 (or Back+Start, or Guide) | Settings |
 | F12 | Screenshot |
 | Esc | Quit |
 

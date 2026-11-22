@@ -1648,6 +1648,7 @@ static inline float SoftClip(float x)
 #include <time.h>
 extern int gPcBattleFrame;
 int gPcAmbientOn = 1;
+float gPcAmbientVol = 1.0f;
 static u32 sARng = 0x1234567;
 static inline float ARnd(void) { sARng = sARng * 1664525u + 1013904223u; return (float)((sARng >> 9) & 0xFFFF) / 32768.0f - 1.0f; }
 struct OnePole { float z; };
@@ -1778,8 +1779,8 @@ static void MixAmbient(float *outL, float *outR, int n)
             if (!told++) fprintf(stderr, "ambient NaN: lv %g %g %g %g %g %g %g %g\n", sAmbLevel[0], sAmbLevel[1], sAmbLevel[2], sAmbLevel[3], sAmbLevel[4], sAmbLevel[5], sAmbLevel[6], sAmbLevel[7]);
             L = R = 0;
         }
-        outL[i] = L * 1.6f;
-        outR[i] = R * 1.6f;
+        outL[i] = L * 1.6f * gPcAmbientVol;
+        outR[i] = R * 1.6f * gPcAmbientVol;
     }
 }
 

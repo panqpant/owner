@@ -275,8 +275,24 @@ void PcSetFieldMaps(uint16_t *bg1, uint16_t *bg2, uint16_t *bg3, int base1, int 
 
 int gPcOutdoors;
 void PcMarkBattleFrame(void) { sBattleSeen = 1; }
-int gPcIntroSerial;
-void PcBattleIntro(void) { gPcIntroSerial++; }
+int gPcIntroSerial, gPcIntroKind;
+// Wild battles get one of five gentle intros, trainers one of four bolder
+// ones, legendaries and gym leaders the full shatter.
+void PcBattleIntro(void)
+{
+    extern uint32_t gBattleTypeFlags;
+    static uint32_t rng = 2463534242u;
+    rng ^= rng << 13; rng ^= rng >> 17; rng ^= rng << 5;
+    if (gBattleTypeFlags & ((1u << 12) | (1u << 13) | (1u << 14) | (1u << 28) | (1u << 29) | (1u << 30))   /* Kyogre/Groudon, legendary, Regi, Groudon, Kyogre, Rayquaza */)
+        gPcIntroKind = 9;
+    else if (gBattleTypeFlags & 0x8 /* TRAINER */)
+        gPcIntroKind = 5 + rng % 4;
+    else
+        gPcIntroKind = rng % 5;
+    if (getenv("EMERALD_INTRO"))
+        gPcIntroKind = atoi(getenv("EMERALD_INTRO"));
+    gPcIntroSerial++;
+}
 int gPcMapPopup;
 void PcSetMapPopup(int shown) { gPcMapPopup = shown; }
 void PcSetOutdoors(int outdoors) { gPcOutdoors = outdoors; }

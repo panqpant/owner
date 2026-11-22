@@ -119,6 +119,8 @@ static void Screenshot(void)
     SaveScreenshot(path);
 }
 
+#include "settings_ui.c"
+
 int FrontendInit(int argc, char **argv)
 {
     SDL_AudioSpec want, have;
@@ -212,6 +214,9 @@ int FrontendInit(int argc, char **argv)
         if (sGl && !getenv("EMERALD_NOGL") && HdInit() == 0)
         {
             sUseGl = 1;
+            LoadSettings();
+            if (getenv("EMERALD_MENU"))
+                MenuOpen(1);
             // Vsync (adaptive where supported) to avoid tearing; frame pacing
             // to the GBA's 59.73 Hz is still done by the timer below.
             if (SDL_GL_SetSwapInterval(-1) != 0)
@@ -301,6 +306,14 @@ static void PumpEvents(void)
     SDL_Event e;
     while (SDL_PollEvent(&e))
     {
+        if (MenuEvent(&e))
+            continue;
+        if ((e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_F10 && sUseGl)
+         || (e.type == SDL_CONTROLLERBUTTONDOWN && e.cbutton.button == SDL_CONTROLLER_BUTTON_GUIDE && sUseGl))
+        {
+            MenuOpen(1);
+            continue;
+        }
         switch (e.type)
         {
         case SDL_QUIT:
@@ -504,16 +517,18 @@ uint16_t FrontendPollKeys(void)
         return ScriptStep(SaveScreenshot, TestHookRun, &sQuit);
     }
 
-    if (k[SDL_SCANCODE_X]) keys |= PC_KEY_A;
-    if (k[SDL_SCANCODE_Z]) keys |= PC_KEY_B;
-    if (k[SDL_SCANCODE_RETURN]) keys |= PC_KEY_START;
-    if (k[SDL_SCANCODE_BACKSPACE]) keys |= PC_KEY_SELECT;
-    if (k[SDL_SCANCODE_RIGHT]) keys |= PC_KEY_RIGHT;
-    if (k[SDL_SCANCODE_LEFT]) keys |= PC_KEY_LEFT;
-    if (k[SDL_SCANCODE_UP]) keys |= PC_KEY_UP;
-    if (k[SDL_SCANCODE_DOWN]) keys |= PC_KEY_DOWN;
-    if (k[SDL_SCANCODE_A]) keys |= PC_KEY_L;
-    if (k[SDL_SCANCODE_S]) keys |= PC_KEY_R;
+    if (sMenuOpen)
+        return 0;
+    {
+        int i;
+        for (i = 0; i < 10; i++)
+            if (k[sKeyMap[i]]) keys |= sButtonBits[i];
+    }
+    if (sPad && SDL_GameControllerGetButton(sPad, SDL_CONTROLLER_BUTTON_BACK) && SDL_GameControllerGetButton(sPad, SDL_CONTROLLER_BUTTON_START))
+    {
+        MenuOpen(1);   // Back + Start opens the settings
+        return 0;
+    }
     sFastForward = k[SDL_SCANCODE_TAB];
 
     if (sPad)

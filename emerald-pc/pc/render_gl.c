@@ -1499,7 +1499,10 @@ static const char *kPresent =
     "uniform vec3 uSoftSides;\n"
     "uniform sampler2D uSnap;\n"     // the screen as the battle intro began
     "uniform float uShatter;\n"      // intro time 0-1 (< 0: off)
-    "uniform float uAspect;\n"  // battles: x = left edge u, y = right edge u, z = message box top (v, from top)
+    "uniform float uAspect;\n"
+    "uniform int uIntroKind;\n"
+    "uniform sampler2D uOverlay;\n"   // settings screen
+    "uniform int uOverlayOn;\n"  // battles: x = left edge u, y = right edge u, z = message box top (v, from top)
     "void main() {\n"
     "  vec2 uv = vec2(vUv.x * uUScale, uFlip > 0.5 ? 1.0 - vUv.y : vUv.y);\n"
     "  vec3 c = texture(uTex, uv).rgb;\n"
@@ -1562,12 +1565,13 @@ static const char *kPresent =
     "  }\n"
     // Battle intro: the screen cracks, then breaks into shards that spin
     // away toward the camera, revealing the game's own transition behind.
-    "  if (uShatter >= 0.0) {\n"
-    "    vec2 grid = vec2(9.0, 6.0);\n"
+    "  if (uShatter >= 0.0 && (uIntroKind == 5 || uIntroKind == 9)) {\n"
+    "    vec2 grid = uIntroKind == 9 ? vec2(12.0, 8.0) : vec2(9.0, 6.0);\n"
     "    float t = uShatter;\n"
     "    float fly = smoothstep(0.18, 1.0, t);\n"
     "    vec4 shard = vec4(0.0);\n"
-    "    for (int cx = 0; cx < 9; cx++) for (int cy = 0; cy < 6; cy++) {\n"
+    "    for (int cx = 0; cx < 12; cx++) for (int cy = 0; cy < 8; cy++) {\n"
+    "      if (float(cx) >= grid.x || float(cy) >= grid.y) continue;\n"
     "      vec2 cell = vec2(float(cx), float(cy));\n"
     "      float h = fract(sin(dot(cell, vec2(12.9898, 78.233))) * 43758.5453);\n"
     "      float h2 = fract(h * 91.7);\n"
@@ -1598,7 +1602,62 @@ static const char *kPresent =
     "    }\n"
     "    if (shard.a > 0.0) c = shard.rgb;\n"
     "    else c *= smoothstep(0.1, 0.6, t);\n"   // behind the shards: the game's transition
+    "    if (uIntroKind == 9) c += vec3(1.0) * (1.0 - smoothstep(0.0, 0.12, t)) * 0.9;\n"   // legendary: a flash first
     "  }\n"
+    "  if (uShatter >= 0.0 && uIntroKind != 5 && uIntroKind != 9) {\n"
+    "    float t = uShatter;\n"
+    "    vec2 sv = vec2(uv.x * uUScale, uFlip > 0.5 ? 1.0 - uv.y : uv.y);\n"
+    "    vec2 ctr = vec2(0.5 * uUScale, 0.5);\n"
+    "    vec3 snap = vec3(0.0); float keep = 0.0;\n"   // keep: how much of the old screen still shows
+    "    if (uIntroKind == 0) {\n"   // wild: soft zoom blur into a white bloom
+    "      vec3 acc = vec3(0.0);\n"
+    "      for (int k = 0; k < 10; k++) acc += texture(uSnap, ctr + (sv - ctr) * (1.0 - t * 0.35 * float(k) / 9.0)).rgb;\n"
+    "      snap = mix(acc / 10.0, vec3(1.0), smoothstep(0.35, 0.8, t) * 0.8); keep = 1.0 - smoothstep(0.7, 1.0, t);\n"
+    "    } else if (uIntroKind == 1) {\n"   // wild: iris closing on the centre
+    "      float rad = mix(1.0, 0.0, smoothstep(0.0, 0.85, t));\n"
+    "      float d = length((uv - 0.5) * vec2(uAspect, 1.0));\n"
+    "      snap = texture(uSnap, sv).rgb; keep = 1.0 - smoothstep(rad - 0.04, rad + 0.04, d);\n"
+    "      snap *= keep; keep = max(keep, 1.0 - smoothstep(0.85, 1.0, t));\n"
+    "    } else if (uIntroKind == 2) {\n"   // wild: water ripple that washes the scene away
+    "      float d = length((uv - 0.5) * vec2(uAspect, 1.0));\n"
+    "      vec2 o = normalize(uv - 0.5 + 0.0001) * sin(d * 40.0 - t * 18.0) * 0.012 * t;\n"
+    "      snap = mix(texture(uSnap, sv + o).rgb, vec3(0.85, 0.92, 1.0), smoothstep(0.4, 0.9, t) * 0.7);\n"
+    "      keep = 1.0 - smoothstep(0.75, 1.0, t);\n"
+    "    } else if (uIntroKind == 3) {\n"   // wild: a band of light sweeps across
+    "      float x = uv.x + uv.y * 0.4;\n"
+    "      float front = mix(-0.3, 1.7, t);\n"
+    "      snap = texture(uSnap, sv).rgb + vec3(1.0, 0.95, 0.8) * exp(-pow((x - front) * 8.0, 2.0)) * 0.9;\n"
+    "      keep = 1.0 - smoothstep(front - 0.1, front + 0.02, x) * 0.0 - smoothstep(0.0, 0.2, front - x);\n"
+    "      keep = clamp(keep, 0.0, 1.0);\n"
+    "    } else if (uIntroKind == 4) {\n"   // wild: dissolves into soft points
+    "      vec2 cell = floor(uv * vec2(uAspect, 1.0) * 60.0);\n"
+    "      float h = fract(sin(dot(cell, vec2(12.9898, 78.233))) * 43758.5453);\n"
+    "      snap = texture(uSnap, sv).rgb; keep = 1.0 - smoothstep(h * 0.8, h * 0.8 + 0.15, t);\n"
+    "    } else if (uIntroKind == 6) {\n"   // trainer: horizontal slices slide apart
+    "      float band = floor(uv.y * 16.0);\n"
+    "      float dir = mod(band, 2.0) < 1.0 ? 1.0 : -1.0;\n"
+    "      float sl = pow(smoothstep(0.1, 0.9, t), 2.0) * 1.2 * dir;\n"
+    "      vec2 q = vec2(sv.x - sl * uUScale, sv.y);\n"
+    "      snap = texture(uSnap, q).rgb; keep = (q.x >= 0.0 && q.x <= uUScale) ? 1.0 : 0.0;\n"
+    "    } else if (uIntroKind == 7) {\n"   // trainer: spiral twist into the centre
+    "      vec2 d = (uv - 0.5) * vec2(uAspect, 1.0);\n"
+    "      float a = t * t * 9.0 * (1.0 - length(d));\n"
+    "      d = mat2(cos(a), sin(a), -sin(a), cos(a)) * d / max(1.0 - t * 0.9, 0.05);\n"
+    "      vec2 q = 0.5 + d / vec2(uAspect, 1.0);\n"
+    "      snap = texture(uSnap, vec2(q.x * uUScale, uFlip > 0.5 ? 1.0 - q.y : q.y)).rgb;\n"
+    "      keep = (q.x >= 0.0 && q.x <= 1.0 && q.y >= 0.0 && q.y <= 1.0) ? 1.0 - smoothstep(0.8, 1.0, t) : 0.0;\n"
+    "    } else {\n"   // trainer: zoom punch with speed lines
+    "      vec2 d = uv - 0.5;\n"
+    "      float z = 1.0 + pow(t, 3.0) * 6.0;\n"
+    "      snap = texture(uSnap, ctr + (sv - ctr) / z).rgb;\n"
+    "      float ang = atan(d.y, d.x);\n"
+    "      float lines = step(0.8, fract(sin(floor(ang * 40.0) * 91.3) * 43758.5)) * smoothstep(0.1, 0.5, length(d));\n"
+    "      snap = mix(snap, vec3(1.0), lines * smoothstep(0.1, 0.4, t) * 0.8);\n"
+    "      keep = 1.0 - smoothstep(0.75, 1.0, t);\n"
+    "    }\n"
+    "    c = mix(c, snap, keep);\n"
+    "  }\n"
+    "  if (uOverlayOn != 0) { vec4 o = texture(uOverlay, vec2(vUv.x, 1.0 - vUv.y)); c = mix(c, o.rgb, o.a); }\n"
     "  oColor = vec4(c, 1.0);\n"
     "}\n";
 
@@ -1689,7 +1748,29 @@ static const char *kGi =
     "}\n";
 
 static GLuint sProgGi, sGiTex, sGiFbo;
-static GLuint sSnapTex;
+static GLuint sSnapTex, sOverlayTex;
+static int sOverlayOn, sGiEnabled = 1, sShatterEnabled = 1;
+void HdSetGi(int on) { sGiEnabled = on; }
+int HdGetGi(void) { return sGiEnabled; }
+void HdSetShatter(int on) { sShatterEnabled = on; }
+int HdGetShatter(void) { return sShatterEnabled; }
+void HdSetOverlay(const uint32_t *rgba, int w, int h)
+{
+    sOverlayOn = rgba != NULL;
+    if (!rgba)
+        return;
+    if (!sOverlayTex)
+    {
+        glGenTextures(1, &sOverlayTex);
+        glBindTexture(GL_TEXTURE_2D, sOverlayTex);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    }
+    glBindTexture(GL_TEXTURE_2D, sOverlayTex);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, w, h, 0, GL_BGRA, GL_UNSIGNED_BYTE, rgba);
+}
 static int sSnapW, sSnapH, sIntroSerial, sIntroFrame = -1000;
 extern int gPcIntroSerial;
 static float sGiStr;
@@ -2175,7 +2256,7 @@ static void RenderGi(void)
         }
         if (gPcFieldFx.heat) str = str > 0.8f ? str : 0.8f;
     }
-    if (getenv("EMERALD_NOGI")) str = 0;
+    if (getenv("EMERALD_NOGI") || !sGiEnabled) str = 0;
     if (getenv("EMERALD_GIDEBUG")) { static int n; if (n++ % 60 == 0) fprintf(stderr, "gi: field=%d mt=%d night=%.2f str=%.2f lights=%d player=%d,%d margin=%d\n", field, mt, sNight, str, gPcFieldFx.numLights, gPcFieldFx.playerX, gPcFieldFx.playerY, (gPcScreenW - GBA_W) / 2); }
     sGiStr = str;
     if (str <= 0.01f)
@@ -2276,7 +2357,7 @@ static void RenderHd(const uint32_t *frame, int outW, int outH)
     if (gPcIntroSerial != sIntroSerial)
     {
         sIntroSerial = gPcIntroSerial;
-        if (sCompTex && sCompW > 0 && !getenv("EMERALD_NOSHATTER"))
+        if (sCompTex && sCompW > 0 && sShatterEnabled && !getenv("EMERALD_NOSHATTER"))
         {
             if (!sSnapTex || sSnapW != sCompW || sSnapH != sCompH)
             {
@@ -2595,6 +2676,11 @@ static void DrawPresent(int hdMode, int winW, int winH)
     glViewport(x, y, w, h);
     glUseProgram(sProgPresent);
     glUniform1i(glGetUniformLocation(sProgPresent, "uTex"), 0);
+    glUniform1i(glGetUniformLocation(sProgPresent, "uOverlay"), 2);
+    glUniform1i(glGetUniformLocation(sProgPresent, "uOverlayOn"), sOverlayOn);
+    glActiveTexture(GL_TEXTURE0 + 2);
+    glBindTexture(GL_TEXTURE_2D, sOverlayTex);
+    glActiveTexture(GL_TEXTURE0);
     glActiveTexture(GL_TEXTURE0);
     if (hdMode)
     {
@@ -2605,9 +2691,14 @@ static void DrawPresent(int hdMode, int winW, int winH)
         glUniform1f(glGetUniformLocation(sProgPresent, "uBloom"), sGrade ? 0.25f + sNight * 0.9f : 0.0f);
         glUniform1f(glGetUniformLocation(sProgPresent, "uSharpen"), sGrade ? 1.0f : 0.0f);
         {
-            float t = ((int)PortFrameCount() - sIntroFrame) / 54.0f;
+            extern int gPcIntroKind;
+            float t = ((int)PortFrameCount() - sIntroFrame) / (gPcIntroKind < 5 ? 48.0f : 54.0f);
             glUniform1f(glGetUniformLocation(sProgPresent, "uShatter"), sSnapTex && t >= 0 && t < 1 ? t : -1.0f);
             glUniform1f(glGetUniformLocation(sProgPresent, "uAspect"), (float)w / (h > 0 ? h : 1));
+            {
+                extern int gPcIntroKind;
+                glUniform1i(glGetUniformLocation(sProgPresent, "uIntroKind"), gPcIntroKind);
+            }
             glUniform1i(glGetUniformLocation(sProgPresent, "uSnap"), 1);
             glActiveTexture(GL_TEXTURE0 + 1);
             glBindTexture(GL_TEXTURE_2D, sSnapTex);
