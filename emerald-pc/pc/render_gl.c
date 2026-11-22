@@ -305,8 +305,6 @@ static const char *kComposite =
     "uniform vec4 uKey;\n"
     "uniform float uFlash;\n"
     "uniform vec2 uPlayer;\n"
-    "uniform float uRelief;\n"
-    "uniform sampler2D uObj;\n"     // 3D world: height of each native pixel (R * 255 = px above its base)     // 3D world: camera lean per px of height (0 = flat)
     "uniform vec3 uWake[12];\n"     // player's recent world positions (map px) and when (uTime); z < 0 unused
     "uniform vec3 uLife;\n"
     "uniform vec4 uInSun;\n"
@@ -401,14 +399,6 @@ static const char *kComposite =
     "  float a = float(Cell(i) >> 6), b = float(Cell(i + ivec2(1, 0)) >> 6);\n"
     "  float c = float(Cell(i + ivec2(0, 1)) >> 6), d = float(Cell(i + ivec2(1, 1)) >> 6);\n"
     "  return mix(mix(a, b, f.x), mix(c, d, f.x), f.y) / 3.0;\n"
-    "}\n"
-    // 3D world: height (px) of scenery at screen point g, measured on the CPU
-    // from the art (see UploadObjectMask).
-    "float HeightAt(vec2 g) {\n"
-    "  float h = texelFetch(uObj, clamp(ivec2(g + vec2(uMargin, 0.0)), ivec2(0), ivec2(uDim) - 1), 0).r * 255.0;\n"
-    "  if (h > 0.0) return h;\n"
-    "  vec2 cp = CellPos(g);\n"
-    "  return (Cell(ivec2(floor(cp))) & 16) != 0 ? 6.0 * (1.0 - fract(cp.y)) : 0.0;\n"   // ledges: a low step
     "}\n"
     "float LumL(int k, vec2 q, float centre) {\n"   // relief height: art luminance for scenery, outline for sprites
     "  if (k == 4) return texture(uLayer[4], q).a;\n"
@@ -814,29 +804,6 @@ static const char *kComposite =
     "    uvc = uCineZoom.xy + (uvc - uCineZoom.xy) / uCineZoom.z;\n"
     "    npc = clamp(ivec2(floor(uvc * uDim)), ivec2(0), ivec2(uDim) - 1);\n"
     "  }\n"
-    // ---- 3D world: a camera above the player looks straight down at the
-    // height field; tall scenery leans out from the centre of the screen and
-    // hides the ground behind it. March down the ray by height, first hit wins. ----
-    "  bool relief = false; float reliefSide = 0.0;\n"
-    "  if (uRelief > 0.0 && uFieldFx != 0 && uBattle == 0 && uMenu == 0) {\n"
-    "    vec2 o = uvc * uDim - vec2(uMargin, 0.0);\n"
-    "    vec2 C = vec2(uDim.x * 0.5 - uMargin, uDim.y * 0.5);\n"
-    "    const int N = 16; const float HMAX = 40.0;\n"
-    "    float hit = 0.0, stp = HMAX / float(N);\n"
-    "    for (int i = 0; i < N; i++) {\n"
-    "      float h = HMAX - float(i) * stp;\n"
-    "      if (HeightAt(C + (o - C) / (1.0 + uRelief * h)) >= h) { hit = h; break; }\n"
-    "    }\n"
-    "    if (hit > 0.0) {\n"   // refine between the hit and the step above it
-    "      float lo = hit, hi = min(hit + stp, HMAX);\n"
-    "      for (int j = 0; j < 4; j++) { float m = 0.5 * (lo + hi); if (HeightAt(C + (o - C) / (1.0 + uRelief * m)) >= m) lo = m; else hi = m; }\n"
-    "      vec2 p = C + (o - C) / (1.0 + uRelief * lo);\n"
-    "      uvc = (p + vec2(uMargin, 0.0)) / uDim;\n"
-    "      npc = clamp(ivec2(floor(uvc * uDim)), ivec2(0), ivec2(uDim) - 1);\n"
-    "      relief = true;\n"
-    "      reliefSide = clamp((HeightAt(p) - lo - 3.0) / 10.0, 0.0, 1.0);\n"   // entered through a wall: shade it, don't trust the stretched art
-    "    }\n"
-    "  }\n"
     "  if (uFieldFx != 0 && uLife.z > 0.0 && np.y > 0) {\n"   // heat rising off the ground
     "    vec2 gq = uv * uDim;\n"
     "    uvc.x += sin(gq.y * 0.55 + uTime * 5.5 + sin(gq.x * 0.08 + uTime) * 2.0) * 0.32 / uDim.x;\n"
@@ -880,9 +847,9 @@ static const char *kComposite =
     "  }\n"
     "  gZoomField = camOn && uBattle == 0;\n"
     "  vec2 uvScreen = uv;\n"
-    "  if (camOn || relief) uv = uvc;\n"   // every scene effect below works in the camera's view
+    "  if (camOn) uv = uvc;\n"   // every scene effect below works in the camera's view
     "  vec2 gp = vec2(vUv.x * uDim.x - uMargin, (1.0 - vUv.y) * uDim.y);\n"
-    "  if (camOn || relief) gp = uvc * uDim - vec2(uMargin, 0.0);\n"
+    "  if (camOn) gp = uvc * uDim - vec2(uMargin, 0.0);\n"
     "  vec2 wp = gp - uGridPos.xy + uGridPos.zw * 16.0;\n"   // world position (map pixels)
     "  int here = uFieldFx != 0 ? Cell(ivec2(floor(CellPos(gp)))) : 0;\n"
     // Wind: grass and tree leaves sway, anchored at the top and bottom of each tile.
@@ -1825,7 +1792,6 @@ static const char *kComposite =
     "      res = pc;\n"
     "    }\n"
     "  }\n"
-    "  if (relief && top != 4) res *= 1.0 - 0.45 * reliefSide;\n"   // side walls of raised scenery, in shade
     "  for (int k = ti - 1; k >= 0; k--) if (order[k] == 0) { vec4 c = lay[0]; res = res * (1.0 - c.a) + c.rgb; }\n"
     "  oColor = vec4(res, 1.0);\n"
     "}\n";
@@ -2167,126 +2133,6 @@ static int sCompW, sCompH; // composite size = on-screen size of the game image
 static int sLastWinW, sLastWinH;
 static int sGrade = 1;
 static int sLighting = 1;
-static float sRelief = 0.002f;   // 3D world: camera lean per px of height
-static GLuint sObjTex;
-
-// 3D world: the height of every pixel. In solid tiles (and tiles sandwiched
-// between solid ones, like a door in a facade), colours that also appear in
-// the open ground beside the tile are ground showing through (grass around a
-// tree's canopy); everything else is the object. The art is palette-indexed,
-// so exact colour matches are reliable. A 3x3 majority pass closes stray
-// holes; then, as the art is a 3/4 view, each object pixel's height is how far
-// it is above the object's base: the run of object pixels below it.
-static void UploadObjectMask(void)
-{
-    static unsigned char mask[GBA_H][PC_MAX_W][2], raw[GBA_H][PC_MAX_W];
-    const struct PcFieldFx *f = &gPcFieldFx;
-    int m = (gPcScreenW - GBA_W) / 2, row, col, x, y;
-    memset(raw, 0, sizeof(raw));
-    for (row = 0; row < PC_GRID_H; row++)
-        for (col = 0; col < PC_GRID_W; col++)
-        {
-            static const int nb[4][2] = { { 0, 1 }, { -1, 0 }, { 1, 0 }, { 0, -1 } };
-            uint32_t ground[32];
-            int ng = 0, k, x0 = f->gridX + col * 16 + m, y0 = f->gridY + row * 16;
-            if (!(f->grid[row][col] & PC_CELL_SOLID)
-             && !(row > 0 && row < PC_GRID_H - 1 && (f->grid[row - 1][col] & PC_CELL_SOLID) && (f->grid[row + 1][col] & PC_CELL_SOLID)))
-                continue;
-            for (k = 0; k < 4 && ng < 24; k++)   // colours of the open ground beside it
-            {
-                int r2 = row + nb[k][1], c2 = col + nb[k][0];
-                if (r2 < 0 || c2 < 0 || r2 >= PC_GRID_H || c2 >= PC_GRID_W || (f->grid[r2][c2] & PC_CELL_SOLID))
-                    continue;
-                for (y = 1; y < 16; y += 2)
-                    for (x = 1; x < 16; x += 2)
-                    {
-                        int px = f->gridX + c2 * 16 + m + x, py = f->gridY + r2 * 16 + y, l, i;
-                        uint32_t c = 0;
-                        if (px < 0 || py < 0 || px >= gPcScreenW || py >= GBA_H) continue;
-                        for (l = 1; l <= 3 && !c; l++) if (gPpuLayers.layer[l][py][px] >> 24) c = gPpuLayers.layer[l][py][px] & 0xFFFFFF;
-                        for (i = 0; i < ng && ground[i] != c; i++) ;
-                        if (i == ng && ng < 32) ground[ng++] = c;
-                    }
-            }
-            {
-                // Big blocks (buildings, cliffs: solid on both sides) are all object;
-                // the ground-colour test is only for small things (trees, signs, rocks).
-                int sl = col > 0 && (f->grid[row][col - 1] & PC_CELL_SOLID), sr = col < PC_GRID_W - 1 && (f->grid[row][col + 1] & PC_CELL_SOLID);
-                if (sl && sr) ng = 0;
-            }
-            for (y = 0; y < 16; y++)
-                for (x = 0; x < 16; x++)
-                {
-                    int px = x0 + x, py = y0 + y, l, i;
-                    uint32_t c = 0;
-                    if (px < 0 || py < 0 || px >= gPcScreenW || py >= GBA_H) continue;
-                    for (l = 1; l <= 3 && !c; l++) if (gPpuLayers.layer[l][py][px] >> 24) c = gPpuLayers.layer[l][py][px] & 0xFFFFFF;
-                    for (i = 0; i < ng && ground[i] != c; i++) ;
-                    raw[py][px] = (i == ng) ? (ng ? 1 : 2) : 0;   // 1 object, 2 object in a big block
-                }
-        }
-    for (y = 0; y < GBA_H; y++)
-        for (x = 0; x < gPcScreenW; x++)
-        {
-            int n = 0, dx, dy;
-            for (dy = -1; dy <= 1; dy++) for (dx = -1; dx <= 1; dx++)
-            {
-                int yy = y + dy, xx = x + dx;
-                if (yy >= 0 && yy < GBA_H && xx >= 0 && xx < gPcScreenW) n += raw[yy][xx] != 0;
-            }
-            mask[y][x][1] = raw[y][x] == 2 ? 2 : n >= 5;   // object (temporary); 2: in a big block
-        }
-    for (x = 0; x < gPcScreenW; x++)   // thin ground-coloured lines inside an object (plank seams) are the object too
-        for (y = 1; y < GBA_H; y++)
-            if (!mask[y][x][1] && mask[y - 1][x][1])
-            {
-                int g = 0;
-                while (y + g < GBA_H && !mask[y + g][x][1] && g < 4) g++;
-                if (g <= 3 && y + g < GBA_H && mask[y + g][x][1])
-                    while (g--) mask[y + g][x][1] = 1;
-            }
-    for (x = 0; x < gPcScreenW; x++)   // height: object pixels stacked below, capped
-    {
-        int h = 0;
-        for (y = GBA_H - 1; y >= 0; y--)
-        {
-            h = mask[y][x][1] ? (h < 40 ? h + 1 : 40) : 0;
-            mask[y][x][0] = (unsigned char)h;
-        }
-    }
-    {
-        // Big blocks: a facade is one wall, so a pixel takes the tallest height
-        // within 16 px along its row (a door below must not cut the wall above it).
-        static unsigned char row[PC_MAX_W];
-        for (y = 0; y < GBA_H; y++)
-        {
-            for (x = 0; x < gPcScreenW; x++) row[x] = mask[y][x][0];
-            for (x = 0; x < gPcScreenW; x++)
-                if (mask[y][x][1] == 2)
-                {
-                    int k, mx = row[x];
-                    for (k = -16; k <= 16; k++)
-                        if (x + k >= 0 && x + k < gPcScreenW && mask[y][x + k][1] == 2 && row[x + k] > mx) mx = row[x + k];
-                    mask[y][x][0] = (unsigned char)mx;
-                }
-        }
-    }
-    glActiveTexture(GL_TEXTURE0 + 18);
-    if (!sObjTex)
-    {
-        glGenTextures(1, &sObjTex);
-        glBindTexture(GL_TEXTURE_2D, sObjTex);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RG8, PC_MAX_W, GBA_H, 0, GL_RG, GL_UNSIGNED_BYTE, NULL);
-    }
-    glBindTexture(GL_TEXTURE_2D, sObjTex);
-    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, PC_MAX_W, GBA_H, GL_RG, GL_UNSIGNED_BYTE, mask);
-    glActiveTexture(GL_TEXTURE0);
-    glUniform1i(glGetUniformLocation(sProgComp, "uObj"), 18);
-}
 static float sTilt = 0.0f;   // HD-2D tilt (off by default): F8 cycles off / gentle / strong
 void HdCycleTilt(void) { sTilt = sTilt <= 0.0f ? 0.25f : sTilt < 0.3f ? 0.4f : sTilt < 0.5f ? 0.6f : 0.0f; }
 float HdGetTilt(void) { return sTilt; }
@@ -2396,6 +2242,9 @@ static void EnsureComposite(int w, int h)
     sCompH = h;
 }
 
+static const char *kWorld3d;   // 3D world shader (defined with Render3d)
+static GLuint sProg3d;
+
 int HdInit(void)
 {
     int i;
@@ -2405,6 +2254,7 @@ int HdInit(void)
     sProgComp = Program(kComposite);
     sProgPresent = Program(kPresent);
     sProgGi = Program(kGi);
+    sProg3d = Program(kWorld3d);
     if (!sProgXbr || !sProgComp || !sProgPresent || !sProgGi)
         return -1;
 
@@ -2482,7 +2332,6 @@ void HdDebugEnv(void)
 {
     if (getenv("EMERALD_NOLIGHT")) sLighting = 0;
     if (getenv("EMERALD_TILT")) sTilt = (float)atof(getenv("EMERALD_TILT"));
-    if (getenv("EMERALD_RELIEF")) sRelief = (float)atof(getenv("EMERALD_RELIEF"));
 }
 void HdSetScale(int scale)
 {
@@ -3164,8 +3013,6 @@ static void RenderHd(const uint32_t *frame, int outW, int outH)
             glUniform4f(glGetUniformLocation(sProgComp, "uGridPos"), gPcFieldFx.gridX, gPcFieldFx.gridY,
                         gPcFieldFx.gridWX, gPcFieldFx.gridWY);
             glUniform1iv(glGetUniformLocation(sProgComp, "uGrid"), cells / 4, packed);
-            if (field)
-                UploadObjectMask();
             glUniform1i(glGetUniformLocation(sProgComp, "uMapType"), gPcFieldFx.mapType);
             glUniform1f(glGetUniformLocation(sProgComp, "uForest"), (float)solid / cells);
             {
@@ -3288,7 +3135,6 @@ static void RenderHd(const uint32_t *frame, int outW, int outH)
                 glUniform2f(glGetUniformLocation(sProgComp, "uFollowOn"), 0.0f, fo->feetY);   // drawn by the PPU now
             }
             glUniform1f(glGetUniformLocation(sProgComp, "uTilt"), field && sLighting ? sTilt : 0.0f);
-            glUniform1f(glGetUniformLocation(sProgComp, "uRelief"), field && sLighting && gPcFieldFx.outdoors && sTilt <= 0.0f ? sRelief : 0.0f);
             glUniform2f(glGetUniformLocation(sProgComp, "uPlayer"), (float)gPcFieldFx.playerX, (float)gPcFieldFx.playerY);
             {
                 // Wake trail from the field update: game frames -> shader time.
@@ -3396,6 +3242,352 @@ static void RenderHd(const uint32_t *frame, int outW, int outH)
     DrawQuad();
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
+
+// ---------------------------------------------------------------------------
+// 3D world (outdoors). The overworld's scenery is replaced by original
+// models built in code (trees, houses, blocks for cliffs/walls/rocks, ground,
+// water), placed where the game's own scenery is: the map grid says where
+// things are and what they are, and broad colours (a house's roof colour,
+// grass or sand) are sampled from the art. Characters and Pokémon stay the
+// game's own sprites, standing upright. Ray traced against signed distance
+// fields from a camera above and behind the player; UI (BG0) stays flat.
+static const char *kWorld3d =
+    "#version 330 core\n"
+    "in vec2 vUv;\n"
+    "out vec4 oColor;\n"
+    "uniform sampler2D uComp;\n"    // the finished 2D frame (for UI)
+    "uniform sampler2D uL0;\n"      // BG0: text boxes, signs
+    "uniform sampler2D uObj;\n"     // OBJ layer: characters (top-down, premultiplied)
+    "uniform sampler2D uCellT;\n"   // per cell: r type, g block id + 1
+    "uniform sampler2D uCellC;\n"   // per cell: colour from the art (linear filtered)
+    "uniform vec2 uDim;\n"
+    "uniform float uMargin;\n"
+    "uniform vec2 uGridPos;\n"
+    "uniform vec2 uWorld;\n"        // grid cell 0 in map px (for stable noise)
+    "uniform vec2 uTarget;\n"
+    "uniform int uNumBlk;\n"
+    "uniform vec4 uBlk[16];\n"      // building footprint x0, y0, x1, y1 (screen px)
+    "uniform vec4 uRoof[16];\n"     // roof rgb, wall height
+    "uniform vec4 uWall[16];\n"     // wall rgb, door x (-1 none)
+    "uniform int uNumSpr;\n"
+    "uniform vec3 uSpr[32];\n"      // character feet x, y, width
+    "uniform float uDay;\n"
+    "uniform vec4 uFade;\n"
+    "uniform float uTime;\n"
+    "const float TREE = 1.0, BLD = 2.0, BLOCK = 3.0, WATER = 4.0, TALL = 5.0;\n"
+    "float H21(vec2 p) { p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }\n"
+    "float N2(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);\n"
+    "  return mix(mix(H21(i), H21(i + vec2(1, 0)), f.x), mix(H21(i + vec2(0, 1)), H21(i + vec2(1, 1)), f.x), f.y); }\n"
+    "vec4 CT(ivec2 c) { return texelFetch(uCellT, clamp(c, ivec2(0), ivec2(35, 15)), 0); }\n"
+    "float Ty(ivec2 c) { return floor(CT(c).r * 255.0 + 0.5); }\n"
+    "vec3 Alb(vec2 p) { return texture(uCellC, (p - uGridPos) / 16.0 / vec2(36.0, 16.0)).rgb; }\n"
+    "float sdBox(vec3 p, vec3 b) { vec3 q = abs(p) - b; return length(max(q, 0.0)) + min(max(q.x, max(q.y, q.z)), 0.0); }\n"
+    // Scene: distance and material (x dist, y material, z block index)
+    "vec3 Map(vec3 p) {\n"
+    "  vec3 r = vec3(1e5, 0.0, 0.0);\n"
+    "  ivec2 c0 = ivec2(floor((p.xy - uGridPos) / 16.0));\n"
+    "  for (int j = -1; j <= 1; j++) for (int i = -1; i <= 1; i++) {\n"
+    "    ivec2 c = c0 + ivec2(i, j);\n"
+    "    float t = Ty(c);\n"
+    "    vec2 ce = uGridPos + (vec2(c) + 0.5) * 16.0;\n"
+    "    if (t == TREE) {\n"   // round leafy canopy, trunk under the front row
+    "      vec3 q = p - vec3(ce, 24.0);\n"
+    "      float d = length(q * vec3(1.0, 1.0, 1.15)) - 11.5 - 1.6 * N2(p.xy * 0.35 + p.z * 0.2);\n"
+    "      if (d < r.x) r = vec3(d, 10.0, 0.0);\n"
+    "      if (Ty(c + ivec2(0, 1)) != TREE) {\n"
+    "        vec2 tq = p.xy - ce; float dt = max(length(tq) - 2.6, abs(p.z - 9.0) - 9.0);\n"
+    "        if (dt < r.x) r = vec3(dt, 11.0, 0.0);\n"
+    "      }\n"
+    "    } else if (t == BLOCK) {\n"   // cliffs, walls, rocks, fences: rounded blocks that merge with neighbours
+    "      float h = 12.0;\n"
+    "      float d = sdBox(p - vec3(ce, h * 0.5), vec3(8.0, 8.0, h * 0.5));\n"   // sharp boxes: neighbours join without seams
+    "      if (d < r.x) r = vec3(d, 12.0, 0.0);\n"
+    "    }\n"
+    "  }\n"
+    "  for (int k = 0; k < 16; k++) {\n"   // houses: walls and a pitched roof with eaves
+    "    if (k >= uNumBlk) break;\n"
+    "    vec4 b = uBlk[k]; float hw = uRoof[k].w;\n"
+    "    vec2 ce = (b.xy + b.zw) * 0.5, he = (b.zw - b.xy) * 0.5;\n"
+    "    vec3 q = p - vec3(ce, 0.0);\n"
+    "    float dw = sdBox(q - vec3(0.0, 0.0, hw * 0.5), vec3(he - 1.0, hw * 0.5));\n"
+    "    float hr = min(he.y * 0.9, 18.0);\n"
+    "    vec2 rq = vec2(abs(q.y), q.z - hw);\n"
+    "    vec2 n = normalize(vec2(hr, he.y + 2.0));\n"
+    "    float dr = max(dot(rq - vec2(0.0, hr), n), max(-rq.y, abs(q.x) - he.x - 1.5));\n"
+    "    dr = max(dr, -(dot(rq - vec2(0.0, hr - 1.6), n)));\n"   // a thin roof shell
+    "    if (dw < r.x) r = vec3(dw, 20.0, float(k));\n"
+    "    if (dr < r.x) r = vec3(dr, 21.0, float(k));\n"
+    "  }\n"
+    "  return r;\n"
+    "}\n"
+    "vec3 Nrm(vec3 p) {\n"
+    "  vec2 e = vec2(0.35, -0.35);\n"
+    "  return normalize(e.xyy * Map(p + e.xyy).x + e.yyx * Map(p + e.yyx).x + e.yxy * Map(p + e.yxy).x + e.xxx * Map(p + e.xxx).x);\n"
+    "}\n"
+    "float Shadow(vec3 p, vec3 l) {\n"
+    "  float s = 1.0, t = 0.8;\n"
+    "  for (int i = 0; i < 28; i++) {\n"
+    "    vec3 q = p + l * t;\n"
+    "    if (q.z > 60.0) break;\n"
+    "    float d = Map(q).x;\n"
+    "    s = min(s, 6.0 * d / t);\n"
+    "    if (s < 0.02) return 0.0;\n"
+    "    t += clamp(d, 0.6, 5.0);\n"
+    "  }\n"
+    "  return clamp(s, 0.0, 1.0);\n"
+    "}\n"
+    "void main() {\n"
+    "  vec2 sp = vec2(vUv.x * uDim.x, (1.0 - vUv.y) * uDim.y);\n"   // native screen px (incl. margin)
+    "  vec4 ui = texture(uL0, vec2(vUv.x, 1.0 - vUv.y));\n"
+    "  vec3 comp = texture(uComp, vUv).rgb;\n"
+    "  if (ui.a > 0.02) { oColor = vec4(comp, 1.0); return; }\n"
+    // camera: above and behind (south of) the player, looking down and north
+    "  float el = radians(56.0), D = 340.0;\n"
+    "  vec3 T = vec3(uTarget, 0.0);\n"
+    "  vec3 C = T + D * vec3(0.0, cos(el), sin(el));\n"
+    "  vec3 F = normalize(T - C), R = vec3(1.0, 0.0, 0.0), U = cross(F, R);\n"
+    "  float th = 82.0 * sin(el) / D;\n"
+    "  vec2 nd = vec2((vUv.x * 2.0 - 1.0) * uDim.x / uDim.y, vUv.y * 2.0 - 1.0);\n"
+    "  vec3 rd = normalize(F + (nd.x * R + nd.y * U) * th);\n"
+    "  vec3 ro = C - vec3(uMargin, 0.0, 0.0) * 0.0;\n"
+    "  float tg = -ro.z / rd.z, t = max((ro.z - 64.0) / -rd.z, 0.0);\n"
+    "  vec3 hit = vec3(-1.0);\n"
+    "  for (int i = 0; i < 140; i++) {\n"
+    "    if (t > tg) break;\n"
+    "    vec3 m = Map(ro + rd * t);\n"
+    "    if (m.x < 0.15) { hit = vec3(t, m.y, m.z); break; }\n"
+    "    t += clamp(m.x, 0.25, 6.0);\n"
+    "  }\n"
+    "  float tHit = hit.x > 0.0 ? hit.x : tg;\n"
+    // characters: the game's sprites standing upright on their feet
+    "  vec4 spr = vec4(0.0); float tS = 1e9;\n"
+    "  for (int k = 0; k < 32; k++) {\n"
+    "    if (k >= uNumSpr) break;\n"
+    "    vec3 s = uSpr[k];\n"
+    "    vec3 B = vec3(s.xy, 0.0), Nb = -F;\n"   // a card standing on the feet, turned to face the camera
+    "    float ts = dot(B - ro, Nb) / dot(rd, Nb);\n"
+    "    if (ts <= 0.0 || ts >= min(tS, tHit + 0.5)) continue;\n"
+    "    vec3 q = ro + rd * ts;\n"
+    "    float v = dot(q - B, U);\n"
+    "    if (abs(q.x - s.x) > 16.0 || v < 0.0 || v > 32.0) continue;\n"
+    "    vec2 g = vec2(q.x + uMargin, s.y - v);\n"
+    "    vec4 c = texture(uObj, g / uDim);\n"
+    "    if (c.a > 0.5) { spr = vec4(c.rgb / c.a, 1.0); tS = ts; }\n"
+    "  }\n"
+    // lighting
+    "  vec3 L = normalize(vec3(-0.45, 0.55, 0.75));\n"
+    "  vec3 sun = mix(vec3(0.35, 0.42, 0.65), vec3(1.05, 1.0, 0.92), uDay);\n"
+    "  vec3 sky = mix(vec3(0.16, 0.2, 0.34), vec3(0.64, 0.65, 0.66), uDay);\n"
+    "  vec3 col;\n"
+    "  if (tS < 1e8) col = spr.rgb * (sky * 0.5 + sun * 0.75);\n"
+    "  else {\n"
+    "    vec3 p = ro + rd * tHit;\n"
+    "    vec3 n = vec3(0.0, 0.0, 1.0), alb; float spec = 0.0;\n"
+    "    ivec2 cc = ivec2(floor((p.xy - uGridPos) / 16.0));\n"
+    "    vec2 wn = p.xy - uGridPos + uWorld;\n"   // map-stable noise coordinates
+    "    if (hit.x > 0.0) {\n"
+    "      n = Nrm(p);\n"
+    "      if (hit.y == 10.0) alb = Alb(p.xy) * 1.05 * (0.8 + 0.35 * N2(wn * 0.45 + p.z * 0.3));\n"
+    "      else if (hit.y == 11.0) alb = vec3(0.42, 0.29, 0.19) * (0.85 + 0.15 * N2(vec2(p.z * 1.5, wn.x)));\n"
+    "      else if (hit.y == 12.0) alb = Alb(p.xy) * (n.z > 0.6 ? 1.0 : 0.82) * (0.95 + 0.05 * N2(wn * 0.3 + p.z * 0.3));\n"
+    "      else if (hit.y == 20.0) {\n"   // house walls: plaster, windows, the door
+    "        int k = int(hit.z); vec4 w = uWall[k], b = uBlk[k];\n"
+    "        alb = w.rgb;\n"
+    "        if (n.y > 0.7) {\n"   // front: windows in a row, a door where the game's door is
+    "          float wx = fract((p.x - b.x) / 20.0), wz = p.z / uRoof[k].w;\n"
+    "          bool door = w.a >= 0.0 && abs(p.x - w.a) < 5.0 && p.z < 13.0;\n"
+    "          if (door) alb = vec3(0.45, 0.28, 0.18) * (abs(p.x - w.a) > 4.0 || p.z > 12.0 ? 0.6 : 1.0);\n"
+    "          else if (abs(wx - 0.5) < 0.22 && wz > 0.35 && wz < 0.75 && abs(p.x - w.a) > 8.0) alb = mix(vec3(0.35, 0.55, 0.75), vec3(1.0, 0.85, 0.5), 1.0 - uDay) * (abs(wx - 0.5) > 0.19 ? 0.5 : 1.0);\n"
+    "        }\n"
+    "        if (p.z < 2.0) alb *= 0.8;\n"   // plinth
+    "      } else {\n"   // roof: rows of tiles down the slope
+    "        int k = int(hit.z);\n"
+    "        alb = uRoof[k].rgb * (0.82 + 0.18 * step(0.5, fract(p.z * 0.6 + (p.y - uBlk[k].y) * 0.0)));\n"
+    "        spec = 0.1;\n"
+    "      }\n"
+    "    } else {\n"   // ground: smooth colour from the area, fine detail by kind
+    "      float ty = Ty(cc);\n"
+    "      alb = Alb(p.xy);\n"
+    "      float g = alb.g - max(alb.r, alb.b);\n"
+    "      if (ty == WATER) {\n"
+    "        vec2 wv = vec2(N2(wn * 0.12 + uTime * 0.5), N2(wn * 0.12 - uTime * 0.4 + 7.0)) - 0.5;\n"
+    "        n = normalize(vec3(wv * 0.5, 1.0));\n"
+    "        float fr = pow(1.0 - max(dot(-rd, n), 0.0), 3.0);\n"
+    "        alb = mix(alb * 0.8, sky * 1.3, 0.25 + fr * 0.5);\n"
+    "        spec = 1.0;\n"
+    "      } else if (ty == TALL) alb *= 0.72 + 0.4 * N2(vec2(wn.x * 1.3, wn.y * 0.35));\n"
+    "      else if (g > 0.03) alb *= 0.93 + 0.1 * N2(wn * 0.35) + 0.05 * N2(wn * 1.1) - 0.06 * N2(wn * 0.08);\n"
+    "      else alb *= 0.96 + 0.06 * N2(wn * 0.5);\n"
+    "    }\n"
+    "    float dif = max(dot(n, L), 0.0) * Shadow(p + n * 0.6, L);\n"
+    "    float ao = hit.x > 0.0 ? clamp(0.55 + p.z / 30.0, 0.55, 1.0) : clamp(Map(p + vec3(0.0, 0.0, 3.0)).x / 3.0, 0.45, 1.0);\n"
+    "    col = alb * (sky * ao * 0.75 + sun * dif * 0.9);\n"
+    "    col += sun * spec * pow(max(dot(reflect(rd, n), L), 0.0), 60.0) * 0.6;\n"
+    "  }\n"
+    "  col = mix(col, sky * 1.1, clamp((min(tS, tHit) - D) / 500.0, 0.0, 0.35));\n"   // distance haze
+    "  col = mix(col, uFade.rgb, uFade.a);\n"
+    "  oColor = vec4(col, 1.0);\n"
+    "}\n";
+
+static GLuint s3dTex, s3dFbo, sCellTex[2];
+static int s3dW, s3dH, s3dOn = 1;
+
+// The 3D frame replaces the composite: classify the cells around the camera,
+// gather houses, upload, ray trace into s3dTex and swap it in.
+static void Render3d(void)
+{
+    extern int gPcMenuFrame;
+    const struct PcFieldFx *f = &gPcFieldFx;
+    static unsigned char ty[PC_GRID_H][PC_GRID_W][4], co[PC_GRID_H][PC_GRID_W][4];
+    static signed char blk[PC_GRID_H][PC_GRID_W];
+    float br[16][4], rf[16][4], wl[16][4], spr[32][3];
+    int m = (gPcScreenW - GBA_W) / 2, row, col, nb = 0, k, ns = 0;
+    if (!s3dOn || !sLighting || !PcFieldWideActive() || gPcBattleFrame || gPcMenuFrame || !f->outdoors || f->playerX < -900 || getenv("EMERALD_NO3D"))
+        return;
+    // Per cell: the art's average colour (layers 1-3, every 4th px), and its kind.
+    for (row = 0; row < PC_GRID_H; row++)
+        for (col = 0; col < PC_GRID_W; col++)
+        {
+            int x, y, n = 0, s[3] = { 0, 0, 0 }, fl = f->grid[row][col];
+            for (y = 2; y < 16; y += 4)
+                for (x = 2; x < 16; x += 4)
+                {
+                    int px = f->gridX + col * 16 + x + m, py = f->gridY + row * 16 + y, l;
+                    uint32_t c = 0;
+                    if (px < 0 || py < 0 || px >= gPcScreenW || py >= GBA_H) continue;
+                    for (l = 1; l <= 3 && !c; l++) if (gPpuLayers.layer[l][py][px] >> 24) c = gPpuLayers.layer[l][py][px];
+                    if (!c) continue;
+                    s[0] += c & 255; s[1] += (c >> 8) & 255; s[2] += (c >> 16) & 255; n++;
+                }
+            if (n) { co[row][col][0] = s[0] / n; co[row][col][1] = s[1] / n; co[row][col][2] = s[2] / n; }
+            else if (col > 0) memcpy(co[row][col], co[row][col - 1], 4);   // off screen: carry the neighbour
+            else if (row > 0) memcpy(co[row][col], co[row - 1][col], 4);
+            co[row][col][3] = 255;
+            {
+                int r = co[row][col][0], g = co[row][col][1], b = co[row][col][2];
+                int green = g > r * 112 / 100 && g > b * 108 / 100 && g - r > 18;   // leafy, not cream or grey
+                int blue = b > r + 25 && b > g;                                   // open water drawn on a solid tile
+                ty[row][col][0] = fl & PC_CELL_WATER ? 4 : (fl & PC_CELL_SOLID) ? (blue ? 4 : green ? 1 : 3) : (fl & PC_CELL_GRASS) ? 5 : 0;
+            }
+            ty[row][col][1] = ty[row][col][2] = 0; ty[row][col][3] = 255;
+            blk[row][col] = -1;
+        }
+    // Off-screen rows carry the nearest on-screen colour (the grid reaches beyond the picture).
+    for (col = 0; col < PC_GRID_W; col++)
+        for (row = PC_GRID_H - 2; row >= 0; row--)
+            if (f->gridY + row * 16 + 16 <= 0) memcpy(co[row][col], co[row + 1][col], 4);
+    // Houses grow from each door: the wall row is the door's row, as wide as
+    // the solid cells beside the door that look like the same wall; upward
+    // while most of that span is solid. Everything else solid stays blocks.
+    for (row = 0; row < PC_GRID_H && nb < 16; row++)
+        for (col = 0; col < PC_GRID_W && nb < 16; col++)
+        {
+            int x0 = col, x1 = col, y0 = row, y, x, i, ref[3] = { 0, 0, 0 }, nr = 0;
+            int rs[3] = { 0, 0, 0 }, ws[3] = { 0, 0, 0 }, nrf = 0, nw = 0;
+            if (!(f->grid[row][col] & PC_CELL_DOOR) || blk[row][col] != -1)
+                continue;
+            for (i = -1; i <= 1; i += 2)   // the wall colour right beside the door
+                if (col + i >= 0 && col + i < PC_GRID_W && ty[row][col + i][0] == 3)
+                {
+                    ref[0] += co[row][col + i][0]; ref[1] += co[row][col + i][1]; ref[2] += co[row][col + i][2]; nr++;
+                }
+            if (!nr && row > 0 && ty[row - 1][col][0] == 3) { ref[0] = co[row - 1][col][0]; ref[1] = co[row - 1][col][1]; ref[2] = co[row - 1][col][2]; nr = 1; }
+            if (!nr)
+                continue;
+            for (i = 0; i < 3; i++) ref[i] /= nr;
+#define SAMEWALL(r_, c_) (ty[r_][c_][0] == 3 && abs(co[r_][c_][0] - ref[0]) + abs(co[r_][c_][1] - ref[1]) + abs(co[r_][c_][2] - ref[2]) < 120)
+            while (x0 > 0 && col - x0 < 8 && SAMEWALL(row, x0 - 1)) x0--;
+            while (x1 < PC_GRID_W - 1 && x1 - col < 8 && SAMEWALL(row, x1 + 1)) x1++;
+#undef SAMEWALL
+            for (y = row - 1; y >= 0 && row - y <= 6; y--)
+            {
+                int solid = 0;
+                for (x = x0; x <= x1; x++) solid += ty[y][x][0] == 3;
+                if (solid * 2 < x1 - x0 + 1) break;
+                y0 = y;
+            }
+            for (y = y0; y <= row; y++)
+                for (x = x0; x <= x1; x++)
+                {
+                    const unsigned char *c = co[y][x];
+                    if (ty[y][x][0] != 3 && !(f->grid[y][x] & PC_CELL_DOOR)) continue;
+                    ty[y][x][0] = 2; ty[y][x][1] = (unsigned char)(nb + 1); blk[y][x] = (signed char)nb;
+                    if (y == y0) { rs[0] += c[0]; rs[1] += c[1]; rs[2] += c[2]; nrf++; }
+                    if (y == row && !(f->grid[y][x] & PC_CELL_DOOR)) { ws[0] += c[0]; ws[1] += c[1]; ws[2] += c[2]; nw++; }
+                }
+            if (!nrf) nrf = 1;
+            if (!nw) nw = 1;
+            br[nb][0] = f->gridX + x0 * 16; br[nb][1] = f->gridY + y0 * 16;
+            br[nb][2] = f->gridX + x1 * 16 + 16; br[nb][3] = f->gridY + row * 16 + 16;
+            for (i = 0; i < 3; i++) { rf[nb][i] = rs[i] / (255.0f * nrf); wl[nb][i] = ws[i] / (255.0f * nw); }
+            rf[nb][3] = 20.0f;
+            wl[nb][3] = f->gridX + col * 16 + 8.0f;
+            nb++;
+        }
+    for (k = 0; k < f->numShadows && ns < 32; k++, ns++)
+    {
+        spr[ns][0] = f->shadows[k].x; spr[ns][1] = f->shadows[k].y; spr[ns][2] = f->shadows[k].w;
+    }
+    // Upload and draw.
+    for (k = 0; k < 2; k++)
+    {
+        if (!sCellTex[k])
+        {
+            glGenTextures(1, &sCellTex[k]);
+            glBindTexture(GL_TEXTURE_2D, sCellTex[k]);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, k ? GL_LINEAR : GL_NEAREST);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, k ? GL_LINEAR : GL_NEAREST);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        }
+        glBindTexture(GL_TEXTURE_2D, sCellTex[k]);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, PC_GRID_W, PC_GRID_H, 0, GL_RGBA, GL_UNSIGNED_BYTE, k ? (void *)co : (void *)ty);
+    }
+    if (!s3dTex || s3dW != sCompW || s3dH != sCompH)
+    {
+        if (s3dTex) glDeleteTextures(1, &s3dTex);
+        s3dTex = MakeTex(sCompW, sCompH, GL_RGBA8, GL_RGBA, GL_LINEAR);
+        s3dFbo = MakeFbo(s3dTex);
+        s3dW = sCompW; s3dH = sCompH;
+    }
+    glBindFramebuffer(GL_FRAMEBUFFER, s3dFbo);
+    glViewport(0, 0, sCompW, sCompH);
+    glUseProgram(sProg3d);
+    glActiveTexture(GL_TEXTURE0 + 0); glBindTexture(GL_TEXTURE_2D, sCompTex);
+    glActiveTexture(GL_TEXTURE0 + 1); glBindTexture(GL_TEXTURE_2D, sUpTex[0]);
+    glActiveTexture(GL_TEXTURE0 + 2); glBindTexture(GL_TEXTURE_2D, sUpTex[4]);
+    glActiveTexture(GL_TEXTURE0 + 3); glBindTexture(GL_TEXTURE_2D, sCellTex[0]);
+    glActiveTexture(GL_TEXTURE0 + 4); glBindTexture(GL_TEXTURE_2D, sCellTex[1]);
+    glActiveTexture(GL_TEXTURE0);
+    glUniform1i(glGetUniformLocation(sProg3d, "uComp"), 0);
+    glUniform1i(glGetUniformLocation(sProg3d, "uL0"), 1);
+    glUniform1i(glGetUniformLocation(sProg3d, "uObj"), 2);
+    glUniform1i(glGetUniformLocation(sProg3d, "uCellT"), 3);
+    glUniform1i(glGetUniformLocation(sProg3d, "uCellC"), 4);
+    glUniform2f(glGetUniformLocation(sProg3d, "uDim"), (float)gPcScreenW, (float)GBA_H);
+    glUniform1f(glGetUniformLocation(sProg3d, "uMargin"), (float)m);
+    glUniform2f(glGetUniformLocation(sProg3d, "uGridPos"), (float)f->gridX, (float)f->gridY);
+    glUniform2f(glGetUniformLocation(sProg3d, "uWorld"), f->gridWX * 16.0f, f->gridWY * 16.0f);
+    glUniform2f(glGetUniformLocation(sProg3d, "uTarget"), (float)f->playerX, f->playerY - 8.0f);
+    glUniform1i(glGetUniformLocation(sProg3d, "uNumBlk"), nb);
+    if (nb)
+    {
+        glUniform4fv(glGetUniformLocation(sProg3d, "uBlk"), nb, &br[0][0]);
+        glUniform4fv(glGetUniformLocation(sProg3d, "uRoof"), nb, &rf[0][0]);
+        glUniform4fv(glGetUniformLocation(sProg3d, "uWall"), nb, &wl[0][0]);
+    }
+    glUniform1i(glGetUniformLocation(sProg3d, "uNumSpr"), ns);
+    if (ns)
+        glUniform3fv(glGetUniformLocation(sProg3d, "uSpr"), ns, &spr[0][0]);
+    glUniform1f(glGetUniformLocation(sProg3d, "uDay"), 1.0f - sNight);
+    glUniform4f(glGetUniformLocation(sProg3d, "uFade"), f->fade[0], f->fade[1], f->fade[2], f->fade[3]);
+    glUniform1f(glGetUniformLocation(sProg3d, "uTime"), (float)(PortFrameCount() % 36000) / 59.73f);
+    DrawQuad();
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    { GLuint t = sCompTex; sCompTex = s3dTex; s3dTex = t; t = sCompFbo; sCompFbo = s3dFbo; s3dFbo = t; }
+}
+void HdSet3d(int on) { s3dOn = on; }
+int HdGet3d(void) { return s3dOn; }
 
 static void Letterbox(int winW, int winH, int *x, int *y, int *w, int *h)
 {
@@ -3513,7 +3705,10 @@ void HdPresent(const uint32_t *frame, int hdMode, int winW, int winH)
     sLastHdMode = hdMode;
     Letterbox(winW, winH, &x, &y, &w, &h);
     if (hdMode)
+    {
         RenderHd(frame, w, h);
+        Render3d();
+    }
     else
     {
         glBindTexture(GL_TEXTURE_2D, sFrameTex);

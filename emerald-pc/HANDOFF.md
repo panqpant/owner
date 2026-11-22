@@ -78,12 +78,16 @@ start menu can't save and over a different file). Hard mode (trainers +10%
 levels, min +2): Birch asks after the name; stored as FLAG_PC_HARD_MODE
 (FLAG_UNUSED_0x020). Test hooks: `call flag N`, `call pc`.
 
-Item 1 (3D world), first pass: top-down camera (no tilt); per-pixel heights
-measured from the art on the CPU (`UploadObjectMask`, render_gl.c: solid tiles,
-ground colours beside small objects stay down, big blocks solid, height = run of
-object pixels below, capped 40 px), ray-marched in the composite shader
-(`uRelief`, default 0.002 lean per px; `EMERALD_RELIEF=0` turns it off).
-Known: steps on the big Slateport building's left side; rocks in water smear.
+Item 1 (3D world): owner wants own-made 3D scenery replacing the game's art;
+characters and Pokémon stay the game's sprites (NOT to be modelled). Built:
+`Render3d()` + `kWorld3d` in render_gl.c ray-trace a scene of code-built SDF
+models (trees, houses grown from each door with pitched roof/windows/door,
+blocks for cliffs/walls/rocks, ground and water with procedural detail),
+placed from the map grid; colours sampled per cell from the art. Characters are
+camera-facing cards from the OBJ layer. Outdoors overworld only; UI (BG0)
+passes through. `EMERALD_NO3D=1` turns it off. Not done: weather/particles and
+window panels are lost in 3D frames, ledges/stairs flat, cell-edge lines on
+blocks, performance unmeasured on a real GPU (could need half-res).
 
 ## The owner's preferences (important)
 

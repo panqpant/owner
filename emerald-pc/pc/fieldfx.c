@@ -304,6 +304,8 @@ void PcUpdateFieldFx(void)
                     f |= PC_CELL_LEDGE;
                 if (MetatileBehavior_IsPuddle(b) || MetatileBehavior_IsShallowFlowingWater(b) || MetatileBehavior_IsReflective(b))
                     f |= PC_CELL_PUDDLE;
+                if (MetatileBehavior_IsDoor(b) || MetatileBehavior_IsWarpDoor(b) || MetatileBehavior_IsNonAnimDoor(b))
+                    f |= PC_CELL_DOOR;
                 fx->grid[row][col] = f;
             }
     }
@@ -330,6 +332,13 @@ void PcUpdateFieldFx(void)
             CleanupOverworldWindowsAndTilemaps();
             FieldInitRegionMap(CB2_ReturnToField);
         }
+    }
+
+    // Screen fade (doors, warps): the 3D world fades with the palettes.
+    {
+        u16 c = gPaletteFade.blendColor;
+        fx->fade[0] = (c & 31) / 31.0f; fx->fade[1] = ((c >> 5) & 31) / 31.0f; fx->fade[2] = ((c >> 10) & 31) / 31.0f;
+        fx->fade[3] = gPaletteFade.y / 16.0f;
     }
 
     // Quick save (F6) while the player is free to move, wherever the start

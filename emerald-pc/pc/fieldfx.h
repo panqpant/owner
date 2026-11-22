@@ -13,6 +13,7 @@ enum {
     PC_CELL_SAND  = 8,   // sand, deep sand, ash
     PC_CELL_LEDGE = 16,
     PC_CELL_PUDDLE = 32, // puddles and shallow water: rain ripples, reflections
+    PC_CELL_DOOR = 64,   // a door (3D world: marks the block above it as a building)
 };
 enum { PC_WEATHER_NONE, PC_WEATHER_RAIN, PC_WEATHER_DOWNPOUR, PC_WEATHER_SANDSTORM };
 struct PcFieldFx {
@@ -28,6 +29,7 @@ struct PcFieldFx {
     int gridX, gridY;                    // screen position of the grid's first metatile
     int gridWX, gridWY;                  // its map coordinates (world position = cell * 16)
     unsigned char grid[PC_GRID_H][PC_GRID_W]; // PC_CELL_* flags around the camera
+    float fade[4];                       // screen palette fade: blend colour rgb (0-1), amount (0-1)
     float wake[12][3];                   // swimming: [0] the player now, [1..] trail; world px x, y, game frame (-1 unused)
 
     int numLights, numShadows;
