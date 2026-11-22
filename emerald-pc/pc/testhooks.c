@@ -55,6 +55,10 @@ void TestHookRun(const char *cmd)
         void ShowPokemonStorageSystemPC(void);
         ShowPokemonStorageSystemPC();   // the PC's box menu, as from a Pokémon Center PC
     }
+    else if (!strcmp(name, "flag"))
+    {
+        fprintf(stderr, "[test] flag 0x%X = %d\n", a, FlagGet(a));
+    }
     else if (!strcmp(name, "map"))
     {
         extern int gPcMapRequest;

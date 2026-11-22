@@ -23,10 +23,10 @@ index 8566762fe..097e81577 100644
  #if MODERN
  // NOTE: Assumes 16-bit DMAs.
 diff --git a/include/global.h b/include/global.h
-index f62485065..fcfb2c1bd 100644
+index f62485065..51c533c49 100644
 --- a/include/global.h
 +++ b/include/global.h
-@@ -17,6 +17,36 @@
+@@ -17,6 +17,48 @@
  #include "constants/easy_chat.h"
  #include "constants/trainer_hill.h"
  
@@ -58,6 +58,18 @@ index f62485065..fcfb2c1bd 100644
 +void PcTextFree(u8 windowId);
 +void PcTextToVram(u8 windowId, int tileX, int tileY, int tileW, int tileH);
 +void PcTextToVramRange(u8 windowId, int firstTile, int numTiles);
++// Modern conveniences, always on in the PC version: instant text, auto-run
++// (B walks), EXP Share for the whole party, physical/special split.
++#define PC_OPT(o) 1
++bool8 PcMoveIsPhysical(u16 move, u8 type);   // by the move's modern category (pc/fieldfx.c)
++// Hard mode: chosen in Professor Birch's speech, kept in the save file.
++#define FLAG_PC_HARD_MODE FLAG_UNUSED_0x020
++extern bool8 gPcHardChoice;               // the answer, until the new save exists
++struct Pokemon;
++void PcHardModeBoost(struct Pokemon *party, int count);   // trainers' Pokémon a few levels higher
++#else
++#define PC_OPT(o) 0
++#define PcMoveIsPhysical(move, type) IS_TYPE_PHYSICAL(type)
 +#endif
 +
  // Prevent cross-jump optimization.
@@ -86,7 +98,7 @@ index fb2817af9..3e22b57c2 100644
      if (!IsContest())
      {
 diff --git a/src/battle_main.c b/src/battle_main.c
-index 11fc16860..083e19166 100644
+index 11fc16860..51f2a48ad 100644
 --- a/src/battle_main.c
 +++ b/src/battle_main.c
 @@ -1862,8 +1862,14 @@ static void CB2_HandleStartMultiBattle(void)
@@ -104,6 +116,74 @@ index 11fc16860..083e19166 100644
      RunTextPrinters();
      UpdatePaletteFade();
      RunTasks();
+@@ -2070,6 +2076,9 @@ static u8 CreateNPCTrainerParty(struct Pokemon *party, u16 trainerNum, bool8 fir
+         }
+ 
+         gBattleTypeFlags |= gTrainers[trainerNum].doubleBattle;
++#ifdef PLATFORM_PC
++        PcHardModeBoost(party, monsCount);
++#endif
+     }
+ 
+     return gTrainers[trainerNum].partySize;
+diff --git a/src/battle_script_commands.c b/src/battle_script_commands.c
+index 3af09ec7a..7ce16525a 100644
+--- a/src/battle_script_commands.c
++++ b/src/battle_script_commands.c
+@@ -1153,7 +1153,7 @@ static void Cmd_accuracycheck(void)
+             calc = (calc * 130) / 100; // 1.3 compound eyes boost
+         if (WEATHER_HAS_EFFECT && gBattleMons[gBattlerTarget].ability == ABILITY_SAND_VEIL && gBattleWeather & B_WEATHER_SANDSTORM)
+             calc = (calc * 80) / 100; // 1.2 sand veil loss
+-        if (gBattleMons[gBattlerAttacker].ability == ABILITY_HUSTLE && IS_TYPE_PHYSICAL(type))
++        if (gBattleMons[gBattlerAttacker].ability == ABILITY_HUSTLE && PcMoveIsPhysical(move, type))
+             calc = (calc * 80) / 100; // 1.2 hustle loss
+ 
+         if (gBattleMons[gBattlerTarget].item == ITEM_ENIGMA_BERRY)
+@@ -1935,7 +1935,7 @@ static void Cmd_datahpupdate(void)
+                 // Note: While physicalDmg/specialDmg below are only distinguished between for Counter/Mirror Coat, they are
+                 //       used in combination as general damage trackers for other purposes. specialDmg is additionally used
+                 //       to help determine if a fire move should defrost the target.
+-                if (IS_TYPE_PHYSICAL(moveType) && !(gHitMarker & HITMARKER_PASSIVE_HP_UPDATE) && gCurrentMove != MOVE_PAIN_SPLIT)
++                if (PcMoveIsPhysical(gCurrentMove, moveType) && !(gHitMarker & HITMARKER_PASSIVE_HP_UPDATE) && gCurrentMove != MOVE_PAIN_SPLIT)
+                 {
+                     // Record physical damage/attacker for Counter
+                     gProtectStructs[gActiveBattler].physicalDmg = gHpDealt;
+@@ -1951,7 +1951,7 @@ static void Cmd_datahpupdate(void)
+                         gSpecialStatuses[gActiveBattler].physicalBattlerId = gBattlerTarget;
+                     }
+                 }
+-                else if (!IS_TYPE_PHYSICAL(moveType) && !(gHitMarker & HITMARKER_PASSIVE_HP_UPDATE))
++                else if (!PcMoveIsPhysical(gCurrentMove, moveType) && !(gHitMarker & HITMARKER_PASSIVE_HP_UPDATE))
+                 {
+                     // Record special damage/attacker for Mirror Coat
+                     gProtectStructs[gActiveBattler].specialDmg = gHpDealt;
+@@ -3303,7 +3303,7 @@ static void Cmd_getexp(void)
+                 else
+                     holdEffect = GetItemHoldEffect(item);
+ 
+-                if (holdEffect == HOLD_EFFECT_EXP_SHARE)
++                if ((holdEffect == HOLD_EFFECT_EXP_SHARE || PC_OPT(PC_OPT_EXPSHARE)))
+                     viaExpShare++;
+             }
+ 
+@@ -3342,7 +3342,7 @@ static void Cmd_getexp(void)
+             else
+                 holdEffect = GetItemHoldEffect(item);
+ 
+-            if (holdEffect != HOLD_EFFECT_EXP_SHARE && !(gBattleStruct->sentInPokes & 1))
++            if ((holdEffect != HOLD_EFFECT_EXP_SHARE && !PC_OPT(PC_OPT_EXPSHARE)) && !(gBattleStruct->sentInPokes & 1))
+             {
+                 *(&gBattleStruct->sentInPokes) >>= 1;
+                 gBattleScripting.getexpState = 5;
+@@ -3371,7 +3371,7 @@ static void Cmd_getexp(void)
+                     else
+                         gBattleMoveDamage = 0;
+ 
+-                    if (holdEffect == HOLD_EFFECT_EXP_SHARE)
++                    if ((holdEffect == HOLD_EFFECT_EXP_SHARE || PC_OPT(PC_OPT_EXPSHARE)))
+                         gBattleMoveDamage += gExpShareExp;
+                     if (holdEffect == HOLD_EFFECT_LUCKY_EGG)
+                         gBattleMoveDamage = (gBattleMoveDamage * 150) / 100;
 diff --git a/src/battle_transition.c b/src/battle_transition.c
 index 59fb57ef2..95cdee2e6 100644
 --- a/src/battle_transition.c
@@ -414,6 +494,19 @@ index e76ba3d85..cc2d6a977 100644
      x -= gSaveBlock1Ptr->pos.x;
      x *= 2;
      if (x >= 32 || x < 0)
+diff --git a/src/field_player_avatar.c b/src/field_player_avatar.c
+index 5b22ff74c..b05a1915d 100644
+--- a/src/field_player_avatar.c
++++ b/src/field_player_avatar.c
+@@ -655,7 +655,7 @@ static void PlayerNotOnBikeMoving(u8 direction, u16 heldKeys)
+         return;
+     }
+ 
+-    if (!(gPlayerAvatar.flags & PLAYER_AVATAR_FLAG_UNDERWATER) && (heldKeys & B_BUTTON) && FlagGet(FLAG_SYS_B_DASH)
++    if (!(gPlayerAvatar.flags & PLAYER_AVATAR_FLAG_UNDERWATER) && (!(heldKeys & B_BUTTON) == !!PC_OPT(PC_OPT_AUTORUN)) && FlagGet(FLAG_SYS_B_DASH)
+      && IsRunningDisallowed(gObjectEvents[gPlayerAvatar.objectEventId].currentMetatileBehavior) == 0)
+     {
+         PlayerRun(direction);
 diff --git a/src/item_menu.c b/src/item_menu.c
 index 86b1bf941..06b66bd00 100755
 --- a/src/item_menu.c
@@ -527,6 +620,88 @@ index 2a47ec51a..1b21f1e38 100644
  }
  
  void SetTrainerHillVBlankCounter(u32 *counter)
+diff --git a/src/main_menu.c b/src/main_menu.c
+index 45fa12cfc..9f42e09e6 100644
+--- a/src/main_menu.c
++++ b/src/main_menu.c
+@@ -197,6 +197,10 @@ static void NewGameBirchSpeech_StartFadePlatformOut(u8, u8);
+ static void Task_NewGameBirchSpeech_WaitForSpriteFadeInWelcome(u8);
+ static void NewGameBirchSpeech_ShowDialogueWindow(u8, u8);
+ static void NewGameBirchSpeech_ClearWindow(u8);
++#ifdef PLATFORM_PC
++bool8 gPcHardChoice;
++static bool8 sPcHardAsked;
++#endif
+ static void Task_NewGameBirchSpeech_ThisIsAPokemon(u8);
+ static void Task_NewGameBirchSpeech_MainSpeech(u8);
+ static void NewGameBirchSpeech_WaitForThisIsPokemonText(struct TextPrinterTemplate *, u16);
+@@ -1264,6 +1268,10 @@ static void HighlightSelectedMainMenuItem(u8 menuType, u8 selectedMenuItem, s16
+ 
+ static void Task_NewGameBirchSpeech_Init(u8 taskId)
+ {
++#ifdef PLATFORM_PC
++    sPcHardAsked = FALSE;
++    gPcHardChoice = FALSE;
++#endif
+     SetGpuReg(REG_OFFSET_DISPCNT, 0);
+     SetGpuReg(REG_OFFSET_DISPCNT, DISPCNT_OBJ_ON | DISPCNT_OBJ_1D_MAP);
+     InitBgFromTemplate(&sBirchBgTemplate);
+@@ -1681,12 +1689,55 @@ static void Task_NewGameBirchSpeech_ReshowBirchLotad(u8 taskId)
+     }
+ }
+ 
++#ifdef PLATFORM_PC
++// Birch asks whether to turn on Hard mode, once, after the player's name is settled.
++static const u8 sText_PcHardAsk[] = _("Turn on HARD MODE?\nTRAINERS will be much stronger.");
++static void Task_NewGameBirchSpeech_PcHardChoose(u8 taskId)
++{
++    switch (Menu_ProcessInputNoWrapClearOnChoose())
++    {
++    case 0:
++        PlaySE(SE_SELECT);
++        gPcHardChoice = TRUE;
++        NewGameBirchSpeech_ClearWindow(0);
++        gTasks[taskId].func = Task_NewGameBirchSpeech_WaitForSpriteFadeInAndTextPrinter;
++        break;
++    case MENU_B_PRESSED:
++    case 1:
++        PlaySE(SE_SELECT);
++        gPcHardChoice = FALSE;
++        NewGameBirchSpeech_ClearWindow(0);
++        gTasks[taskId].func = Task_NewGameBirchSpeech_WaitForSpriteFadeInAndTextPrinter;
++        break;
++    }
++}
++static void Task_NewGameBirchSpeech_PcHardAsk(u8 taskId)
++{
++    if (!RunTextPrintersAndIsPrinter0Active())
++    {
++        CreateYesNoMenuParameterized(2, 1, 0xF3, 0xDF, 2, 15);
++        gTasks[taskId].func = Task_NewGameBirchSpeech_PcHardChoose;
++    }
++}
++#endif
++
+ static void Task_NewGameBirchSpeech_WaitForSpriteFadeInAndTextPrinter(u8 taskId)
+ {
+     if (gTasks[taskId].tIsDoneFadingSprites)
+     {
+         gSprites[gTasks[taskId].tBirchSpriteId].oam.objMode = ST_OAM_OBJ_NORMAL;
+         gSprites[gTasks[taskId].tLotadSpriteId].oam.objMode = ST_OAM_OBJ_NORMAL;
++#ifdef PLATFORM_PC
++        if (!sPcHardAsked && !RunTextPrintersAndIsPrinter0Active())
++        {
++            sPcHardAsked = TRUE;
++            NewGameBirchSpeech_ClearWindow(0);
++            StringExpandPlaceholders(gStringVar4, sText_PcHardAsk);
++            AddTextPrinterForMessage(TRUE);
++            gTasks[taskId].func = Task_NewGameBirchSpeech_PcHardAsk;
++            return;
++        }
++#endif
+         if (!RunTextPrintersAndIsPrinter0Active())
+         {
+             gSprites[gTasks[taskId].tBirchSpriteId].oam.objMode = ST_OAM_OBJ_BLEND;
 diff --git a/src/menu.c b/src/menu.c
 index 094ccd7aa..7dda93f62 100644
 --- a/src/menu.c
@@ -702,6 +877,21 @@ index ca3be258b..0cd0de93d 100644
      AnimateSprites();
      BuildOamBuffer();
      UpdatePaletteFade();
+diff --git a/src/new_game.c b/src/new_game.c
+index 80746561b..da15bf326 100644
+--- a/src/new_game.c
++++ b/src/new_game.c
+@@ -204,6 +204,10 @@ void NewGameInitData(void)
+     WipeTrainerNameRecords();
+     ResetTrainerHillResults();
+     ResetContestLinkResults();
++#ifdef PLATFORM_PC
++    if (gPcHardChoice)
++        FlagSet(FLAG_PC_HARD_MODE);
++#endif
+ }
+ 
+ static void ResetMiniGamesRecords(void)
 diff --git a/src/overworld.c b/src/overworld.c
 index 1d6b81c1f..228eb5669 100644
 --- a/src/overworld.c
@@ -829,6 +1019,37 @@ index 626ee304e..dccdcc3a0 100644
      RunTasks();
      AnimateSprites();
      BuildOamBuffer();
+diff --git a/src/pokemon.c b/src/pokemon.c
+index 4b5c19714..b870df192 100644
+--- a/src/pokemon.c
++++ b/src/pokemon.c
+@@ -3173,7 +3173,7 @@ s32 CalculateBaseDamage(struct BattlePokemon *attacker, struct BattlePokemon *de
+         if (attackerHoldEffect == sHoldEffectToType[i][0]
+             && type == sHoldEffectToType[i][1])
+         {
+-            if (IS_TYPE_PHYSICAL(type))
++            if (PcMoveIsPhysical(move, type))
+                 attack = (attack * (attackerHoldEffectParam + 100)) / 100;
+             else
+                 spAttack = (spAttack * (attackerHoldEffectParam + 100)) / 100;
+@@ -3229,7 +3229,7 @@ s32 CalculateBaseDamage(struct BattlePokemon *attacker, struct BattlePokemon *de
+     if (gBattleMoves[gCurrentMove].effect == EFFECT_EXPLOSION)
+         defense /= 2;
+ 
+-    if (IS_TYPE_PHYSICAL(type))
++    if (PcMoveIsPhysical(move, type))
+     {
+         if (gCritMultiplier == 2)
+         {
+@@ -3284,7 +3284,7 @@ s32 CalculateBaseDamage(struct BattlePokemon *attacker, struct BattlePokemon *de
+     if (type == TYPE_MYSTERY)
+         damage = 0; // is ??? type. does 0 damage.
+ 
+-    if (IS_TYPE_SPECIAL(type))
++    if (!PcMoveIsPhysical(move, type) && type != TYPE_MYSTERY)
+     {
+         if (gCritMultiplier == 2)
+         {
 diff --git a/src/pokemon_storage_system.c b/src/pokemon_storage_system.c
 index 6ff9ec867..bcdab4298 100644
 --- a/src/pokemon_storage_system.c
@@ -858,10 +1079,30 @@ index 96407787b..148e4565d 100644
      AnimateSprites();
      BuildOamBuffer();
 diff --git a/src/text.c b/src/text.c
-index 398aaba26..a3a2af26c 100644
+index 398aaba26..076541d2f 100644
 --- a/src/text.c
 +++ b/src/text.c
-@@ -644,6 +644,9 @@ void CopyGlyphToWindow(struct TextPrinter *textPrinter)
+@@ -327,6 +327,19 @@ void RunTextPrinters(void)
+             if (sTextPrinters[i].active)
+             {
+                 u16 renderCmd = RenderFont(&sTextPrinters[i]);
++                // Instant text: print the rest of the page now; waits for a button press still stop it.
++                int guard = 0;
++                while (PC_OPT(PC_OPT_INSTANT_TEXT) && guard++ < 1024
++                    && (renderCmd == RENDER_PRINT || renderCmd == RENDER_REPEAT || (renderCmd == RENDER_UPDATE && sTextPrinters[i].delayCounter))
++                    && sTextPrinters[i].state == RENDER_STATE_HANDLE_CHAR)
++                {
++                    if (renderCmd == RENDER_PRINT && sTextPrinters[i].callback != NULL)
++                        sTextPrinters[i].callback(&sTextPrinters[i].printerTemplate, renderCmd);
++                    sTextPrinters[i].delayCounter = 0;
++                    renderCmd = RenderFont(&sTextPrinters[i]);
++                }
++                if (guard > 1)   // characters were drawn in the loop: show them even if the text just finished
++                    CopyWindowToVram(sTextPrinters[i].printerTemplate.windowId, COPYWIN_GFX);
+                 switch (renderCmd)
+                 {
+                 case RENDER_PRINT:
+@@ -644,6 +657,9 @@ void CopyGlyphToWindow(struct TextPrinter *textPrinter)
              GLYPH_COPY(windowTiles, widthOffset, currX + 8, currY + 8, glyphPixels + 24, glyphWidth - 8, glyphHeight - 8);
          }
      }

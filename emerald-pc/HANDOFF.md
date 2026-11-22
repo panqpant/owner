@@ -70,6 +70,14 @@ panel: menu.c records windows (`PcPanelAdd/Remove`) instead of drawing frames;
 `PcPanels()` checks each is still on screen. All menu screens (party, bag,
 summary, Pokédex, PC boxes = menu kind 5) share one deep-blue background.
 
+Item 7 (conveniences), always on in the PC version, no settings (owner: F10
+stays graphics/audio only; no autosave): instant text, auto-run (B walks),
+EXP Share for the whole party, physical/special split (gen-4 categories from
+pokeemerald-expansion, table in fieldfx.c), F6 quick save (refused where the
+start menu can't save and over a different file). Hard mode (trainers +10%
+levels, min +2): Birch asks after the name; stored as FLAG_PC_HARD_MODE
+(FLAG_UNUSED_0x020). Test hooks: `call flag N`, `call pc`.
+
 ## The owner's preferences (important)
 
 - Wants big, visible upgrades, "think big". Answers short; often types quickly.
@@ -90,9 +98,7 @@ summary, Pokédex, PC boxes = menu kind 5) share one deep-blue background.
 ## Open items / ideas not yet done
 
 - Owner's order from session 2: water (done) -> orchestral audio (first pass
-  done, needs a listen) -> full HD menu redesign (party screen done) -> Switch-era conveniences
-  (autosave, instant text, run toggle, difficulty, phys/spec split, EXP Share)
-  -> 3D world from the tiles with sprites standing up (no new 3D models).
+  done, needs a listen) -> full HD menu redesign (party screen done) -> Switch-era conveniences (done) -> 3D world from the tiles with sprites standing up (no new 3D models).
 - Surf Pokémon sprite renders with a black lower half (seen before session 2's changes).
 - A thin strip of the original water art shows right against boat hulls (Slateport).
 - Water art test is strongly-blue only (lavender walls were half-turned to water).

@@ -363,6 +363,11 @@ static void PumpEvents(void)
                 M4aPcSetHdAudio(!gPcHdAudio);
                 SDL_SetWindowTitle(sWindow, gPcHdAudio ? "Pokémon Emerald  [HD audio]" : "Pokémon Emerald  [original audio]");
             }
+            else if (e.key.keysym.sym == SDLK_F6)
+            {
+                extern int gPcQuickSave;
+                gPcQuickSave = 1;
+            }
             else if (e.key.keysym.sym == SDLK_m)
             {
                 extern int gPcMapRequest;

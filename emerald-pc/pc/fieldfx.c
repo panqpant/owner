@@ -17,6 +17,18 @@
 #include "gpu_regs.h"
 #include "party_menu.h"
 #include "constants/party_menu.h"
+#include "constants/moves.h"
+#include "save.h"
+#include "event_data.h"
+#include "new_game.h"
+#include "battle_pike.h"
+#include "battle_pyramid.h"
+#include "field_specials.h"
+#include "link.h"
+#include "safari_zone.h"
+#include "constants/battle_pyramid.h"
+#include "fieldmap.h"
+#include "battle.h"
 #include "palette.h"
 #include "sound.h"
 #include "constants/songs.h"
@@ -49,6 +61,7 @@ bool8 ArePlayerFieldControlsLocked(void); // (game script.h; pc/script.h shadows
 
 struct PcFieldFx gPcFieldFx;
 int gPcMapRequest;   // set by the frontend's map button
+int gPcQuickSave;    // set by the frontend's quick-save key (F6)
 struct PcAmbient gPcAmbient;
 struct PcFollower gPcFollower;
 struct PcBattleFx gPcBattleFx;
@@ -317,6 +330,24 @@ void PcUpdateFieldFx(void)
             CleanupOverworldWindowsAndTilemaps();
             FieldInitRegionMap(CB2_ReturnToField);
         }
+    }
+
+    // Quick save (F6) while the player is free to move, wherever the start
+    // menu would offer SAVE. Never over a different file the player has not
+    // saved over yet (a new game: the start menu, with its warning, does that).
+    if (gPcQuickSave)
+    {
+        int free = gMain.callback2 == CB2_Overworld && !gPaletteFade.active && !ArePlayerFieldControlsLocked()
+                && gPlayerAvatar.tileTransitionState == T_NOT_MOVING;
+        int may = !gDifferentSaveFile && !IsOverworldLinkActive() && !InUnionRoom() && !GetSafariZoneFlag()
+               && !InBattlePike() && CurrentBattlePyramidLocation() == PYRAMID_LOCATION_NONE && !InMultiPartnerRoom();
+        if (free && may)
+        {
+            SaveMapView();
+            TrySavingData(SAVE_NORMAL);
+        }
+        PlaySE(free && may ? SE_SAVE : SE_FAILURE);
+        gPcQuickSave = 0;   // pressed in a menu or battle: refused, not saved later by surprise
     }
 
     // Wake: while swimming, where the player was every few frames (the
@@ -776,4 +807,61 @@ int PcPanels(struct PcPanel out[16])
         n++;
     }
     return n;
+}
+
+// Physical/special split: the moves that are special from generation 4 on
+// (pokeemerald-expansion's categories); every other damaging move is physical.
+static const u16 sSpecialMoves[] = {
+    MOVE_RAZOR_WIND, MOVE_GUST, MOVE_SONIC_BOOM, MOVE_ACID,
+    MOVE_EMBER, MOVE_FLAMETHROWER, MOVE_WATER_GUN, MOVE_HYDRO_PUMP,
+    MOVE_SURF, MOVE_ICE_BEAM, MOVE_BLIZZARD, MOVE_PSYBEAM,
+    MOVE_BUBBLE_BEAM, MOVE_AURORA_BEAM, MOVE_HYPER_BEAM, MOVE_ABSORB,
+    MOVE_MEGA_DRAIN, MOVE_SOLAR_BEAM, MOVE_PETAL_DANCE, MOVE_DRAGON_RAGE,
+    MOVE_FIRE_SPIN, MOVE_THUNDER_SHOCK, MOVE_THUNDERBOLT, MOVE_THUNDER,
+    MOVE_CONFUSION, MOVE_PSYCHIC, MOVE_NIGHT_SHADE, MOVE_SMOG,
+    MOVE_SLUDGE, MOVE_FIRE_BLAST, MOVE_SWIFT, MOVE_DREAM_EATER,
+    MOVE_BUBBLE, MOVE_PSYWAVE, MOVE_TRI_ATTACK, MOVE_SNORE,
+    MOVE_AEROBLAST, MOVE_POWDER_SNOW, MOVE_SLUDGE_BOMB, MOVE_MUD_SLAP,
+    MOVE_OCTAZOOKA, MOVE_ZAP_CANNON, MOVE_ICY_WIND, MOVE_GIGA_DRAIN,
+    MOVE_DRAGON_BREATH, MOVE_HIDDEN_POWER, MOVE_TWISTER, MOVE_MIRROR_COAT,
+    MOVE_ANCIENT_POWER, MOVE_SHADOW_BALL, MOVE_FUTURE_SIGHT, MOVE_WHIRLPOOL,
+    MOVE_UPROAR, MOVE_SPIT_UP, MOVE_HEAT_WAVE, MOVE_ERUPTION,
+    MOVE_LUSTER_PURGE, MOVE_MIST_BALL, MOVE_HYPER_VOICE, MOVE_BLAST_BURN,
+    MOVE_HYDRO_CANNON, MOVE_WEATHER_BALL, MOVE_AIR_CUTTER, MOVE_OVERHEAT,
+    MOVE_SILVER_WIND, MOVE_WATER_SPOUT, MOVE_SIGNAL_BEAM, MOVE_EXTRASENSORY,
+    MOVE_SHEER_COLD, MOVE_MUDDY_WATER, MOVE_FRENZY_PLANT, MOVE_MUD_SHOT,
+    MOVE_MAGICAL_LEAF, MOVE_SHOCK_WAVE, MOVE_WATER_PULSE, MOVE_DOOM_DESIRE,
+    MOVE_PSYCHO_BOOST
+};
+
+bool8 PcMoveIsPhysical(u16 move, u8 type)
+{
+    int i;
+    if (move == MOVE_NONE)
+        return IS_TYPE_PHYSICAL(type);
+    for (i = 0; i < (int)ARRAY_COUNT(sSpecialMoves); i++)
+        if (sSpecialMoves[i] == move)
+            return FALSE;
+    return TRUE;
+}
+
+// Hard mode: trainers' Pokémon a few levels higher (10%, at least 2), stats recalculated.
+void PcHardModeBoost(struct Pokemon *party, int count)
+{
+    int i;
+    if (!FlagGet(FLAG_PC_HARD_MODE))
+        return;
+    for (i = 0; i < count; i++)
+    {
+        u16 species = GetMonData(&party[i], MON_DATA_SPECIES);
+        u32 lvl = GetMonData(&party[i], MON_DATA_LEVEL), exp;
+        if (species == SPECIES_NONE)
+            continue;
+        lvl += lvl / 10 > 2 ? lvl / 10 : 2;
+        if (lvl > MAX_LEVEL)
+            lvl = MAX_LEVEL;
+        exp = gExperienceTables[gSpeciesInfo[species].growthRate][lvl];
+        SetMonData(&party[i], MON_DATA_EXP, &exp);
+        CalculateMonStats(&party[i]);
+    }
 }
