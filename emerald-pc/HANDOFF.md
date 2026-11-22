@@ -2,7 +2,7 @@
 
 This file carries the context of the long chat that built this project, so a
 new chat can continue where it left off. Code is on branch
-`claude/sharp-meitner-z013ct` of `panqpant/owner`, folder `emerald-pc/`.
+`claude/new-session-k24koo` (earlier: `claude/sharp-meitner-z013ct`) of `panqpant/owner`, folder `emerald-pc/`.
 
 ## What this is
 
@@ -54,14 +54,21 @@ for wild, bolder for trainers, legendary shatter), cinematic story moments
 (letterbox, camera push, 16 colour styles), HD audio (Lanczos, DS-era mix,
 reverb, brass/bass layer), ambient soundscape, settings screen (F10), menu
 backgrounds, tilt camera (right stick, PgUp/PgDn, I/K, wheel, right-drag),
-real-art minimap (M), Wonder Trade replica (W / Y on pad).
+Wonder Trade replica (W / Y on pad).
+
+Session 2: water remake (continuous sea, shallows with seabed + caustics,
+clouds reflected, surf wake); orchestral audio (real recorded instruments from
+the FluidR3 GM soundfont via `hd/orchestra.bin`, built by
+`pc/tools/sf2extract.py`; `EMERALD_NO_ORCH=1` turns it off); minimap removed,
+M / pad X opens the game's own Hoenn region map; camera tilt now off by default
+(owner: tilt looks bad with 2D sprites; it also disabled the water remake).
 
 ## The owner's preferences (important)
 
 - Wants big, visible upgrades, "think big". Answers short; often types quickly.
 - Liked: Phase 2 lighting, procedural battle backdrops, cinematics, seasons with
   real visible change (e.g. leaves on the ground), Wonder Trade.
-- Disliked, do not repeat: anything that looks like a colour filter; AI-upscaled
+- Disliked, do not repeat: camera tilt (2D sprites look bad); the minimap; anything that looks like a colour filter; AI-upscaled
   or traced art ("terrible"); the redrawn grass; synth instruments ("weird and
   synthy", wants HG/SS-style sound instead); tile-shaped blotches or seams
   (always check at full size); crude particle sprites (seagulls); following
@@ -74,6 +81,13 @@ real-art minimap (M), Wonder Trade replica (W / Y on pad).
   ~3% legendary, all 386 species.
 
 ## Open items / ideas not yet done
+
+- Owner's order from session 2: water (done) -> orchestral audio (first pass
+  done, needs a listen) -> full HD menu redesign -> Switch-era conveniences
+  (autosave, instant text, run toggle, difficulty, phys/spec split, EXP Share)
+  -> 3D world from the tiles with sprites standing up (no new 3D models).
+- Surf Pokémon sprite renders with a black lower half (seen before session 2's changes).
+- A thin strip of the original water art shows right against boat hulls (Slateport).
 
 - Real Windows play-testing of recent builds (only screenshot-tested here).
 - Settings screen entries for seasons, live weather, cinematics, minimap, moods.

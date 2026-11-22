@@ -11,6 +11,12 @@
 #include "overworld.h"
 #include "sprite.h"
 #include "field_weather.h"
+#include "port.h"
+#include "palette.h"
+#include "sound.h"
+#include "constants/songs.h"
+bool8 ArePlayerFieldControlsLocked(void);   // game script.h (pc/script.h shadows it)
+void LockPlayerFieldControls(void);
 #include "metatile_behavior.h"
 #include "constants/weather.h"
 #include "field_player_avatar.h"
@@ -37,8 +43,8 @@ bool8 ArePlayerFieldControlsLocked(void); // (game script.h; pc/script.h shadows
 #include "fieldfx.h"
 
 struct PcFieldFx gPcFieldFx;
+int gPcMapRequest;   // set by the frontend's map button
 struct PcAmbient gPcAmbient;
-struct PcMinimap gPcMinimap;
 struct PcFollower gPcFollower;
 struct PcBattleFx gPcBattleFx;
 struct PcCine gPcCine;
@@ -91,7 +97,6 @@ static void SpriteFeet(struct ObjectEvent *obj, int *x, int *y)
 // player, or a cutscene (a script holds the controls while characters move
 // by themselves), or anything scripted on a story map.
 static void CineDebug(void);
-static void PcUpdateMinimap(void);
 static void PcUpdateFollower(void);
 static void CineForce(void);
 static int *s_cineWasLocked;
@@ -285,7 +290,54 @@ void PcUpdateFieldFx(void)
             }
     }
 
-    PcUpdateMinimap();
+    // Map button (M / pad X): fade out and open the game's own Hoenn region
+    // map, which marks where the player is; B returns to the field.
+    {
+        static int opening;
+        if (gPcMapRequest && !opening && gMain.callback2 == CB2_Overworld && !gPaletteFade.active
+         && !ArePlayerFieldControlsLocked() && gPlayerAvatar.tileTransitionState == T_NOT_MOVING)
+        {
+            PlaySE(SE_WIN_OPEN);
+            FreezeObjectEvents();
+            PlayerFreeze();
+            StopPlayerAvatar();
+            LockPlayerFieldControls();
+            FadeScreen(FADE_TO_BLACK, 0);
+            opening = 1;
+        }
+        gPcMapRequest = 0;
+        if (opening && !gPaletteFade.active)
+        {
+            opening = 0;
+            CleanupOverworldWindowsAndTilemaps();
+            FieldInitRegionMap(CB2_ReturnToField);
+        }
+    }
+
+    // Wake: while swimming, where the player was every few frames (the
+    // renderer spreads rings from these, leaving a V behind).
+    {
+        static int tick;
+        float now = (float)PortFrameCount();
+        int cx = (fx->playerX - fx->gridX) >> 4, cy = (fx->playerY - 4 - fx->gridY) >> 4, k;
+        int swim = fx->playerX > -900 && cx >= 0 && cx < PC_GRID_W && cy >= 0 && cy < PC_GRID_H
+            && (fx->grid[cy][cx] & PC_CELL_WATER);
+        float wx = (float)(fx->playerX - fx->gridX + fx->gridWX * 16), wy = (float)(fx->playerY - 4 - fx->gridY + fx->gridWY * 16);
+        if (fx->playerX <= -900)
+            for (k = 0; k < 12; k++) fx->wake[k][2] = -1;
+        if (swim && ++tick >= 6)
+        {
+            float dx = wx - fx->wake[1][0], dy = wy - fx->wake[1][1];
+            tick = 0;
+            if (fx->wake[1][2] < 0 || dx * dx + dy * dy >= 4)
+            {
+                memmove(fx->wake[2], fx->wake[1], sizeof(fx->wake[0]) * 10);
+                fx->wake[1][0] = wx; fx->wake[1][1] = wy; fx->wake[1][2] = now;
+            }
+        }
+        fx->wake[0][0] = wx; fx->wake[0][1] = wy; fx->wake[0][2] = swim ? now : -1;
+    }
+
     PcWonderTradeUpdate();
     PcUpdateFollower();
     PcUpdateCinematic();
@@ -501,104 +553,6 @@ int PcBattleBoss(void)
         if (tc == TRAINER_CLASS_RIVAL) return CINE_RIVAL;
     }
     return CINE_NONE;
-}
-
-// ---- Minimap: the real map art around the player, at half size ----
-static void PcUpdateMinimap(void)
-{
-    struct PcMinimap *m = &gPcMinimap;
-    struct ObjectEvent *pl = &gObjectEvents[gPlayerAvatar.objectEventId];
-    const struct MapLayout *lay = gMapHeader.mapLayout;
-    static int lastPx = -999, lastPy = -999, lastMap = -1, tick;
-    int px = pl->currentCoords.x, py = pl->currentCoords.y;
-    int x0 = px - PC_MINI_MW / 2, y0 = py - PC_MINI_MH / 2, mx, my, i;
-    u16 mapId = gSaveBlock1Ptr->location.mapNum | (gSaveBlock1Ptr->location.mapGroup << 8);
-    m->facing = pl->facingDirection;
-    {
-        // Smooth scrolling between tiles: how far the player sprite is from its tile.
-        struct Sprite *sp = &gSprites[pl->spriteId];
-        s16 sx, sy;
-        SetSpritePosToMapCoords(px, py, &sx, &sy);
-        m->offX = (sp->x + sp->x2 - (sx + 8)) / 2.0f;
-        m->offY = (sp->y + sp->y2 - (sy + 8 + (-sp->centerToCornerVecY - 16 + 8))) / 2.0f;
-        if (m->offX > 8 || m->offX < -8) m->offX = 0;
-        if (m->offY > 8 || m->offY < -8) m->offY = 0;
-    }
-    if (!lay || (px == lastPx && py == lastPy && mapId == lastMap && (tick++ % 20) && m->valid))
-        return;
-    lastPx = px; lastPy = py; lastMap = mapId;
-    for (my = 0; my < PC_MINI_MH; my++)
-        for (mx = 0; mx < PC_MINI_MW; mx++)
-        {
-            s32 id = MapGridGetMetatileIdAt(x0 + mx, y0 + my);
-            const u16 *mt;
-            u32 acc[8][8][3];
-            int l, t, yy, xx;
-            if (id < NUM_METATILES_IN_PRIMARY)
-                mt = lay->primaryTileset->metatiles + id * NUM_TILES_PER_METATILE;
-            else
-                mt = lay->secondaryTileset->metatiles + (id - NUM_METATILES_IN_PRIMARY) * NUM_TILES_PER_METATILE;
-            memset(acc, 0, sizeof(acc));
-            // Bottom layer, then top layer over it; each 16x16 metatile is
-            // box-filtered down to 8x8.
-            {
-                u16 pix[16][16];
-                memset(pix, 0, sizeof(pix));
-                for (l = 0; l < 2; l++)
-                    for (t = 0; t < 4; t++)
-                    {
-                        u16 e = mt[l * 4 + t];
-                        int tile = e & 0x3FF, hf = (e >> 10) & 1, vf = (e >> 11) & 1, pal = e >> 12;
-                        const u8 *src = (const u8 *)VRAM + tile * 32;
-                        for (yy = 0; yy < 8; yy++)
-                            for (xx = 0; xx < 8; xx++)
-                            {
-                                int sx2 = hf ? 7 - xx : xx, sy2 = vf ? 7 - yy : yy;
-                                u8 b = src[sy2 * 4 + sx2 / 2];
-                                int c = (sx2 & 1) ? b >> 4 : b & 15;
-                                if (!c && (l || pix[(t / 2) * 8 + yy][(t % 2) * 8 + xx])) continue;
-                                pix[(t / 2) * 8 + yy][(t % 2) * 8 + xx] = c ? (gPlttBufferFaded[pal * 16 + c] | 0x8000) : (gPlttBufferFaded[0] | 0x8000);
-                            }
-                    }
-                for (yy = 0; yy < 8; yy++)
-                    for (xx = 0; xx < 8; xx++)
-                    {
-                        u32 r = 0, g = 0, bl = 0;
-                        int k;
-                        for (k = 0; k < 4; k++)
-                        {
-                            u16 c = pix[yy * 2 + k / 2][xx * 2 + (k & 1)];
-                            r += c & 31; g += (c >> 5) & 31; bl += (c >> 10) & 31;
-                        }
-                        r = r * 255 / 124; g = g * 255 / 124; bl = bl * 255 / 124;
-                        m->rgba[my * 8 + yy][mx * 8 + xx] = 0xFF000000u | (bl << 16) | (g << 8) | r;
-                    }
-            }
-        }
-    // People, trainers and items as small marked dots.
-    for (i = 0; i < OBJECT_EVENTS_COUNT; i++)
-    {
-        struct ObjectEvent *o = &gObjectEvents[i];
-        int ox, oy, dx, dy;
-        u32 c;
-        if (!o->active || o->invisible || i == gPlayerAvatar.objectEventId)
-            continue;
-        ox = (o->currentCoords.x - x0) * 8 + 4; oy = (o->currentCoords.y - y0) * 8 + 4;
-        if (ox < 2 || oy < 2 || ox >= PC_MINI_W - 2 || oy >= PC_MINI_H - 2)
-            continue;
-        if (o->graphicsId == OBJ_EVENT_GFX_ITEM_BALL) c = 0xFF30D8FFu;
-        else if (o->trainerType != TRAINER_TYPE_NONE) c = 0xFF3030F0u;
-        else c = 0xFFFFFFFFu;
-        for (dy = -2; dy <= 2; dy++)
-            for (dx = -2; dx <= 2; dx++)
-            {
-                int d2 = dx * dx + dy * dy;
-                if (d2 <= 2) m->rgba[oy + dy][ox + dx] = c;
-                else if (d2 <= 5) m->rgba[oy + dy][ox + dx] = 0xFF202020u;
-            }
-    }
-    m->valid = 1;
-    m->version++;
 }
 
 // ---- Following Pokémon ----

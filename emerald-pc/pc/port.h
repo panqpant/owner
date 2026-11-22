@@ -88,5 +88,6 @@ void FlashPcSetPath(const char *path);
 // m4a_pc.c
 void M4aPcMixFrame(int16_t *out, int frames);
 void M4aPcSetFrameRate(double fps);
+void M4aPcLoadOrchestra(const char *basePath);   // hd/orchestra.bin: recorded instruments for HD audio
 
 #endif // PC_PORT_H

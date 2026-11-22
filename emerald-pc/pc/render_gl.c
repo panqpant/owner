@@ -95,6 +95,7 @@ typedef unsigned char GLboolean;
     X(void, glUniform4f, (GLint, GLfloat, GLfloat, GLfloat, GLfloat)) \
     X(void, glUniform3f, (GLint, GLfloat, GLfloat, GLfloat)) \
     X(void, glUniform1iv, (GLint, GLsizei, const GLint *)) \
+    X(void, glUniform3fv, (GLint, GLsizei, const GLfloat *)) \
     X(void, glGenVertexArrays, (GLsizei, GLuint *)) \
     X(void, glBindVertexArray, (GLuint)) \
     X(void, glGenFramebuffers, (GLsizei, GLuint *)) \
@@ -146,6 +147,7 @@ GLFUNCS
 #define glUniform4f p_glUniform4f
 #define glUniform3f p_glUniform3f
 #define glUniform1iv p_glUniform1iv
+#define glUniform3fv p_glUniform3fv
 #define glGenVertexArrays p_glGenVertexArrays
 #define glBindVertexArray p_glBindVertexArray
 #define glGenFramebuffers p_glGenFramebuffers
@@ -299,6 +301,7 @@ static const char *kComposite =
     "uniform vec4 uKey;\n"
     "uniform float uFlash;\n"
     "uniform vec2 uPlayer;\n"
+    "uniform vec3 uWake[12];\n"     // player's recent world positions (map px) and when (uTime); z < 0 unused
     "uniform vec3 uLife;\n"
     "uniform vec4 uInSun;\n"
     "uniform vec3 uGrassDark, uGrassLight;\n"
@@ -679,6 +682,16 @@ static const char *kComposite =
     "  vec3 k = TexS(uFlat, q).rgb;\n"
     "  return smoothstep(0.06, 0.16, k.b - max(k.r, k.g * 0.9)) * smoothstep(0.25, 0.4, k.b);\n"
     "}\n"
+    "float Caustic(vec2 p, float t) {\n"   // sunlight focused by the waves onto the seabed: a bright moving net
+    "  vec2 i = p; float c = 1.0;\n"
+    "  for (int n = 0; n < 4; n++) {\n"
+    "    float tt = t * (1.0 - 3.5 / float(n + 1));\n"
+    "    i = p + vec2(cos(tt - i.x) + sin(tt + i.y), sin(tt - i.y) + cos(tt + i.x));\n"
+    "    c += 1.0 / length(vec2(p.x / (sin(i.x + tt) / 0.005), p.y / (cos(i.y + tt) / 0.005)));\n"
+    "  }\n"
+    "  c = 1.17 - pow(c / 4.0, 1.4);\n"
+    "  return clamp(pow(abs(c), 8.0), 0.0, 1.0);\n"
+    "}\n"
     "void GrassColors(ivec2 cell, out vec3 dark, out vec3 light) {\n"   // darkest and lightest colours of a grass cell's art
     "  vec2 o = uGridPos.xy + vec2(cell) * 16.0;\n"
     "  dark = vec3(1.0); light = vec3(0.0); float dl = 9.0, ll = -1.0;\n"
@@ -910,9 +923,19 @@ static const char *kComposite =
     "  float wm = 0.0;\n"
     "  if (uFieldFx != 0 && top >= 1 && top <= 3) {\n"
     "    ivec2 c0 = ivec2(floor(CellPos(gp)));\n"
-    "    bool nearWater = ((here | Cell(c0 + ivec2(1, 0)) | Cell(c0 - ivec2(1, 0)) | Cell(c0 + ivec2(0, 1)) | Cell(c0 - ivec2(0, 1))) & 2) != 0;\n"
+    "    wm = WaterArt(uv);\n"
+    // water art counts on water tiles, and on broad blue right beside them
+    // (water drawn under boats and piers), so the remake doesn't stop at a tile edge
+    "    bool nearWater = false;\n"
+    "    if (wm > 0.0) {\n"
+    "      if ((here & 2) != 0) nearWater = true;\n"
+    "      else {\n"   // beside water: only broad blue (open water drawn under boats/piers), not glass or trim
+    "        float big = min(min(WaterArt(uv + vec2(6.0, 0.0) / uDim), WaterArt(uv - vec2(6.0, 0.0) / uDim)), min(WaterArt(uv + vec2(0.0, 6.0) / uDim), WaterArt(uv - vec2(0.0, 6.0) / uDim)));\n"
+    "        if (big > 0.5) for (int j = -1; j <= 1 && !nearWater; j++) for (int i = -1; i <= 1; i++) if ((Cell(c0 + ivec2(i, j)) & 2) != 0) { nearWater = true; break; }\n"
+    "      }\n"
+    "    }\n"
+    "    if (!nearWater) wm = 0.0;\n"
     "    if (nearWater) {\n"
-    "      wm = WaterArt(uv);\n"
     "      if (wm > 0.0) {\n"
     "        float shore = 0.0;\n"   // how close the nearest non-water art is (0 open water .. 1 at the shore)
     "        for (int k = 0; k < 8; k++) {\n"
@@ -929,16 +952,45 @@ static const char *kComposite =
     "        sl += vec2(-0.5, 0.85) * cos(dot(q, vec2(-0.5, 0.85)) * 0.55 - uTime * 2.1) * 0.3;\n"
     "        sl += vec2(0.2, -1.0) * cos(dot(q, vec2(0.2, -1.0)) * 0.9 - uTime * 2.7 + Noise(q * 0.05) * 3.0) * 0.18;\n"
     "        sl += (vec2(Noise(q * 0.18 + uTime * 0.4), Noise(q * 0.18 - uTime * 0.35 + 9.0)) - 0.5) * 0.2;\n"
+    // wake: rings spreading from where the player swam, so surfing leaves a V behind
+    "        float crest = 0.0;\n"
+    "        for (int k = 0; k < 12; k++) {\n"
+    "          float age = uTime - uWake[k].z;\n"
+    "          if (uWake[k].z < 0.0 || age < 0.0 || age > 3.0) continue;\n"
+    "          vec2 dv = q - uWake[k].xy; float d = length(dv);\n"
+    "          float x = d - 4.0 - age * 16.0;\n"
+    "          float ring = exp(-x * x / 18.0) * exp(-age * 1.3);\n"
+    "          sl += dv / max(d, 1.0) * sin(x * 0.8) * ring * 1.4;\n"
+    "          crest += ring * smoothstep(0.0, 1.5, -x + 1.5) * (1.0 - age / 3.0);\n"
+    "        }\n"
+    "        if (uWake[0].z >= 0.0 && uTime - uWake[0].z < 0.2) {\n"   // bobbing in place: small rings at the player
+    "          float d = length(q - uWake[0].xy), x = mod(d - uTime * 10.0, 14.0) - 7.0;\n"
+    "          sl += sin(x * 0.9) * exp(-d / 14.0) * 0.4 * vec2(1.0);\n"
+    "        }\n"
     "        vec3 deep = vec3(0.10, 0.30, 0.55), shallow = vec3(0.25, 0.62, 0.72);\n"
     "        vec3 base = mix(deep, shallow, shore * 0.85);\n"
     "        base = mix(base, art, 0.25);\n"   // keep a little of each area's own water colour
+    // shallows: the seabed shows through, bent by the waves, with sunlight caustics on it
+    "        float clear = smoothstep(0.2, 0.85, shore) * (uMapType == 4 ? 0.0 : 1.0);\n"
+    "        if (clear > 0.0) {\n"
+    "          vec2 bp = q + sl * 3.0;\n"
+    "          float cs = Caustic(bp * 0.09, uTime * 0.55) * 0.7 + Caustic(bp * 0.15 + 3.0, uTime * 0.8) * 0.3;\n"
+    "          vec3 bed = vec3(0.80, 0.74, 0.55) * (0.82 + 0.18 * Noise(bp * 0.12));\n"
+    "          bed *= 0.7 + cs * 1.1 * max(uSun.w, 0.1) * (1.0 - 0.7 * uLiveWx.x);\n"
+    "          base = mix(base, mix(bed, shallow, 0.35), clear * 0.6);\n"
+    "        }\n"
     "        float facing = clamp(0.5 + dot(sl, vec2(-0.5, -0.7)) * 0.6, 0.0, 1.0);\n"
     "        vec3 skyc = mix(vec3(0.62, 0.80, 1.0), vec3(1.0, 0.75, 0.5), clamp((uTint.r - uTint.b) * 3.0, 0.0, 1.0));\n"
+    // clouds drifting overhead, seen in the surface (more on a cloudy day)
+    "        vec2 cp = q * 0.012 + sl * 0.06 + vec2(uTime * 0.012, uTime * 0.005);\n"
+    "        float cl = smoothstep(0.45, 0.8, Noise(cp) * 0.65 + Noise(cp * 2.3 + 5.0) * 0.35);\n"
+    "        skyc = mix(skyc, vec3(1.0, 0.99, 0.97) * (0.6 + 0.4 * max(uSun.w, 0.2)), cl * (0.55 + 0.35 * uLiveWx.x));\n"
     "        vec3 wc = mix(base * (0.85 + 0.3 * facing), skyc, 0.18 + 0.22 * facing * facing);\n"
     "        float spec = pow(clamp(dot(normalize(vec3(sl * 1.2, 1.0)), normalize(vec3(-0.35, -0.55, 0.75))), 0.0, 1.0), 240.0);\n"
     "        wc += vec3(1.0, 0.97, 0.9) * spec * 0.6 * max(uSun.w, 0.15);\n"
     "        float foamBand = smoothstep(0.55, 0.95, shore) * (0.55 + 0.45 * sin(uTime * 1.5 - shore * 9.0 + Noise(q * 0.2) * 4.0));\n"
     "        float foam = foamBand * smoothstep(0.35, 0.65, Noise(q * 0.45 + vec2(uTime * 0.3, 0.0)));\n"
+    "        foam += clamp(crest, 0.0, 1.0) * (0.35 + 0.35 * Noise(q * 0.12 + uTime * 0.4));\n"   // soft: no small noise cells, which read as blocks at 1440p
     "        wc = mix(wc, vec3(0.93, 0.97, 1.0), clamp(foam, 0.0, 1.0) * 0.85);\n"
     "        res = mix(res, wc, wm);\n"
     "      }\n"
@@ -1666,9 +1718,6 @@ static const char *kPresent =
     "uniform int uIntroKind;\n"
     "uniform vec4 uCine;\n"         // x top bar, y bottom bar, z grade amount, w time
     "uniform int uCineStyle;\n"
-    "uniform sampler2D uMini;\n"     // minimap (one texel per metatile)
-    "uniform vec3 uMiniOn;\n"        // x on, y fade, z player facing
-    "uniform vec2 uMiniOff;\n"
     "uniform sampler2D uOverlay;\n"   // settings screen
     "uniform int uOverlayOn;\n"  // battles: x = left edge u, y = right edge u, z = message box top (v, from top)
     "void main() {\n"
@@ -1854,36 +1903,6 @@ static const char *kPresent =
     "  }\n"
     "  if (uCine.x > 0.001 && vUv.y > 1.0 - 0.105 * uCine.x) c = vec3(0.0);\n"
     "  if (uCine.y > 0.001 && vUv.y < 0.105 * uCine.y) c = vec3(0.0);\n"
-    // Minimap: the map art around the player at reduced size, in a rounded
-    // frame in the top-right corner, scrolling smoothly.
-    "  if (uMiniOn.x > 0.5 && uMiniOn.y > 0.01) {\n"
-    "    float H = 0.34, W = H * (40.0 / 26.0) / uAspect;\n"
-    "    vec2 lo = vec2(1.0 - W - 0.012 / uAspect * 1.6, 1.0 - H - 0.02);\n"
-    "    vec2 q = (vUv - lo) / vec2(W, H);\n"
-    "    vec2 pxl = q * vec2(W * uAspect, H);\n"
-    "    vec2 hs = vec2(W * uAspect, H) * 0.5;\n"
-    "    float rad = 0.03;\n"
-    "    vec2 dd = abs(pxl - hs) - (hs - rad);\n"
-    "    float sd = length(max(dd, 0.0)) + min(max(dd.x, dd.y), 0.0) - rad;\n"   // rounded-rect distance
-    "    if (sd < 0.006) {\n"
-    "      vec2 mt = vec2(q.x, 1.0 - q.y) * vec2(320.0, 208.0);\n"
-    "      vec2 view = vec2(304.0, 192.0);\n"   // show a little less than stored, so scrolling never shows the edge
-    "      vec2 mp = (mt - vec2(160.0, 104.0)) * (view / vec2(320.0, 208.0)) + vec2(164.0, 108.0) + uMiniOff;\n"
-    "      vec3 m = texture(uMini, mp / vec2(320.0, 208.0)).rgb;\n"
-    "      vec2 pc = mp - vec2(164.0, 108.0) - uMiniOff;\n"   // player marker at the centre
-    "      vec2 fd = uMiniOn.z < 1.5 ? vec2(0.0, 1.0) : uMiniOn.z < 2.5 ? vec2(0.0, -1.0) : uMiniOn.z < 3.5 ? vec2(-1.0, 0.0) : vec2(1.0, 0.0);\n"
-    "      vec2 side = vec2(-fd.y, fd.x);\n"
-    "      float along = dot(pc, fd), across = abs(dot(pc, side));\n"
-    "      float tri = step(-3.5, along) * step(along, 4.5) * step(across, (4.5 - along) * 0.6);\n"
-    "      float triO = step(-5.0, along) * step(along, 6.2) * step(across, (6.2 - along) * 0.62 + 0.5);\n"
-    "      m = mix(m, vec3(0.1), triO); m = mix(m, vec3(1.0, 0.85, 0.2), tri);\n"
-    "      float inside = 1.0 - smoothstep(-0.004, 0.0, sd);\n"
-    "      vec3 framec = vec3(0.95, 0.96, 1.0);\n"
-    "      vec3 outc = mix(framec, m, inside);\n"
-    "      float a = (1.0 - smoothstep(0.004, 0.006, sd)) * uMiniOn.y;\n"
-    "      c = mix(c, outc, a);\n"
-    "    }\n"
-    "  }\n"
     "  if (uOverlayOn != 0) { vec4 o = texture(uOverlay, vec2(vUv.x, 1.0 - vUv.y)); c = mix(c, o.rgb, o.a); }\n"
     "  oColor = vec4(c, 1.0);\n"
     "}\n";
@@ -1975,12 +1994,8 @@ static const char *kGi =
     "}\n";
 
 static GLuint sProgGi, sGiTex, sGiFbo;
-static GLuint sSnapTex, sOverlayTex, sMiniTex, sFollowTex;
+static GLuint sSnapTex, sOverlayTex, sFollowTex;
 static int sFollowVersion = -1;
-static int sMiniEnabled = 1;
-static float sMiniFade;
-void HdSetMinimap(int on) { sMiniEnabled = on; }
-int HdGetMinimap(void) { return sMiniEnabled; }
 static int sOverlayOn, sGiEnabled = 1, sShatterEnabled = 1;
 void HdSetGi(int on) { sGiEnabled = on; }
 int HdGetGi(void) { return sGiEnabled; }
@@ -2021,7 +2036,7 @@ static int sCompW, sCompH; // composite size = on-screen size of the game image
 static int sLastWinW, sLastWinH;
 static int sGrade = 1;
 static int sLighting = 1;
-static float sTilt = 0.4f;   // HD-2D tilt: F8 cycles off / gentle / strong
+static float sTilt = 0.0f;   // HD-2D tilt (off by default): F8 cycles off / gentle / strong
 void HdCycleTilt(void) { sTilt = sTilt <= 0.0f ? 0.25f : sTilt < 0.3f ? 0.4f : sTilt < 0.5f ? 0.6f : 0.0f; }
 float HdGetTilt(void) { return sTilt; }
 void HdSetTilt(float t) { sTilt = t < 0 ? 0 : t > 1.2f ? 1.2f : t; }
@@ -2967,6 +2982,18 @@ static void RenderHd(const uint32_t *frame, int outW, int outH)
             }
             glUniform1f(glGetUniformLocation(sProgComp, "uTilt"), field && sLighting ? sTilt : 0.0f);
             glUniform2f(glGetUniformLocation(sProgComp, "uPlayer"), (float)gPcFieldFx.playerX, (float)gPcFieldFx.playerY);
+            {
+                // Wake trail from the field update: game frames -> shader time.
+                float wake[12][3], now = (float)PortFrameCount();
+                float t = (float)(PortFrameCount() % 36000) / 59.73f;
+                for (int i = 0; i < 12; i++)
+                {
+                    wake[i][0] = gPcFieldFx.wake[i][0];
+                    wake[i][1] = gPcFieldFx.wake[i][1];
+                    wake[i][2] = field && gPcFieldFx.wake[i][2] >= 0 ? t - (now - gPcFieldFx.wake[i][2]) / 59.73f : -1.0f;
+                }
+                glUniform3fv(glGetUniformLocation(sProgComp, "uWake"), 12, &wake[0][0]);
+            }
             SetBattleUniforms();
             SetMenuUniforms();
             glUniform1f(glGetUniformLocation(sProgComp, "uFlash"), field ? (getenv("EMERALD_FLASH") ? 1.0f : gPcFieldFx.flash / 16.0f) : 0.0f);
@@ -3107,47 +3134,6 @@ static void DrawPresent(int hdMode, int winW, int winH)
         glUniform1f(glGetUniformLocation(sProgPresent, "uUScale"), 1.0f);
         glUniform1f(glGetUniformLocation(sProgPresent, "uBloom"), sGrade ? 0.25f + sNight * 0.9f : 0.0f);
         glUniform1f(glGetUniformLocation(sProgPresent, "uSharpen"), sGrade ? 1.0f : 0.0f);
-        {
-            // Minimap: shown on the overworld (not in battles, menus or cutscenes).
-            extern struct PcWt gPcWt;
-            int show = sMiniEnabled && PcFieldWideActive() && !gPcBattleFrame && gPcMinimap.valid && sCineBarT < 0.2f && !gPcWt.busy;
-            {
-                extern int gPcMenuFrame;
-                if (gPcMenuFrame) show = 0;
-            }
-            {
-                static unsigned lastMf;
-                unsigned fnow = (unsigned)PortFrameCount();
-                int steps = (int)(fnow - lastMf);
-                lastMf = fnow;
-                if (steps < 1) steps = 1;
-                if (steps > 60) steps = 60;
-                sMiniFade += ((show ? 1.0f : 0.0f) - sMiniFade) * (1.0f - powf(0.85f, (float)steps));
-            }
-            if (!sMiniTex)
-            {
-                glGenTextures(1, &sMiniTex);
-                glBindTexture(GL_TEXTURE_2D, sMiniTex);
-                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-            }
-            glActiveTexture(GL_TEXTURE0 + 3);
-            glBindTexture(GL_TEXTURE_2D, sMiniTex);
-            {
-                static int ver = -1;
-                if (show && ver != gPcMinimap.version)
-                {
-                    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, PC_MINI_W, PC_MINI_H, 0, GL_RGBA, GL_UNSIGNED_BYTE, gPcMinimap.rgba);
-                    ver = gPcMinimap.version;
-                }
-            }
-            glUniform2f(glGetUniformLocation(sProgPresent, "uMiniOff"), gPcMinimap.offX, gPcMinimap.offY);
-            glActiveTexture(GL_TEXTURE0);
-            glUniform1i(glGetUniformLocation(sProgPresent, "uMini"), 3);
-            glUniform3f(glGetUniformLocation(sProgPresent, "uMiniOn"), sMiniTex ? 1.0f : 0.0f, sMiniFade, (float)gPcMinimap.facing);
-        }
         glUniform4f(glGetUniformLocation(sProgPresent, "uCine"), sCineBarT, sCineBarB, sCineAmt, (float)(PortFrameCount() % 36000) / 59.73f);
         glUniform1i(glGetUniformLocation(sProgPresent, "uCineStyle"), sCineStyle);
         {

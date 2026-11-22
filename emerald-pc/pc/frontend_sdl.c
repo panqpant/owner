@@ -210,6 +210,7 @@ int FrontendInit(int argc, char **argv)
     {
         sGl = SDL_GL_CreateContext(sWindow);
         HdPackInit(sBasePath);
+        M4aPcLoadOrchestra(sBasePath);
         if (sDumpAtStart)
             HdPackSetDump(1);
         if (sGl && !getenv("EMERALD_NOGL") && HdInit() == 0)
@@ -317,6 +318,12 @@ static void PumpEvents(void)
             MenuOpen(1);
             continue;
         }
+        if (e.type == SDL_CONTROLLERBUTTONDOWN && e.cbutton.button == SDL_CONTROLLER_BUTTON_X)
+        {
+            extern int gPcMapRequest;
+            gPcMapRequest = 1;   // region map
+            continue;
+        }
         switch (e.type)
         {
         case SDL_QUIT:
@@ -355,11 +362,10 @@ static void PumpEvents(void)
                 M4aPcSetHdAudio(!gPcHdAudio);
                 SDL_SetWindowTitle(sWindow, gPcHdAudio ? "Pokémon Emerald  [HD audio]" : "Pokémon Emerald  [original audio]");
             }
-            else if (e.key.keysym.sym == SDLK_m && sUseGl)
+            else if (e.key.keysym.sym == SDLK_m)
             {
-                extern void HdSetMinimap(int on);
-                extern int HdGetMinimap(void);
-                HdSetMinimap(!HdGetMinimap());
+                extern int gPcMapRequest;
+                gPcMapRequest = 1;   // region map
             }
             else if (e.key.keysym.sym == SDLK_F8 && sUseGl)
             {

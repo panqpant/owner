@@ -9,6 +9,7 @@
 #   libpng-dev git python3 curl
 #   windowed Linux build: sudo dpkg --add-architecture i386 && sudo apt install libsdl2-dev:i386
 #   Windows build:        gcc-mingw-w64-i686 (SDL2 for MinGW is downloaded automatically)
+#   Orchestra (optional): fluid-soundfont-gm (MIT licence) -> hd/orchestra.bin, real instrument samples
 # No ROM is needed: the decompilation builds every asset from source.
 set -euo pipefail
 
@@ -42,6 +43,12 @@ cd pokeemerald
 # The GBA build converts graphics, maps and music into the forms the game
 # includes; the PC build reuses those generated files.
 make -j"$(nproc)"
+SF2=/usr/share/sounds/sf2/FluidR3_GM.sf2
+for out in build/pc/hd build/win/hd; do
+    if [ -f "$SF2" ] && [ ! -f "$out/orchestra.bin" ]; then
+        mkdir -p "$out" && python3 pc/tools/sf2extract.py "$SF2" "$out/orchestra.bin"
+    fi
+done
 if [ "$TARGET" = win ]; then
     SDL_VER=2.30.9
     if [ ! -d ../sdl2-mingw ]; then

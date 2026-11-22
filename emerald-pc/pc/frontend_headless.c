@@ -51,10 +51,13 @@ static void WritePpm(const char *path)
     fclose(f);
 }
 
+float gPcLiveRain;   // set by the GL renderer; never rains in headless runs
+
 int FrontendInit(int argc, char **argv)
 {
     int i;
     const char *script = NULL;
+    M4aPcLoadOrchestra("");
     for (i = 1; i < argc; i++)
     {
         if (!strcmp(argv[i], "--script") && i + 1 < argc)

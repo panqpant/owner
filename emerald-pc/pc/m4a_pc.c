@@ -890,7 +890,111 @@ static void InitLanczos(void)
 #include "instr_table.h"
 
 #define SYN_MAX_WAVS 40
-struct WavInfo { const struct WaveData *w; int kind; double f0; float gain; };
+
+// ---------------------------------------------------------------------------
+// Recorded orchestra (hd/orchestra.bin, made by tools/sf2extract.py from a
+// General MIDI soundfont): real piano, strings, brass, winds and choir
+// samples play the melodic notes in place of the GBA's tiny samples. The
+// game's sequencer, envelopes, volume and pan still drive every note.
+struct OrchZone { u8 lo, hi, root, pad; float cents, gain; u32 rate, start, len, loopStart, loopEnd; };
+struct OrchInst { int prog, n; const struct OrchZone *z; float rms; };
+static struct OrchInst sOrch[32];
+static int sNumOrch;
+static s16 *sOrchPcm;
+int gPcOrchestra = 1;   // HD audio: use the recorded orchestra when loaded
+
+static float OrchZoneRms(const struct OrchZone *z)
+{
+    u32 a = z->loopEnd ? z->loopStart : z->len / 6, n = z->len - a, i;
+    double e = 0;
+    if (n > 8192) n = 8192;
+    for (i = 0; i < n; i++) { double v = sOrchPcm[z->start + a + i] / 256.0 * z->gain; e += v * v; }
+    return n ? (float)sqrt(e / n) : 0;
+}
+
+void M4aPcLoadOrchestra(const char *basePath)
+{
+    char path[1100];
+    FILE *f;
+    long size;
+    u8 *d;
+    u32 off = 8, ni, i, pcmN;
+    snprintf(path, sizeof(path), "%shd/orchestra.bin", basePath);
+    if (!(f = fopen(path, "rb")))
+        return;
+    fseek(f, 0, SEEK_END);
+    size = ftell(f);
+    fseek(f, 0, SEEK_SET);
+    d = malloc(size > 8 ? size : 8);
+    if (!d || fread(d, 1, size, f) != (size_t)size || size < 8 || memcmp(d, "EORC", 4))
+    {
+        fclose(f);
+        free(d);
+        return;
+    }
+    fclose(f);
+    memcpy(&ni, d + 4, 4);
+    // Instruments, then the sample pool; every zone is checked against the pool.
+    {
+        u32 o = off;
+        for (i = 0; i < ni && o + 2 <= (u32)size; i++)
+            o += 2 + d[o + 1] * (u32)sizeof(struct OrchZone);
+        if (i < ni || o + 4 > (u32)size)
+            goto bad;
+        memcpy(&pcmN, d + o, 4);
+        if ((u64)o + 4 + (u64)pcmN * 2 > (u64)size)
+            goto bad;
+        sOrchPcm = (s16 *)(d + o + 4);   // shortcut: assumes a little-endian, unaligned-tolerant CPU (x86), as the port does elsewhere
+    }
+    for (i = 0; i < ni && sNumOrch < 32; i++)
+    {
+        struct OrchInst *in = &sOrch[sNumOrch];
+        int k, ok = 1;
+        in->prog = d[off];
+        in->n = d[off + 1];
+        in->z = (const struct OrchZone *)(d + off + 2);
+        off += 2 + in->n * sizeof(struct OrchZone);
+        for (k = 0; k < in->n; k++)
+        {
+            const struct OrchZone *z = &in->z[k];
+            if ((u64)z->start + z->len > pcmN || z->len < 4 || z->rate == 0 || (z->loopEnd && (z->loopEnd > z->len || z->loopStart + 2 > z->loopEnd)))
+                ok = 0;
+        }
+        if (!ok || !in->n)
+            continue;
+        {
+            // Loudness reference: the zone nearest middle C.
+            const struct OrchZone *best = &in->z[0];
+            for (k = 0; k < in->n; k++)
+                if (abs(in->z[k].root - 60) < abs(best->root - 60)) best = &in->z[k];
+            in->rms = OrchZoneRms(best);
+        }
+        sNumOrch++;
+    }
+    if (getenv("EMERALD_NO_ORCH"))
+        gPcOrchestra = 0;
+    return;
+bad:
+    fprintf(stderr, "orchestra: %s is damaged, ignored\n", path);
+    free(d);
+}
+
+static const struct OrchZone *OrchZoneFor(const struct OrchInst *in, double hz)
+{
+    int key = (int)lround(69.0 + 12.0 * log2(hz / 440.0)), k;
+    const struct OrchZone *best = &in->z[0];
+    for (k = 0; k < in->n; k++)
+    {
+        if (key >= in->z[k].lo && key <= in->z[k].hi)
+            return &in->z[k];
+        if (abs(in->z[k].root - key) < abs(best->root - key)) best = &in->z[k];
+    }
+    return best;
+}
+
+static const struct OrchZone *sOz[MAX_DIRECTSOUND_CHANNELS];
+static double sOPos[MAX_DIRECTSOUND_CHANNELS];
+struct WavInfo { const struct WaveData *w; int kind; double f0; float gain; float rms; const struct OrchInst *orch; };
 static struct WavInfo sWavInfo[SYN_MAX_WAVS];
 static int sNumWavInfo, sSynReady;
 
@@ -1148,6 +1252,11 @@ static void SynthInit(void)
         wi->w = sSynthInstruments[i].wav;
         wi->kind = sSynthInstruments[i].kind;
         AnalyseWave(wi->w, &wi->f0, &rms);
+        wi->rms = rms;
+        wi->orch = NULL;
+        for (k = 0; k < sNumOrch; k++)
+            if (sOrch[k].prog == sSynthInstruments[i].prog && sOrch[k].rms > 0)
+                wi->orch = &sOrch[k];
         wi->gain = kindRms[wi->kind] > 1e-6f ? rms / kindRms[wi->kind] : 0;
         if (getenv("EMERALD_SYNTH_DEBUG"))
             fprintf(stderr, "synth: wav %p kind %d f0 %.6f rms %.1f\n", (void *)wi->w, wi->kind, wi->f0, rms);
@@ -1228,6 +1337,57 @@ static void MixDirectSound(struct SoundInfo *si, int n)
             SynthInit();
         if (gPcHdAudio && gPcSynthInstruments && !(c->type & (TONEDATA_TYPE_FIX | TONEDATA_TYPE_REV | TONEDATA_TYPE_CMP)))
             syn = SynthFor(w);
+        if (syn && syn->orch && gPcOrchestra)
+        {
+            // Recorded instrument plays the note; the GBA sample is skipped.
+            const struct OrchInst *in = syn->orch;
+            double hz = syn->f0 * step * OUT_RATE, ostep;
+            const struct OrchZone *z;
+            float g;
+            if (sSynNew[i] || !sOz[i])
+            {
+                sOz[i] = OrchZoneFor(in, hz);
+                sOPos[i] = 0;
+            }
+            sSynNew[i] = 0;
+            z = sOz[i];
+            ostep = hz / (440.0 * pow(2.0, (z->root - 69) / 12.0)) * pow(2.0, z->cents / 1200.0) * z->rate / OUT_RATE;
+            g = syn->rms / in->rms * z->gain / 256.0f;
+            for (s = 0; s < n; s++)
+            {
+                double op = sOPos[i];
+                s32 ip;
+                float fr, a, b, c0, d0, smp;
+                const s16 *p = sOrchPcm + z->start;
+                if (z->loopEnd && op >= z->loopEnd)
+                    op = z->loopStart + fmod(op - z->loopStart, (double)(z->loopEnd - z->loopStart));
+                ip = (s32)op;
+                if ((u32)ip + 2 >= z->len && !z->loopEnd)
+                    break;   // one-shot recording finished; the game's envelope ends the note
+                fr = (float)(op - ip);
+                #define OS(k) ((u32)(k) < z->len ? (float)p[(k) < (s32)(z->loopEnd ? z->loopEnd : z->len) ? (k) : (k) - (s32)(z->loopEnd - z->loopStart)] : 0.0f)
+                a = ip > 0 ? OS(ip - 1) : OS(ip); b = OS(ip); c0 = OS(ip + 1); d0 = OS(ip + 2);
+                #undef OS
+                // Catmull-Rom between b and c0
+                smp = b + 0.5f * fr * (c0 - a + fr * (2.0f * a - 5.0f * b + 4.0f * c0 - d0 + fr * (3.0f * (b - c0) + d0 - a)));
+                sMixL[s] += smp * g * vl;
+                sMixR[s] += smp * g * vr;
+                vl += dvl;
+                vr += dvr;
+                sOPos[i] = op + ostep;
+            }
+            // Keep the GBA sample's clock running so the game sees the note progress as before.
+            pos += step * n;
+            if ((u32)pos >= size)
+            {
+                if (loop && size > loopStart)
+                    pos = loopStart + fmod(pos - size, (double)(size - loopStart));
+                else
+                    pos = size - 1;   // hold: the recorded note and the envelope decide when it ends
+            }
+            goto chanDone;
+        }
+        sOz[i] = NULL;
         if (syn && syn->kind != SYN_BRASS && syn->kind != SYN_STRINGS && syn->kind != SYN_BASS)
             syn = NULL;
         if (syn)
@@ -1299,6 +1459,7 @@ static void MixDirectSound(struct SoundInfo *si, int n)
         }
         }
         }
+    chanDone:
         sPos[i] = pos;
         if (c->statusFlags)
         {

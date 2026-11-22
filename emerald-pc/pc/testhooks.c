@@ -47,6 +47,11 @@ void TestHookRun(const char *cmd)
         if (sscanf(cmd, "%*s %511s", path) == 1)
             PpuRequestCapture(path);
     }
+    else if (!strcmp(name, "map"))
+    {
+        extern int gPcMapRequest;
+        gPcMapRequest = 1;   // as the map button does
+    }
     else if (!strcmp(name, "weather"))
     {
         SetCurrentAndNextWeatherNoDelay(a);
