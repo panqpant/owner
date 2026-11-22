@@ -14,6 +14,8 @@
 #include "field_screen_effect.h"
 #include "field_weather.h"
 #include "event_data.h"
+#include "event_object_movement.h"
+#include "field_player_avatar.h"
 
 void TestHookRun(const char *cmd)
 {
@@ -58,6 +60,33 @@ void TestHookRun(const char *cmd)
     else if (!strcmp(name, "flag"))
     {
         fprintf(stderr, "[test] flag 0x%X = %d\n", a, FlagGet(a));
+    }
+    else if (!strcmp(name, "setflag"))
+    {
+        // setflag N [0]: set (or with 0, clear) a flag
+        if (sscanf(cmd, "%*s %i %i", &a, &b) == 2 && b == 0) FlagClear(a); else FlagSet(a);
+    }
+    else if (!strcmp(name, "pos"))
+    {
+        struct ObjectEvent *o = &gObjectEvents[gPlayerAvatar.objectEventId];
+        fprintf(stderr, "[test] pos %d,%d\n", o->currentCoords.x, o->currentCoords.y);
+    }
+    else if (!strcmp(name, "trainer"))
+    {
+        // trainer ID: start that trainer's battle here (as a trainer script would)
+        extern u16 gTrainerBattleOpponent_A;
+        void BattleSetup_StartTrainerBattle(void);
+        if (gPlayerPartyCount == 0)
+            ScriptGiveMon(SPECIES_TREECKO, 5, ITEM_NONE, 0, 0, 0);
+        gTrainerBattleOpponent_A = a;
+        BattleSetup_StartTrainerBattle();
+    }
+    else if (!strcmp(name, "hp"))
+    {
+        // hp SLOT VALUE: set a party Pokémon's HP (0 faints it)
+        u16 hp = b;
+        if (a >= 0 && a < PARTY_SIZE)
+            SetMonData(&gPlayerParty[a], MON_DATA_HP, &hp);
     }
     else if (!strcmp(name, "map"))
     {

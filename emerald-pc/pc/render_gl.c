@@ -1771,7 +1771,7 @@ static const char *kComposite =
     "      int wbg = int(t.w) / 2;\n"
     "      if (all(greaterThanEqual(sp, r.xy)) && all(lessThan(sp, r.xy + r.zw))) {\n"   // the window itself: the game's pixels,
     "        vec2 e = min(sp - r.xy, r.xy + r.zw - sp);\n"                             // with its soft upscaled edge laid on the panel
-    "        if (min(e.x, e.y) < 1.5 && wbg == 0) { float a = lay[0].a; res = mix(vec3(0.99, 0.995, 1.0) * t.rgb, res, a); }\n"
+    "        if (min(e.x, e.y) < 2.5) { float a = lay[clamp(wbg, 0, 3)].a; res = mix(vec3(0.99, 0.995, 1.0) * t.rgb, res, a); }\n"
     "        continue;\n"
     "      }\n"
     "      vec2 mg = mod(t.w, 2.0) > 0.5 ? vec2(11.0, 6.0) : vec2(6.0);\n"
