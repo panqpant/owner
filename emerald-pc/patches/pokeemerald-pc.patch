@@ -23,10 +23,10 @@ index 8566762..097e815 100644
  #if MODERN
  // NOTE: Assumes 16-bit DMAs.
 diff --git a/include/global.h b/include/global.h
-index f624850..578207d 100644
+index f624850..8b4b94f 100644
 --- a/include/global.h
 +++ b/include/global.h
-@@ -17,6 +17,30 @@
+@@ -17,6 +17,31 @@
  #include "constants/easy_chat.h"
  #include "constants/trainer_hill.h"
  
@@ -41,7 +41,8 @@ index f624850..578207d 100644
 +void PcSetOutdoors(int outdoors); // enables time-of-day lighting on the overworld
 +void PcUpdateFieldFx(void);       // lights and character shadows (pc/fieldfx.c)
 +void PcMarkBattleFrame(void);     // this frame is a battle: render it widescreen
-+void PcUpdateBattleFx(void);      // battler positions for battle lighting (pc/fieldfx.c)
++void PcUpdateBattleFx(void);
++void PcBattleIntro(void);         // a battle transition starts: the PC renderer shatters the screen      // battler positions for battle lighting (pc/fieldfx.c)
 +void PcSetMapPopup(int shown);    // map-name sign: drawn at the widescreen corner
 +// High-resolution text (pc/texthd.c): keep per-pixel glyph tags in step with windows.
 +struct TextPrinter;
@@ -98,6 +99,29 @@ index 11fc168..083e191 100644
      RunTextPrinters();
      UpdatePaletteFade();
      RunTasks();
+diff --git a/src/battle_transition.c b/src/battle_transition.c
+index 59fb57e..95cdee2 100644
+--- a/src/battle_transition.c
++++ b/src/battle_transition.c
+@@ -1025,12 +1025,18 @@ static void UNUSED TestBattleTransition(u8 transitionId)
+ 
+ void BattleTransition_StartOnField(u8 transitionId)
+ {
++#ifdef PLATFORM_PC
++    PcBattleIntro();
++#endif
+     gMain.callback2 = CB2_OverworldBasic;
+     LaunchBattleTransitionTask(transitionId);
+ }
+ 
+ void BattleTransition_Start(u8 transitionId)
+ {
++#ifdef PLATFORM_PC
++    PcBattleIntro();
++#endif
+     LaunchBattleTransitionTask(transitionId);
+ }
+ 
 diff --git a/src/bg.c b/src/bg.c
 index 2c82a42..fbc3a87 100644
 --- a/src/bg.c

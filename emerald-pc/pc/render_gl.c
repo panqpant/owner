@@ -73,6 +73,7 @@ typedef unsigned char GLboolean;
     X(void, glClear, (GLbitfield)) \
     X(void, glDrawArrays, (GLenum, GLint, GLsizei)) \
     X(void, glReadPixels, (GLint, GLint, GLsizei, GLsizei, GLenum, GLenum, void *)) \
+    X(void, glCopyTexSubImage2D, (GLenum, GLint, GLint, GLint, GLint, GLint, GLsizei, GLsizei)) \
     X(GLenum, glGetError, (void)) \
     X(GLuint, glCreateShader, (GLenum)) \
     X(void, glShaderSource, (GLuint, GLsizei, const GLchar *const *, const GLint *)) \
@@ -123,6 +124,7 @@ GLFUNCS
 #define glClear p_glClear
 #define glDrawArrays p_glDrawArrays
 #define glReadPixels p_glReadPixels
+#define glCopyTexSubImage2D p_glCopyTexSubImage2D
 #define glGetError p_glGetError
 #define glCreateShader p_glCreateShader
 #define glShaderSource p_glShaderSource
@@ -1494,7 +1496,10 @@ static const char *kPresent =
     "uniform float uBloom;\n"
     "uniform float uSharpen;\n"
     "uniform vec2 uTexel;\n"
-    "uniform vec3 uSoftSides;\n"  // battles: x = left edge u, y = right edge u, z = message box top (v, from top)
+    "uniform vec3 uSoftSides;\n"
+    "uniform sampler2D uSnap;\n"     // the screen as the battle intro began
+    "uniform float uShatter;\n"      // intro time 0-1 (< 0: off)
+    "uniform float uAspect;\n"  // battles: x = left edge u, y = right edge u, z = message box top (v, from top)
     "void main() {\n"
     "  vec2 uv = vec2(vUv.x * uUScale, uFlip > 0.5 ? 1.0 - vUv.y : vUv.y);\n"
     "  vec3 c = texture(uTex, uv).rgb;\n"
@@ -1554,6 +1559,45 @@ static const char *kPresent =
     "    vec3 sat = mix(vec3(l), c, 1.10);\n"                       // gentle vibrance
     "    vec3 con = (sat - 0.5) * 1.06 + 0.5;\n"                    // gentle contrast
     "    c = mix(c, clamp(con, 0.0, 1.0), uGrade);\n"
+    "  }\n"
+    // Battle intro: the screen cracks, then breaks into shards that spin
+    // away toward the camera, revealing the game's own transition behind.
+    "  if (uShatter >= 0.0) {\n"
+    "    vec2 grid = vec2(9.0, 6.0);\n"
+    "    float t = uShatter;\n"
+    "    float fly = smoothstep(0.18, 1.0, t);\n"
+    "    vec4 shard = vec4(0.0);\n"
+    "    for (int cx = 0; cx < 9; cx++) for (int cy = 0; cy < 6; cy++) {\n"
+    "      vec2 cell = vec2(float(cx), float(cy));\n"
+    "      float h = fract(sin(dot(cell, vec2(12.9898, 78.233))) * 43758.5453);\n"
+    "      float h2 = fract(h * 91.7);\n"
+    "      vec2 seed = (cell + 0.25 + 0.5 * vec2(h, h2)) / grid;\n"
+    "      vec2 away = normalize(seed - vec2(0.5) + 0.001);\n"
+    "      float sc = 1.0 + fly * (0.6 + 1.2 * h);\n"   // flying toward the camera
+    "      float ang = fly * (h2 - 0.5) * 5.0;\n"
+    "      vec2 off = away * fly * (0.25 + 0.6 * h) + vec2(0.0, -fly * fly * 0.6);\n"
+    "      vec2 d = (uv - seed - off) * vec2(uAspect, 1.0) / sc;\n"
+    "      d = mat2(cos(ang), sin(ang), -sin(ang), cos(ang)) * d;\n"
+    "      vec2 q = seed + d / vec2(uAspect, 1.0);\n"
+    "      if (q.x < 0.0 || q.y < 0.0 || q.x > 1.0 || q.y > 1.0) continue;\n"
+    "      vec2 qc = floor(q * grid); float best = 9.0, second = 9.0; vec2 bestSeed = vec2(-1.0);\n"
+    "      for (int i = -1; i <= 1; i++) for (int j = -1; j <= 1; j++) {\n"
+    "        vec2 nc = qc + vec2(float(i), float(j));\n"
+    "        float nh = fract(sin(dot(nc, vec2(12.9898, 78.233))) * 43758.5453);\n"
+    "        vec2 ns = (nc + 0.25 + 0.5 * vec2(nh, fract(nh * 91.7))) / grid;\n"
+    "        float dd = length((q - ns) * vec2(uAspect, 1.0));\n"
+    "        if (dd < best) { second = best; best = dd; bestSeed = ns; } else if (dd < second) second = dd;\n"
+    "      }\n"
+    "      if (distance(bestSeed, seed) > 1e-4) continue;\n"
+    "      float edge = second - best;\n"
+    "      vec3 col = texture(uSnap, vec2(q.x * uUScale, uFlip > 0.5 ? 1.0 - q.y : q.y)).rgb;\n"
+    "      col *= 1.0 + 0.25 * sin(ang * 2.0 + h * 6.0) * fly;\n"   // glinting as they turn
+    "      col = mix(col, vec3(1.0), (1.0 - smoothstep(0.0, 0.006, edge)) * (0.9 - 0.6 * fly));\n"   // cracks
+    "      float a = 1.0 - smoothstep(0.75, 1.0, t);\n"
+    "      if (sc > shard.a) shard = vec4(mix(c, col, a), sc);\n"
+    "    }\n"
+    "    if (shard.a > 0.0) c = shard.rgb;\n"
+    "    else c *= smoothstep(0.1, 0.6, t);\n"   // behind the shards: the game's transition
     "  }\n"
     "  oColor = vec4(c, 1.0);\n"
     "}\n";
@@ -1645,6 +1689,9 @@ static const char *kGi =
     "}\n";
 
 static GLuint sProgGi, sGiTex, sGiFbo;
+static GLuint sSnapTex;
+static int sSnapW, sSnapH, sIntroSerial, sIntroFrame = -1000;
+extern int gPcIntroSerial;
 static float sGiStr;
 
 static int sReady;
@@ -2224,6 +2271,32 @@ static void RenderHd(const uint32_t *frame, int outW, int outH)
 
     RenderGi();
 
+    // Battle intro: keep the last overworld frame before it starts (the
+    // composite still holds it).
+    if (gPcIntroSerial != sIntroSerial)
+    {
+        sIntroSerial = gPcIntroSerial;
+        if (sCompTex && sCompW > 0 && !getenv("EMERALD_NOSHATTER"))
+        {
+            if (!sSnapTex || sSnapW != sCompW || sSnapH != sCompH)
+            {
+                if (!sSnapTex) glGenTextures(1, &sSnapTex);
+                glBindTexture(GL_TEXTURE_2D, sSnapTex);
+                glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, sCompW, sCompH, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+                sSnapW = sCompW; sSnapH = sCompH;
+            }
+            glBindFramebuffer(GL_FRAMEBUFFER, sCompFbo);
+            glBindTexture(GL_TEXTURE_2D, sSnapTex);
+            glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 0, 0, sCompW, sCompH);
+            glBindFramebuffer(GL_FRAMEBUFFER, 0);
+            sIntroFrame = (int)PortFrameCount();
+        }
+    }
+
     // Pass 2: composite at output resolution.
     EnsureComposite(outW, outH);
     glViewport(0, 0, sCompW, sCompH);
@@ -2531,6 +2604,15 @@ static void DrawPresent(int hdMode, int winW, int winH)
         glUniform1f(glGetUniformLocation(sProgPresent, "uUScale"), 1.0f);
         glUniform1f(glGetUniformLocation(sProgPresent, "uBloom"), sGrade ? 0.25f + sNight * 0.9f : 0.0f);
         glUniform1f(glGetUniformLocation(sProgPresent, "uSharpen"), sGrade ? 1.0f : 0.0f);
+        {
+            float t = ((int)PortFrameCount() - sIntroFrame) / 54.0f;
+            glUniform1f(glGetUniformLocation(sProgPresent, "uShatter"), sSnapTex && t >= 0 && t < 1 ? t : -1.0f);
+            glUniform1f(glGetUniformLocation(sProgPresent, "uAspect"), (float)w / (h > 0 ? h : 1));
+            glUniform1i(glGetUniformLocation(sProgPresent, "uSnap"), 1);
+            glActiveTexture(GL_TEXTURE0 + 1);
+            glBindTexture(GL_TEXTURE_2D, sSnapTex);
+            glActiveTexture(GL_TEXTURE0);
+        }
         glUniform2f(glGetUniformLocation(sProgPresent, "uTexel"), 1.0f / (sCompW > 0 ? sCompW : 1), 1.0f / (sCompH > 0 ? sCompH : 1));
         glUniform2f(glGetUniformLocation(sProgPresent, "uContentUv"),
                     (float)gPpuContentX0 / gPcScreenW, (float)gPpuContentX1 / gPcScreenW);
@@ -2549,6 +2631,7 @@ static void DrawPresent(int hdMode, int winW, int winH)
         glUniform1f(glGetUniformLocation(sProgPresent, "uUScale"), (float)gPcScreenW / PC_MAX_W);
         glUniform1f(glGetUniformLocation(sProgPresent, "uBloom"), 0.0f);
         glUniform1f(glGetUniformLocation(sProgPresent, "uSharpen"), 0.0f);
+        glUniform1f(glGetUniformLocation(sProgPresent, "uShatter"), -1.0f);
         glUniform2f(glGetUniformLocation(sProgPresent, "uContentUv"), -1.0f, 2.0f);
         glUniform3f(glGetUniformLocation(sProgPresent, "uSoftSides"), 0.0f, 1.0f, 0.0f);
     }

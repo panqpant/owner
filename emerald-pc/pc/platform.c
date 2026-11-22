@@ -275,6 +275,8 @@ void PcSetFieldMaps(uint16_t *bg1, uint16_t *bg2, uint16_t *bg3, int base1, int 
 
 int gPcOutdoors;
 void PcMarkBattleFrame(void) { sBattleSeen = 1; }
+int gPcIntroSerial;
+void PcBattleIntro(void) { gPcIntroSerial++; }
 int gPcMapPopup;
 void PcSetMapPopup(int shown) { gPcMapPopup = shown; }
 void PcSetOutdoors(int outdoors) { gPcOutdoors = outdoors; }
