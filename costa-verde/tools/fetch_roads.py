@@ -88,7 +88,7 @@ def fetch(t):
                 if key in seen:
                     continue
                 seen.add(key)
-                pts = simplify(pts, 3.0)
+                pts = simplify(pts, 0.5)  # near-lossless: keeps junction vertices for tools/road_stats.py
                 roads.append((kind, pts))
     with open(f"tools/data/roads/{name}.json", "w") as fh:
         json.dump({"name": name, "role": role, "half": km * 1000 * STUD_PER_M / 2,

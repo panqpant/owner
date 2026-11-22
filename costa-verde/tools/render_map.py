@@ -49,7 +49,9 @@ STYLE = {"tower": (205, 215, 230), "midrise": (190, 190, 180), "deco": (250, 190
          "diner": (230, 90, 140), "trailer": (200, 200, 190)}
 for b in world["buildings"]:
     x, z, w, dd = b["x"] * k, b["z"] * k, b["w"] * k / 2, b["d"] * k / 2
-    d.rectangle([x - w, z - dd, x + w, z + dd], fill=STYLE.get(b["style"], (200, 200, 200)))
+    c, sn = math.cos(math.radians(b["rot"])), math.sin(math.radians(b["rot"]))
+    corners = [(x + c * px - sn * pz, z + sn * px + c * pz) for px, pz in ((-w, -dd), (w, -dd), (w, dd), (-w, dd))]
+    d.polygon(corners, fill=STYLE.get(b["style"], (200, 200, 200)))
 
 for t in world["tracks"]:
     pts = [t["ax"] * k, t["az"] * k, t["bx"] * k, t["bz"] * k]

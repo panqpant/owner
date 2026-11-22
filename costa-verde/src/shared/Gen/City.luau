@@ -15,100 +15,161 @@ export type Park = { x: number, z: number, y: number, w: number, d: number, dist
 local W = Config.SIZE
 local B = Config.BLOCK
 
-local function lots(d: Config.District, x: number, z: number, y: number, dens: number, centre: number, rng: Hash.Rng, buildings: { Building }, parks: { Park })
-	local inset = Config.ROAD_W / 2 + 10
-	local size = B - inset * 2
-	local suburb = d.style == "house" or d.style == "shack"
-	local roll = rng:next()
-	if roll < (d.parkChance or 0) then
-		local kind = if suburb and roll < (d.parkChance or 0) * 0.35 then "lake" elseif suburb and roll < (d.parkChance or 0) * 0.6 then "golf" else "park"
-		table.insert(parks, { x = x, z = z, y = y, w = size, d = size, district = d.id, kind = kind })
-		return
-	end
-	local cols = if suburb then 4 elseif d.style == "warehouse" then 1 else rng:int(1, 2)
-	local rows = if suburb then 2 else cols
-	local lw, ld = size / cols, size / rows
-	for a = 0, cols - 1 do
-		for b = 0, rows - 1 do
-			if rng:next() < dens * 1.6 then -- edges of the sprawl thin out
-				local setback = if suburb then 10 else 5
-				local t = rng:next() ^ 1.6
-				if d.style == "tower" or d.style == "midrise" then
-					t *= 0.25 + 0.75 * centre ^ 1.5
-				end
-				local minH, maxH = d.minH :: number, d.maxH :: number
-				table.insert(buildings, {
-					x = x - size / 2 + (a + 0.5) * lw,
-					z = z - size / 2 + (b + 0.5) * ld,
-					y = y,
-					w = lw - setback * 2,
-					d = ld - setback * 2,
-					h = math.floor(minH + (maxH - minH) * t),
-					rot = if suburb and b == 0 then 180 else 0,
-					style = d.style :: string,
-					district = d.id,
-					variant = rng:int(1, 8),
-				})
+local Streets = require("./Streets")
+local StreetStyles = require("./StreetStyles")
+
+-- Lot sizes along the frontage per style: width along the street, depth back from it, setback.
+local LOT = {
+	tower = { 70, 90, 6 }, midrise = { 60, 80, 6 }, deco = { 55, 70, 8 }, stucco = { 40, 50, 8 },
+	house = { 42, 55, 16 }, shack = { 34, 40, 14 }, warehouse = { 110, 120, 12 }, campus = { 80, 70, 20 },
+}
+
+-- Spatial hash of road segments, to keep buildings off the road.
+local function segIndex()
+	local cells: { [number]: { { number } } } = {}
+	local CELL = 128
+	local idx = {}
+	function idx.add(ax: number, az: number, bx: number, bz: number, hw: number)
+		for gx = math.floor((math.min(ax, bx) - hw) / CELL), math.floor((math.max(ax, bx) + hw) / CELL) do
+			for gz = math.floor((math.min(az, bz) - hw) / CELL), math.floor((math.max(az, bz) + hw) / CELL) do
+				local k = (gx + 4096) * 8192 + gz + 4096
+				cells[k] = cells[k] or {}
+				table.insert(cells[k], { ax, az, bx, bz, hw })
 			end
 		end
 	end
-end
-
-local function grid(roads: { Road }, buildings: { Building }, parks: { Park })
-	local n = math.floor(W / B)
-	local inBlock: { [number]: boolean } = {}
-	local rng = Hash.rng(Config.SEED + 1)
-	for i = 0, n - 1 do
-		for j = 0, n - 1 do
-			local x, z = (i + 0.5) * B, (j + 0.5) * B
-			local s = Terrain.sample(x, z)
-			if s.land > 40 and not s.water then
-				local dens = if s.shape == "barrier" then 1 else Districts.urban(x, z)
-				if dens > 0 then
-					local id = Districts.at(x, z, s)
-					local d = Districts.byId[id]
-					if d and d.urban then
-						inBlock[i * 4096 + j] = true
-						local centre = 1 - math.min(1, math.sqrt((x / W - d.u) ^ 2 + (z / W - d.v) ^ 2) / d.radius)
-						lots(d, x, z, s.h, dens, centre, rng, buildings, parks)
+	function idx.clear(x: number, z: number, r: number): boolean
+		local gx, gz = math.floor(x / CELL), math.floor(z / CELL)
+		for i = -1, 1 do
+			for j = -1, 1 do
+				for _, sg in cells[(gx + i + 4096) * 8192 + gz + j + 4096] or {} do
+					local dx, dz = sg[3] - sg[1], sg[4] - sg[2]
+					local t = math.clamp(((x - sg[1]) * dx + (z - sg[2]) * dz) / math.max(dx * dx + dz * dz, 1e-6), 0, 1)
+					if (x - sg[1] - dx * t) ^ 2 + (z - sg[2] - dz * t) ^ 2 < (r + sg[5]) ^ 2 then
+						return false
 					end
 				end
 			end
 		end
+		return true
 	end
-	-- Roads along every grid edge that touches a block, merged into straight runs.
-	local function run(horizontal: boolean)
-		for line = 0, n do
-			local start: number? = nil
-			for step = 0, n do
-				local touches
-				if horizontal then
-					touches = inBlock[step * 4096 + line - 1] or inBlock[step * 4096 + line]
-				else
-					touches = inBlock[(line - 1) * 4096 + step] or inBlock[line * 4096 + step]
-				end
-				if touches and not start then
-					start = step
-				elseif not touches and start then
-					local art = line % Config.ARTERIAL_EVERY == 0
-					local s0, s1 = (start :: number) * B, step * B
-					local p = line * B
-					table.insert(roads, {
-						ax = if horizontal then s0 else p,
-						az = if horizontal then p else s0,
-						bx = if horizontal then s1 else p,
-						bz = if horizontal then p else s1,
-						width = if art then Config.ARTERIAL_W else Config.ROAD_W,
-						kind = if art then "arterial" else "street",
-						bridge = false,
-					})
-					start = nil
+	return idx
+end
+
+-- Districts grow their own street networks (tuned on real data), sharing one index so they join at
+-- borders. Buildings then line the street frontage.
+local function grid(roads: { Road }, buildings: { Building }, parks: { Park }, shared: Streets.Shared)
+	local segs = segIndex()
+	local placed: { [number]: { { number } } } = {}
+	local function free(x: number, z: number, r: number): boolean
+		local gx, gz = math.floor(x / 128), math.floor(z / 128)
+		for i = -1, 1 do
+			for j = -1, 1 do
+				for _, b in placed[(gx + i + 4096) * 8192 + gz + j + 4096] or {} do
+					if (b[1] - x) ^ 2 + (b[2] - z) ^ 2 < (b[3] + r) ^ 2 then
+						return false
+					end
 				end
 			end
 		end
+		return true
 	end
-	run(true)
-	run(false)
+	local function occupy(x: number, z: number, r: number)
+		local k = (math.floor(x / 128) + 4096) * 8192 + math.floor(z / 128) + 4096
+		placed[k] = placed[k] or {}
+		table.insert(placed[k], { x, z, r })
+	end
+
+	-- Big districts first, so small ones join onto them.
+	local order = {}
+	for _, d in Config.DISTRICTS do
+		if d.urban then
+			table.insert(order, d)
+		end
+	end
+	table.sort(order, function(a, b)
+		return a.radius > b.radius
+	end)
+	local rng = Hash.rng(Config.SEED + 1)
+	for di, d in order do
+		local function inside(x: number, z: number): boolean
+			local s = Terrain.sample(x, z)
+			if s.water or s.land < 30 then
+				return false
+			end
+			if d.id == "beach" then
+				return s.shape == "barrier"
+			end
+			return s.shape == "main" and Districts.urban(x, z) > 0 and Districts.at(x, z, s) == d.id
+		end
+		local style = d.style :: string
+		local params = StreetStyles[style] or StreetStyles.house
+		local cx, cz = d.u * W, d.v * W
+		local half = d.radius * W * 1.4
+		local angle = Hash.float(di, 3, Config.SEED) * math.pi / 2
+		if d.id == "beach" then -- the island runs north-south; follow it
+			cx, cz, half, angle = 0.79 * W, 0.5 * W, 0.22 * W, math.pi / 2
+		end
+		local net = Streets.grow(params, inside, cx, cz, half, angle, Config.SEED + di * 101, 3000, shared)
+		local lot = LOT[style] or LOT.house
+		for _, r in net do
+			local art = r.kind == "arterial"
+			local width = if art then Config.ARTERIAL_W else Config.ROAD_W
+			local pts = r.pts
+			for i = 1, #pts - 3, 2 do
+				table.insert(roads, { ax = pts[i], az = pts[i + 1], bx = pts[i + 2], bz = pts[i + 3], width = width, kind = r.kind, bridge = false })
+				segs.add(pts[i], pts[i + 1], pts[i + 2], pts[i + 3], width / 2)
+			end
+		end
+		-- Frontage lots: walk each street, both sides, face the road.
+		for _, r in net do
+			local width = if r.kind == "arterial" then Config.ARTERIAL_W else Config.ROAD_W
+			local pts = r.pts
+			local carry = 0
+			for i = 1, #pts - 3, 2 do
+				local ax, az, bx, bz = pts[i], pts[i + 1], pts[i + 2], pts[i + 3]
+				local len = math.sqrt((bx - ax) ^ 2 + (bz - az) ^ 2)
+				local dx, dz = (bx - ax) / len, (bz - az) / len
+				local t = carry
+				while t < len do
+					local px, pz = ax + dx * t, az + dz * t
+					for _, side in { 1, -1 } do
+						local w = lot[1] * rng:range(0.8, 1.25)
+						local dep = lot[2] * rng:range(0.8, 1.3)
+						local off = width / 2 + lot[3] + dep / 2
+						local x, z = px - dz * off * side, pz + dx * off * side
+						local rad = math.max(w, dep) * 0.5
+						if inside(x, z) and segs.clear(x, z, rad * 0.85) and free(x, z, rad * 0.9) then
+							local s = Terrain.sample(x, z)
+							local dens = if s.shape == "barrier" then 1 else Districts.urban(x, z)
+							occupy(x, z, rad)
+							if rng:next() < (d.parkChance or 0) * 0.5 then
+								local suburb = style == "house" or style == "shack"
+								local roll = rng:next()
+								table.insert(parks, { x = x, z = z, y = s.h, w = w * 1.6, d = dep * 1.6, district = d.id,
+									kind = if suburb and roll < 0.3 then "lake" elseif suburb and roll < 0.55 then "golf" else "park" })
+							elseif rng:next() < dens * 1.6 then
+								local centre = 1 - math.min(1, math.sqrt((x / W - d.u) ^ 2 + (z / W - d.v) ^ 2) / d.radius)
+								local tt = rng:next() ^ 1.6
+								if style == "tower" or style == "midrise" then
+									tt *= 0.25 + 0.75 * centre ^ 1.5
+								end
+								local minH, maxH = d.minH :: number, d.maxH :: number
+								table.insert(buildings, {
+									x = x, z = z, y = s.h, w = w, d = dep,
+									h = math.floor(minH + (maxH - minH) * tt),
+									rot = math.deg(math.atan2(dz, dx)) + (if side == 1 then 0 else 180),
+									style = style, district = d.id, variant = rng:int(1, 8),
+								})
+							end
+						end
+					end
+					t += lot[1] * rng:range(0.9, 1.15)
+				end
+				carry = t - len
+			end
+		end
+	end
 end
 
 -- Catmull-Rom smoothing so highways curve like real ones.
@@ -167,9 +228,10 @@ local function highway(points: { { number } }, roads: { Road })
 	end
 end
 
-function City.generate(): { roads: { Road }, buildings: { Building }, parks: { Park } }
+function City.generate(): { roads: { Road }, buildings: { Building }, parks: { Park }, shared: Streets.Shared }
 	local roads, buildings, parks = {}, {}, {}
-	grid(roads, buildings, parks)
+	local shared = Streets.newShared()
+	grid(roads, buildings, parks, shared)
 	for _, h in Config.HIGHWAYS do
 		highway(h, roads)
 	end
@@ -179,7 +241,7 @@ function City.generate(): { roads: { Road }, buildings: { Building }, parks: { P
 		local x, z = a.u * W, a.v * W + off
 		table.insert(roads, { ax = x - 1100, az = z, bx = x + 1100, bz = z, width = 110, kind = "runway", bridge = false })
 	end
-	return { roads = roads, buildings = buildings, parks = parks }
+	return { roads = roads, buildings = buildings, parks = parks, shared = shared }
 end
 
 return City

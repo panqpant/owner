@@ -1,0 +1,335 @@
+{
+ "deco": {
+  "params": {
+   "spacing": 273.7728473801771,
+   "order": 0.973997326393585,
+   "curve": 0.012458139775304428,
+   "branch": 0.2131796021737692,
+   "cross": 1,
+   "deadEnd": 0.06452344970679702,
+   "connect": 0.5317574259860349,
+   "maxLen": 8,
+   "collectors": 5,
+   "aspect": 1.798896037453218
+  },
+  "loss": 1.5182324908977827,
+  "stats": {
+   "density_km_per_km2": 6.502265607862212,
+   "block_median": 246.25674378499474,
+   "block_p75": 480.1986078429301,
+   "straightness": 0.9890780972275433,
+   "dead_end_frac": 0.09134615384615384,
+   "t_frac": 0.5961538461538461,
+   "cross_frac": 0.3125,
+   "orientation_order": 1.0,
+   "junctions_per_km2": 29.25
+  },
+  "target": {
+   "density_km_per_km2": 5.409665200140707,
+   "block_median": 273.7882393383616,
+   "block_p75": 403.6638770436739,
+   "straightness": 0.9825085111807094,
+   "dead_end_frac": 0.12165450121654502,
+   "t_frac": 0.5352798053527981,
+   "cross_frac": 0.34306569343065696,
+   "orientation_order": 0.6688046418765099,
+   "junctions_per_km2": 25.6875
+  }
+ },
+ "midrise": {
+  "params": {
+   "spacing": 278.9538432170223,
+   "order": 0.9475909455841123,
+   "curve": 0.11415246035796017,
+   "branch": 0.6224495870725187,
+   "cross": 0.8755704048982533,
+   "deadEnd": 0.2212244832252396,
+   "connect": 0.20317717793011503,
+   "maxLen": 6,
+   "collectors": 7,
+   "aspect": 1.991037202595076
+  },
+  "loss": 1.0283547782942695,
+  "stats": {
+   "density_km_per_km2": 13.159966429574308,
+   "block_median": 136.72732808347365,
+   "block_p75": 177.55777312012037,
+   "straightness": 0.9883483659551158,
+   "dead_end_frac": 0.07884856070087609,
+   "t_frac": 0.5306633291614519,
+   "cross_frac": 0.3904881101376721,
+   "orientation_order": 1.0,
+   "junctions_per_km2": 112.359375
+  },
+  "target": {
+   "density_km_per_km2": 15.035717525635626,
+   "block_median": 278.01097994114315,
+   "block_p75": 444.58873996008685,
+   "straightness": 0.9873964314671386,
+   "dead_end_frac": 0.10492465142481573,
+   "t_frac": 0.5077578517440495,
+   "cross_frac": 0.3873174968311347,
+   "orientation_order": 0.9772876232888354,
+   "junctions_per_km2": 62.06597222222223
+  }
+ },
+ "house": {
+  "params": {
+   "spacing": 314.399185643358,
+   "order": 0.34794746097223517,
+   "curve": 0.03883035915510551,
+   "branch": 0.5486089736218371,
+   "cross": 0.5408561114482098,
+   "deadEnd": 0.41082923521334835,
+   "connect": 0.452085491688199,
+   "maxLen": 12,
+   "collectors": 10,
+   "aspect": 2.1415366041377917
+  },
+  "loss": 2.5792675292189085,
+  "stats": {
+   "density_km_per_km2": 9.345473939616868,
+   "block_median": 280.377570243083,
+   "block_p75": 360.2672100841729,
+   "straightness": 0.9907311471413957,
+   "dead_end_frac": 0.12096774193548387,
+   "t_frac": 0.6155913978494624,
+   "cross_frac": 0.26344086021505375,
+   "orientation_order": 1.0,
+   "junctions_per_km2": 52.3125
+  },
+  "target": {
+   "density_km_per_km2": 10.068599659325224,
+   "block_median": 293.3335141263591,
+   "block_p75": 624.6442828663289,
+   "straightness": 0.9566184865770182,
+   "dead_end_frac": 0.27335313801003147,
+   "t_frac": 0.6387206860257377,
+   "cross_frac": 0.08792617596423088,
+   "orientation_order": 0.6591770461619639,
+   "junctions_per_km2": 41.47376543209876
+  }
+ },
+ "campus": {
+  "params": {
+   "spacing": 474.5164478364847,
+   "order": 0.4819863799636717,
+   "curve": 0.08032756264612315,
+   "branch": 0.6686279075088329,
+   "cross": 0.038945610920367836,
+   "deadEnd": 0.17665291228871638,
+   "connect": 0.2,
+   "maxLen": 11,
+   "collectors": 14,
+   "aspect": 1.0202179069824597
+  },
+  "loss": 1.867206755186972,
+  "stats": {
+   "density_km_per_km2": 12.094298536775595,
+   "block_median": 280.2883745825616,
+   "block_p75": 439.58111820419276,
+   "straightness": 0.9863805605726649,
+   "dead_end_frac": 0.05092592592592592,
+   "t_frac": 0.6990740740740741,
+   "cross_frac": 0.25,
+   "orientation_order": 1.0,
+   "junctions_per_km2": 60.75
+  },
+  "target": {
+   "density_km_per_km2": 11.748731815860127,
+   "block_median": 298.52107764124014,
+   "block_p75": 503.0825968251914,
+   "straightness": 0.9660468777166513,
+   "dead_end_frac": 0.19951338199513383,
+   "t_frac": 0.6618004866180048,
+   "cross_frac": 0.1386861313868613,
+   "orientation_order": 0.8051468660386965,
+   "junctions_per_km2": 52.42346938775511
+  }
+ },
+ "rural": {
+  "params": {
+   "spacing": 1711.3415784711515,
+   "order": 0.25576060876313084,
+   "curve": 0.3552201231674984,
+   "branch": 0.19729422734735572,
+   "cross": 0.5306946329547024,
+   "deadEnd": 0.09841736029332065,
+   "connect": 0.24399252550754286,
+   "maxLen": 1,
+   "collectors": 14,
+   "aspect": 2.5880007955736635
+  },
+  "loss": 1.3941382138576146,
+  "stats": {
+   "density_km_per_km2": 0.9534870556078272,
+   "block_median": 2020.316858618503,
+   "block_p75": 2570.8612039551494,
+   "straightness": 0.9873718525711827,
+   "dead_end_frac": 0.2807017543859649,
+   "t_frac": 0.5964912280701754,
+   "cross_frac": 0.12280701754385964,
+   "orientation_order": 0.7159318056571524,
+   "junctions_per_km2": 0.890625
+  },
+  "target": {
+   "density_km_per_km2": 0.734090514257318,
+   "block_median": 1334.7660167191543,
+   "block_p75": 2247.0447033548817,
+   "straightness": 0.9446365096557452,
+   "dead_end_frac": 0.3413908799755986,
+   "t_frac": 0.5549794113161506,
+   "cross_frac": 0.10362970870825072,
+   "orientation_order": 0.720221947809214,
+   "junctions_per_km2": 0.7354736328124998
+  }
+ },
+ "tower": {
+  "params": {
+   "spacing": 556.5711224461133,
+   "order": 0.12628668660551165,
+   "curve": 0.14800032202811558,
+   "branch": 0.9771759026213412,
+   "cross": 0.9546489339583928,
+   "deadEnd": 0.025150977832138467,
+   "connect": 0.230015514396265,
+   "maxLen": 9,
+   "collectors": 7,
+   "aspect": 1.0393643654133726
+  },
+  "loss": 1.2249751785095184,
+  "stats": {
+   "density_km_per_km2": 13.064715360083355,
+   "block_median": 252.7260159631268,
+   "block_p75": 399.72527185126086,
+   "straightness": 0.9854911226013029,
+   "dead_end_frac": 0.0,
+   "t_frac": 0.634453781512605,
+   "cross_frac": 0.36554621848739494,
+   "orientation_order": 0.852923071048358,
+   "junctions_per_km2": 66.9375
+  },
+  "target": {
+   "density_km_per_km2": 12.483279245864377,
+   "block_median": 260.85494057710963,
+   "block_p75": 430.13119555590254,
+   "straightness": 0.9835050343969449,
+   "dead_end_frac": 0.15659037095501183,
+   "t_frac": 0.44211720599842147,
+   "cross_frac": 0.4012924230465667,
+   "orientation_order": 0.8309853127632575,
+   "junctions_per_km2": 55.72916666666667
+  }
+ },
+ "shack": {
+  "params": {
+   "spacing": 400.26311360098174,
+   "order": 0.9649187406028904,
+   "curve": 0.16975882775374385,
+   "branch": 0.5762734071182559,
+   "cross": 0.017379314063458967,
+   "deadEnd": 0.31218336967952726,
+   "connect": 0.2969859410255367,
+   "maxLen": 13,
+   "collectors": 2,
+   "aspect": 1.1136581458099801
+  },
+  "loss": 1.48677657975288,
+  "stats": {
+   "density_km_per_km2": 9.479190420678087,
+   "block_median": 200.20328228757654,
+   "block_p75": 399.8272909738779,
+   "straightness": 0.9919125200782432,
+   "dead_end_frac": 0.1111111111111111,
+   "t_frac": 0.582716049382716,
+   "cross_frac": 0.30617283950617286,
+   "orientation_order": 1.0,
+   "junctions_per_km2": 56.953125
+  },
+  "target": {
+   "density_km_per_km2": 10.021598000097402,
+   "block_median": 304.1720007056542,
+   "block_p75": 543.2168506831545,
+   "straightness": 0.9824205106593131,
+   "dead_end_frac": 0.22948104527051894,
+   "t_frac": 0.5517990781148676,
+   "cross_frac": 0.21871987661461345,
+   "orientation_order": 0.9053526735310853,
+   "junctions_per_km2": 41.49305555555556
+  }
+ },
+ "stucco": {
+  "params": {
+   "spacing": 412.3565312912863,
+   "order": 0,
+   "curve": 0,
+   "branch": 0.9984610840495084,
+   "cross": 0.2763627410761641,
+   "deadEnd": 0.28657137742300803,
+   "connect": 0.2622262917393629,
+   "maxLen": 4,
+   "collectors": 3,
+   "aspect": 1.8963025713310528
+  },
+  "loss": 0.5820819431538087,
+  "stats": {
+   "density_km_per_km2": 9.906174933255786,
+   "block_median": 280.822745226621,
+   "block_p75": 400.01036692276193,
+   "straightness": 0.9918523606148332,
+   "dead_end_frac": 0.12742382271468145,
+   "t_frac": 0.48476454293628807,
+   "cross_frac": 0.3878116343490305,
+   "orientation_order": 1.0,
+   "junctions_per_km2": 50.765625
+  },
+  "target": {
+   "density_km_per_km2": 12.667022302872311,
+   "block_median": 296.92597160271225,
+   "block_p75": 577.4034405528313,
+   "straightness": 0.99057395869252,
+   "dead_end_frac": 0.1710134244214417,
+   "t_frac": 0.43664150669144597,
+   "cross_frac": 0.3923450688871124,
+   "orientation_order": 0.9857633600861699,
+   "junctions_per_km2": 50.224985827664405
+  }
+ },
+ "warehouse": {
+  "params": {
+   "spacing": 735.3480398076774,
+   "order": 0.3666233386979612,
+   "curve": 0.5658037576532182,
+   "branch": 0.6903636293916677,
+   "cross": 0.7578478401543922,
+   "deadEnd": 0.07964912358338068,
+   "connect": 0.2,
+   "maxLen": 3,
+   "collectors": 6,
+   "aspect": 2.830335239413542
+  },
+  "loss": 1.7069006397046884,
+  "stats": {
+   "density_km_per_km2": 7.754118727587767,
+   "block_median": 406.37503772494347,
+   "block_p75": 639.5958088737689,
+   "straightness": 0.9904947249180291,
+   "dead_end_frac": 0.05263157894736842,
+   "t_frac": 0.6526315789473685,
+   "cross_frac": 0.29473684210526313,
+   "orientation_order": 0.8971420980945702,
+   "junctions_per_km2": 26.71875
+  },
+  "target": {
+   "density_km_per_km2": 6.602672822013018,
+   "block_median": 441.0408144378477,
+   "block_p75": 786.2296102284624,
+   "straightness": 0.9548417112168847,
+   "dead_end_frac": 0.23837209302325582,
+   "t_frac": 0.6337209302325582,
+   "cross_frac": 0.12790697674418605,
+   "orientation_order": 0.8667678173629118,
+   "junctions_per_km2": 21.938775510204085
+  }
+ }
+}

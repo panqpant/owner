@@ -8,7 +8,7 @@ import sys
 
 import bpy
 import bmesh  # must come after bpy when running as a module
-from mathutils import Vector
+from mathutils import Matrix, Vector
 
 W = json.load(open("build/world.json"))
 SIZE = W["size"]
@@ -204,6 +204,7 @@ def buildings(night, region=None):
         y = max(bd["y"], 0)
         r = bmesh.ops.create_cube(bm, size=1)
         bmesh.ops.scale(bm, vec=(w, d, h), verts=r["verts"])
+        bmesh.ops.rotate(bm, cent=(0, 0, 0), matrix=Matrix.Rotation(-math.radians(bd["rot"]), 3, "Z"), verts=r["verts"])
         bmesh.ops.translate(bm, vec=(x, -z, y + h / 2), verts=r["verts"])
         idx = styles.index(bd["style"]) if bd["style"] in styles else 0
         for f in {f for v in r["verts"] for f in v.link_faces}:

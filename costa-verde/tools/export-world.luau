@@ -7,7 +7,7 @@ local Gen = require("../src/shared/Gen")
 local t0 = os.clock()
 local hm = Gen.heightmap(Gen.Config.CELL)
 local city = Gen.City.generate()
-local settlements = Gen.Rural.generate(city.roads, city.buildings)
+local settlements = Gen.Rural.generate(city.roads, city.buildings, city.shared)
 local pois = Gen.Rural.pois()
 local tracks, stations = Gen.Transit.generate(settlements)
 
