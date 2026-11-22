@@ -297,7 +297,9 @@ static const char *kComposite =
     "uniform vec3 uLife;\n"
     "uniform vec4 uInSun;\n"
     "uniform vec3 uGrassDark, uGrassLight;\n"
-    "uniform float uTilt;\n"        // HD-2D tilt strength (0 = flat)   // this screen's tall grass colours        // indoors: direction sunlight travels from windows (x, y), strength, night         // x: water fraction on screen, y: volcanic ash, z: heat haze
+    "uniform float uTilt;\n"
+    "uniform sampler2D uGi;\n"      // ray-traced light (native res)
+    "uniform float uGiOn;\n"        // HD-2D tilt strength (0 = flat)   // this screen's tall grass colours        // indoors: direction sunlight travels from windows (x, y), strength, night         // x: water fraction on screen, y: volcanic ash, z: heat haze
     "uniform int uBattle;\n"        // battle scene lighting on
     "uniform vec4 uMon[4];\n"       // battler sprite rects x, y, w, h (w = 0: none)
     "uniform vec3 uMonFeet[4];\n"   // feet x, y; half width
@@ -1430,6 +1432,18 @@ static const char *kComposite =
     "      }\n"
     "    }\n"
     "  }\n"
+    "  if (uGiOn > 0.0 && uFieldFx != 0 && top != 0) {\n"   // ray-traced light, smoothed
+    "    vec2 gq = (gp + vec2(uMargin, 0.0)) / vec2(textureSize(uGi, 0));\n"
+    "    vec3 gi = vec3(0.0);\n"
+    "    for (int i = -2; i <= 2; i++) for (int j = -2; j <= 2; j++) {\n"
+    "      float w = exp(-float(i * i + j * j) / 4.0);\n"
+    "      gi += texture(uGi, gq + vec2(float(i), float(j)) * 1.2 / vec2(textureSize(uGi, 0))).rgb * w;\n"
+    "    }\n"
+    "    gi = min(gi / 11.6, vec3(0.55));\n"
+    "    if (uGiOn > 1.5) { oColor = vec4(gi * 3.0, 1.0); return; }\n"
+    "    res = res * (1.0 + gi * 1.3) + gi * 0.05;\n"
+    "    res = mix(res, 0.8 + 0.2 * (1.0 - exp(-(res - 0.8) / 0.2)), step(0.8, res));\n"   // soft highlight roll-off
+    "  }\n"
     "  if (uTilt > 0.0 && uFieldFx != 0 && uBattle == 0 && top != 0 && uMapType != 8 && uMapType != 9) {\n"   // distance haze
     "    vec3 hz = mix(vec3(0.78, 0.86, 0.96), vec3(1.0, 0.78, 0.6), clamp((uTint.r - uTint.b) * 3.0, 0.0, 1.0));\n"
     "    if (uTint.a > 0.5) hz *= uTint.rgb;\n"
@@ -1517,6 +1531,93 @@ static const char *kPresent =
     "}\n";
 
 // ---------------------------------------------------------------------------
+
+// 2D ray-traced lighting: light from every glowing pixel, door and lantern,
+// traced over the screen at native resolution and blocked by walls, roofs
+// and trees. Its result is smoothed when the composite samples it.
+static const char *kGi =
+    "#version 330 core\n"
+    "out vec4 oColor;\n"
+    "uniform sampler2D uFrame;      // native frame, top row first\n"
+    "uniform sampler2D uTop;        // BG1 (roofs, canopies), native\n"
+    "uniform vec2 uDim;\n"
+    "uniform float uMargin;\n"
+    "uniform vec4 uGridPos;\n"
+    "uniform int uGrid[144];\n"
+    "uniform int uNumLights;\n"
+    "uniform vec3 uLights[24];\n"
+    "uniform vec3 uLantern;         // xy position, z on\n"
+    "uniform float uStr;            // overall strength\n"
+    "uniform float uNightWin;       // lit windows at night\n"
+    "uniform float uLava;           // lava/fire glows\n"
+    "int Cell(ivec2 c) {\n"
+    "  if (c.x < 0 || c.y < 0 || c.x >= 36 || c.y >= 16) return 0;\n"
+    "  int i = c.y * 36 + c.x;\n"
+    "  return (uGrid[i >> 2] >> ((i & 3) * 8)) & 255;\n"
+    "}\n"
+    "float Solid(vec2 gp) {\n"
+    "  vec2 q = (gp - uGridPos.xy) / 16.0 - 0.5; ivec2 i = ivec2(floor(q)); vec2 f = fract(q);\n"
+    "  float a = float(Cell(i) & 1), b = float(Cell(i + ivec2(1, 0)) & 1);\n"
+    "  float c = float(Cell(i + ivec2(0, 1)) & 1), d = float(Cell(i + ivec2(1, 1)) & 1);\n"
+    "  return smoothstep(0.3, 0.7, mix(mix(a, b, f.x), mix(c, d, f.x), f.y));\n"
+    "}\n"
+    "// Light given off at a pixel (screen px, top-first).\n"
+    "vec3 Emit(vec2 p) {\n"
+    "  vec3 e = vec3(0.0);\n"
+    "  vec2 sp = p + vec2(uMargin, 0.0);\n"
+    "  if (sp.x < 0.0 || sp.y < 0.0 || sp.x >= uDim.x || sp.y >= uDim.y) return e;\n"
+    "  vec3 c = texelFetch(uFrame, ivec2(sp), 0).rgb;\n"
+    "  float mx = max(c.r, max(c.g, c.b)), mn = min(c.r, min(c.g, c.b));\n"
+    "  // warm, saturated, very bright pixels: lamps, fire, signs\n"
+    "  e += c * smoothstep(0.85, 0.98, mx) * smoothstep(0.3, 0.55, mx - mn) * step(c.b, c.r) * 1.2 * uLava;\n"
+    "  // lava and embers\n"
+    "  e += vec3(1.0, 0.45, 0.12) * uLava * smoothstep(0.55, 0.8, c.r) * smoothstep(0.25, 0.5, c.r - c.b) * smoothstep(0.2, 0.0, c.b - 0.2);\n"
+    "  // lit windows: pale-blue glass inside a solid wall\n"
+    "  if (uNightWin > 0.0) {\n"
+    "    ivec2 cc = ivec2(floor((p - uGridPos.xy) / 16.0));\n"
+    "    if ((Cell(cc) & 1) != 0 && c.b > 0.6 && c.b - c.r > 0.18 && c.g > 0.5) e += vec3(1.0, 0.75, 0.4) * uNightWin * 1.1;\n"
+    "  }\n"
+    "  for (int k = 0; k < uNumLights; k++)\n"
+    "    e += vec3(1.0, 0.72, 0.4) * (1.0 - smoothstep(2.0, 6.0, distance(p, uLights[k].xy))) * 0.9;\n"
+    "  if (uLantern.z > 0.0)\n"
+    "    e += vec3(1.0, 0.8, 0.55) * (1.0 - smoothstep(2.0, 5.0, distance(p, uLantern.xy))) * 2.0;\n"
+    "  return e;\n"
+    "}\n"
+    "float Block(vec2 p) {\n"
+    "  vec2 sp = p + vec2(uMargin, 0.0);\n"
+    "  float a = texelFetch(uTop, ivec2(clamp(sp, vec2(0.0), uDim - 1.0)), 0).a;\n"
+    "  return max(Solid(p), a);\n"
+    "}\n"
+    "void main() {\n"
+    "  vec2 p = gl_FragCoord.xy - vec2(uMargin, 0.0);   // screen px, top-first (texture rows = screen rows)\n"
+    "  float noise = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));\n"
+    "  vec3 acc = Emit(p) * 0.15;\n"
+    "  bool inside = Block(p) > 0.5;\n"
+    "  const int RAYS = 20;\n"
+    "  for (int r = 0; r < RAYS; r++) {\n"
+    "    float a = (float(r) + noise) * 6.2831853 / float(RAYS);\n"
+    "    vec2 dir = vec2(cos(a), sin(a));\n"
+    "    float t = 1.5, trans = 1.0;\n"
+    "    for (int s = 0; s < 22; s++) {\n"
+    "      vec2 q = p + dir * t;\n"
+    "      vec3 e = Emit(q);\n"
+    "      float lum = max(e.r, max(e.g, e.b));\n"
+    "      if (lum > 0.02) { acc += e * trans / (1.0 + t * t * 0.0016); break; }\n"
+    "      if (!inside || t > 6.0) {\n"
+    "        float b = Block(q);\n"
+    "        trans *= 1.0 - b * 0.85;   // walls, roofs and trees block light\n"
+    "        if (trans < 0.05) break;\n"
+    "      }\n"
+    "      t += 1.5 + t * 0.12;\n"
+    "      if (t > 90.0) break;\n"
+    "    }\n"
+    "  }\n"
+    "  if (inside) acc *= 0.2;\n"   // light falls on the ground, it doesn't burn the walls it comes from
+    "  oColor = vec4(acc / float(RAYS) * uStr * 3.0, 1.0);\n"
+    "}\n";
+
+static GLuint sProgGi, sGiTex, sGiFbo;
+static float sGiStr;
 
 static int sReady;
 static GLuint sVao;
@@ -1649,7 +1750,8 @@ int HdInit(void)
     sProgXbr = Program(kXbr);
     sProgComp = Program(kComposite);
     sProgPresent = Program(kPresent);
-    if (!sProgXbr || !sProgComp || !sProgPresent)
+    sProgGi = Program(kGi);
+    if (!sProgXbr || !sProgComp || !sProgPresent || !sProgGi)
         return -1;
 
     glGenVertexArrays(1, &sVao);
@@ -1662,6 +1764,8 @@ int HdInit(void)
     sMetaTex = MakeTex(PC_MAX_W, GBA_H, GL_RGBA8UI, GL_RGBA_INTEGER, GL_NEAREST);
     sLineTex = MakeTex(4, GBA_H, GL_RGBA8UI, GL_RGBA_INTEGER, GL_NEAREST);
     sFrameTex = MakeTex(PC_MAX_W, GBA_H, GL_RGBA8, GL_BGRA, GL_NEAREST);
+    sGiTex = MakeTex(PC_MAX_W, GBA_H, GL_RGBA8, GL_RGBA, GL_LINEAR);
+    sGiFbo = MakeFbo(sGiTex);
     sW = gPcScreenW;
     AllocScaled();
 
@@ -1688,6 +1792,7 @@ int HdInit(void)
         glUniform1i(glGetUniformLocation(sProgComp, "uAtlas"), 12);
         glUniform1i(glGetUniformLocation(sProgComp, "uGlyphs"), 13);
         glUniform1i(glGetUniformLocation(sProgComp, "uPal"), 14);
+        glUniform1i(glGetUniformLocation(sProgComp, "uGi"), 16);
     }
     {
         const uint32_t *px;
@@ -1973,6 +2078,63 @@ static void DrawQuad(void)
     glDrawArrays(GL_TRIANGLES, 0, 3);
 }
 
+// The 2D ray-traced light pass (native resolution, into sGiTex).
+static void RenderGi(void)
+{
+    char name[32];
+    int field = PcFieldWideActive() && sLighting, k, cells = PC_GRID_W * PC_GRID_H;
+    int mt = gPcFieldFx.mapType, packed[PC_GRID_W * PC_GRID_H / 4];
+    const unsigned char *g = &gPcFieldFx.grid[0][0];
+    float str = 0, lava = gPcFieldFx.heat ? 1.0f : 0.0f;
+    if (field)
+    {
+        if (mt == 4 /* cave */) str = 1.0f;
+        else if (mt == 8 || mt == 9 /* indoors */) str = 0.35f + 0.4f * sNight;
+        else
+        {
+            float t[3];
+            TimeOfDayTint(t);
+            str = (1.0f - (0.2126f * t[0] + 0.7152f * t[1] + 0.0722f * t[2])) * 1.8f;
+            str = str < 0 ? 0 : str > 1 ? 1 : str;
+            sNight = str;
+        }
+        if (gPcFieldFx.heat) str = str > 0.8f ? str : 0.8f;
+    }
+    if (getenv("EMERALD_NOGI")) str = 0;
+    if (getenv("EMERALD_GIDEBUG")) { static int n; if (n++ % 60 == 0) fprintf(stderr, "gi: field=%d mt=%d night=%.2f str=%.2f lights=%d player=%d,%d margin=%d\n", field, mt, sNight, str, gPcFieldFx.numLights, gPcFieldFx.playerX, gPcFieldFx.playerY, (gPcScreenW - GBA_W) / 2); }
+    sGiStr = str;
+    if (str <= 0.01f)
+        return;
+    for (k = 0; k < cells / 4; k++)
+        packed[k] = g[k * 4] | (g[k * 4 + 1] << 8) | (g[k * 4 + 2] << 16) | ((unsigned)g[k * 4 + 3] << 24);
+    glBindFramebuffer(GL_FRAMEBUFFER, sGiFbo);
+    glViewport(0, 0, sW, GBA_H);
+    glUseProgram(sProgGi);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, sFrameTex);
+    glActiveTexture(GL_TEXTURE0 + 1);
+    glBindTexture(GL_TEXTURE_2D, sLayerTex[1]);
+    glActiveTexture(GL_TEXTURE0);
+    glUniform1i(glGetUniformLocation(sProgGi, "uFrame"), 0);
+    glUniform1i(glGetUniformLocation(sProgGi, "uTop"), 1);
+    glUniform2f(glGetUniformLocation(sProgGi, "uDim"), sW, GBA_H);
+    glUniform1f(glGetUniformLocation(sProgGi, "uMargin"), (gPcScreenW - GBA_W) / 2.0f);
+    glUniform4f(glGetUniformLocation(sProgGi, "uGridPos"), gPcFieldFx.gridX, gPcFieldFx.gridY, gPcFieldFx.gridWX, gPcFieldFx.gridWY);
+    glUniform1iv(glGetUniformLocation(sProgGi, "uGrid"), cells / 4, packed);
+    glUniform1i(glGetUniformLocation(sProgGi, "uNumLights"), sNight > 0.1f ? gPcFieldFx.numLights : 0);
+    for (k = 0; k < gPcFieldFx.numLights; k++)
+    {
+        snprintf(name, sizeof(name), "uLights[%d]", k);
+        glUniform3f(glGetUniformLocation(sProgGi, name), gPcFieldFx.lights[k].x, gPcFieldFx.lights[k].y, 0);
+    }
+    glUniform3f(glGetUniformLocation(sProgGi, "uLantern"), gPcFieldFx.playerX, gPcFieldFx.playerY - 10.0f,
+                mt == 4 && gPcFieldFx.playerX > -900 ? 1.0f : 0.0f);
+    glUniform1f(glGetUniformLocation(sProgGi, "uStr"), str);
+    glUniform1f(glGetUniformLocation(sProgGi, "uNightWin"), 0.0f);   // window detection was unreliable
+    glUniform1f(glGetUniformLocation(sProgGi, "uLava"), lava);
+    DrawQuad();
+}
+
 // Render the HD composite into sCompFbo.
 static void RenderHd(const uint32_t *frame, int outW, int outH)
 {
@@ -2031,6 +2193,8 @@ static void RenderHd(const uint32_t *frame, int outW, int outH)
     glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, sW, GBA_H, GL_BGRA, GL_UNSIGNED_BYTE, frame);
     glBindFramebuffer(GL_FRAMEBUFFER, sUpFbo[5]);
     DrawQuad();
+
+    RenderGi();
 
     // Pass 2: composite at output resolution.
     EnsureComposite(outW, outH);
@@ -2281,6 +2445,9 @@ static void RenderHd(const uint32_t *frame, int outW, int outH)
     glBindTexture(GL_TEXTURE_2D, sPalTex);
     glActiveTexture(GL_TEXTURE0 + 15);
     glBindTexture(GL_TEXTURE_2D, sUpTex[5]);
+    glActiveTexture(GL_TEXTURE0 + 16);
+    glBindTexture(GL_TEXTURE_2D, sGiTex);
+    glUniform1f(glGetUniformLocation(sProgComp, "uGiOn"), sGiStr > 0.01f ? (getenv("EMERALD_GIVIEW") ? 2.0f : 1.0f) : 0.0f);
     for (i = 0; i < 5; i++)
     {
         glActiveTexture(GL_TEXTURE0 + i);
