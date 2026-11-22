@@ -19,6 +19,7 @@
 #include "hdpack.h"
 #include "texthd.h"
 #include "fieldfx.h"
+#include "wondertrade.h"
 
 typedef unsigned int GLenum, GLuint, GLbitfield;
 typedef int GLint, GLsizei;
@@ -3108,7 +3109,8 @@ static void DrawPresent(int hdMode, int winW, int winH)
         glUniform1f(glGetUniformLocation(sProgPresent, "uSharpen"), sGrade ? 1.0f : 0.0f);
         {
             // Minimap: shown on the overworld (not in battles, menus or cutscenes).
-            int show = sMiniEnabled && PcFieldWideActive() && !gPcBattleFrame && gPcMinimap.valid && sCineBarT < 0.2f;
+            extern struct PcWt gPcWt;
+            int show = sMiniEnabled && PcFieldWideActive() && !gPcBattleFrame && gPcMinimap.valid && sCineBarT < 0.2f && !gPcWt.busy;
             {
                 extern int gPcMenuFrame;
                 if (gPcMenuFrame) show = 0;

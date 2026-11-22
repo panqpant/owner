@@ -120,6 +120,7 @@ static void Screenshot(void)
 }
 
 #include "settings_ui.c"
+#include "wondertrade_ui.c"
 
 int FrontendInit(int argc, char **argv)
 {
@@ -308,6 +309,8 @@ static void PumpEvents(void)
     {
         if (MenuEvent(&e))
             continue;
+        if (sUseGl && WtEvent(&e))
+            continue;
         if ((e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_F10 && sUseGl)
          || (e.type == SDL_CONTROLLERBUTTONDOWN && e.cbutton.button == SDL_CONTROLLER_BUTTON_GUIDE && sUseGl))
         {
@@ -405,6 +408,8 @@ static void PumpEvents(void)
 
 void FrontendPresent(const uint32_t *fb)
 {
+    if (sUseGl)
+        WtTick();
     uint64_t freq = SDL_GetPerformanceFrequency();
     uint64_t now;
 
@@ -523,7 +528,7 @@ uint16_t FrontendPollKeys(void)
         return ScriptStep(SaveScreenshot, TestHookRun, &sQuit);
     }
 
-    if (sMenuOpen)
+    if (sMenuOpen || WtActive())
         return 0;
     {
         int i;

@@ -33,6 +33,7 @@ bool8 ArePlayerFieldControlsLocked(void); // (game script.h; pc/script.h shadows
 #include "pokemon_icon.h"
 #include "palette.h"
 #include "field_camera.h"
+#include "wondertrade.h"
 #include "fieldfx.h"
 
 struct PcFieldFx gPcFieldFx;
@@ -285,6 +286,7 @@ void PcUpdateFieldFx(void)
     }
 
     PcUpdateMinimap();
+    PcWonderTradeUpdate();
     PcUpdateFollower();
     PcUpdateCinematic();
     CineForce();

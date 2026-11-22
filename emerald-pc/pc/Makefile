@@ -58,7 +58,7 @@ SONG_OBJS := $(patsubst sound/songs/midi/%.s,$(OBJ)/songs/%.o,$(SONG_SRCS))
 
 PORT_COMMON := platform bios ppu flash_pc rtc_pc stubs nullguard script hdpack
 # Port files that use the game's own headers and structures.
-PORT_GAME := m4a_pc texthd fieldfx
+PORT_GAME := m4a_pc texthd fieldfx wondertrade
 PORT_OBJS := $(patsubst %,$(OBJ)/pc/%.o,$(PORT_COMMON)) $(patsubst %,$(OBJ)/pcgame/%.o,$(PORT_GAME))
 
 ALL_GAME := $(GAME_OBJS) $(DATA_OBJS) $(SONG_OBJS) $(PORT_OBJS)

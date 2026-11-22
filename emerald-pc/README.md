@@ -50,6 +50,8 @@ the game's assets.
 | Page Up/Down, I/K, mouse wheel, right-drag, right stick | Tilt the camera |
 | F11 or Alt+Enter | Fullscreen |
 | F10 (or Back+Start, or Guide) | Settings |
+| W (or Y on a gamepad) | Wonder Trade |
+| M | Minimap on/off |
 | F12 | Screenshot |
 | Esc | Quit |
 
