@@ -13,6 +13,9 @@ local GAP = 14 -- studs between stage starts
 local BASE_HEIGHT = 40
 local COIN_VALUE = 5
 local WIN_BONUS = 100
+local PONYTAIL_PRICE = 50
+local PONYTAIL_COLOR = Color3.fromRGB(90, 55, 30)
+local PONYTAIL_TIE_COLOR = Color3.fromRGB(255, 110, 170)
 
 local store = nil
 do
@@ -284,6 +287,113 @@ end)
 -- Skybox-ish ground far below so falling looks like falling.
 killBrick(CFrame.new(0, 0, winZ / 2), Vector3.new(400, 1, winZ + 200))
 
+-- Ponytail add-on. Pieces are (height, distance behind the head, size), in head-size units.
+local PONYTAIL_PIECES = {
+	{ 0.25, 0.05, 0.35, true }, -- hair tie
+	{ 0.15, 0.25, 0.45 },
+	{ -0.2, 0.35, 0.5 },
+	{ -0.6, 0.35, 0.45 },
+	{ -0.95, 0.28, 0.35 },
+	{ -1.2, 0.2, 0.22 },
+}
+
+local function makePonytail(head: BasePart, parent: Instance): Model
+	local model = Instance.new("Model")
+	model.Name = "Ponytail"
+	local s = head.Size.Y
+	local back = head.Size.Z / 2
+	for _, piece in PONYTAIL_PIECES do
+		local p = Instance.new("Part")
+		p.Name = piece[4] and "HairTie" or "Hair"
+		p.Shape = Enum.PartType.Ball
+		p.Size = Vector3.one * (piece[3] * s)
+		-- +Z is the back of the head.
+		p.CFrame = head.CFrame * CFrame.new(0, piece[1] * s, back + piece[2] * s)
+		p.Color = piece[4] and PONYTAIL_TIE_COLOR or PONYTAIL_COLOR
+		p.Material = Enum.Material.SmoothPlastic
+		p.Anchored = false
+		p.CanCollide = false
+		p.CanTouch = false -- so hair can't hit kill bricks or grab coins
+		p.CanQuery = false
+		p.Massless = true
+		local weld = Instance.new("WeldConstraint")
+		weld.Part0 = head
+		weld.Part1 = p
+		weld.Parent = p
+		p.Parent = model
+	end
+	model.Parent = parent
+	return model
+end
+
+local function refreshPonytail(player: Player)
+	local character = player.Character
+	if not character then
+		return
+	end
+	local old = character:FindFirstChild("Ponytail")
+	if old then
+		old:Destroy()
+	end
+	local head = character:FindFirstChild("Head") :: BasePart?
+	if head and player:GetAttribute("WearingPonytail") then
+		makePonytail(head, character)
+	end
+end
+
+-- Ponytail shop next to the spawn: a stand showing the ponytail on a head.
+do
+	local start = checkpoints[1].Position
+	local shopPad = part({
+		Name = "PonytailShop",
+		Size = Vector3.new(6, 1, 4),
+		Position = start + Vector3.new(-5, 0, -6),
+		Color = PONYTAIL_TIE_COLOR,
+		Material = Enum.Material.Neon,
+	})
+	local stand = part({
+		Name = "Stand",
+		Size = Vector3.new(0.6, 3, 0.6),
+		Position = shopPad.Position + Vector3.new(-1.5, 2, 0),
+		Color = Color3.new(1, 1, 1),
+	})
+	local displayHead = part({
+		Name = "Head",
+		Shape = Enum.PartType.Ball,
+		Size = Vector3.new(1.6, 1.6, 1.6),
+		-- Faces away from the course, so you see the ponytail from the side as you spawn.
+		CFrame = CFrame.new(stand.Position + Vector3.new(0, 2.3, 0)),
+		Color = Color3.fromRGB(255, 220, 180),
+	})
+	makePonytail(displayHead, map)
+	addLabel(displayHead, "Ponytail - " .. PONYTAIL_PRICE .. " coins")
+
+	local prompt = Instance.new("ProximityPrompt")
+	prompt.ActionText = "Get / toggle ponytail"
+	prompt.ObjectText = PONYTAIL_PRICE .. " coins (once)"
+	prompt.HoldDuration = 0.3
+	prompt.MaxActivationDistance = 10
+	prompt.RequiresLineOfSight = false
+	prompt.Parent = displayHead
+
+	prompt.Triggered:Connect(function(player)
+		if player:GetAttribute("OwnsPonytail") then
+			player:SetAttribute("WearingPonytail", not player:GetAttribute("WearingPonytail"))
+			refreshPonytail(player)
+			return
+		end
+		local stats = player:FindFirstChild("leaderstats")
+		local coins = stats and stats:FindFirstChild("Coins") :: IntValue?
+		if not coins or coins.Value < PONYTAIL_PRICE then
+			return
+		end
+		coins.Value -= PONYTAIL_PRICE
+		player:SetAttribute("OwnsPonytail", true)
+		player:SetAttribute("WearingPonytail", true)
+		refreshPonytail(player)
+	end)
+end
+
 -- Player data
 local function load(player: Player)
 	local stats = Instance.new("Folder")
@@ -310,6 +420,8 @@ local function load(player: Player)
 			stage.Value = math.clamp(tonumber(data.Stage) or 1, 1, STAGE_COUNT)
 			coins.Value = tonumber(data.Coins) or 0
 			wins.Value = tonumber(data.Wins) or 0
+			player:SetAttribute("OwnsPonytail", data.OwnsPonytail == true)
+			player:SetAttribute("WearingPonytail", data.OwnsPonytail == true and data.WearingPonytail ~= false)
 		end
 	end
 
@@ -320,6 +432,8 @@ local function load(player: Player)
 		local pad = checkpoints[stage.Value] or checkpoints[1]
 		task.wait() -- let the default spawn finish before moving them
 		root.CFrame = pad.CFrame + Vector3.new(0, 4, 0)
+		character:WaitForChild("Head")
+		refreshPonytail(player)
 	end
 	player.CharacterAdded:Connect(placeAtCheckpoint)
 	if player.Character then
@@ -336,6 +450,8 @@ local function save(player: Player)
 		Stage = (stats:FindFirstChild("Stage") :: IntValue).Value,
 		Coins = (stats:FindFirstChild("Coins") :: IntValue).Value,
 		Wins = (stats:FindFirstChild("Wins") :: IntValue).Value,
+		OwnsPonytail = player:GetAttribute("OwnsPonytail") == true,
+		WearingPonytail = player:GetAttribute("WearingPonytail") == true,
 	}
 	local ok, err = pcall(function()
 		store:SetAsync("player_" .. player.UserId, data)

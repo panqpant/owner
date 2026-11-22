@@ -33,6 +33,14 @@ The constants at the top of the script control the game:
 | `GAP`         | Distance between checkpoints       |
 | `COIN_VALUE`  | Coins per coin pickup              |
 | `WIN_BONUS`   | Coins awarded for finishing        |
+| `PONYTAIL_PRICE` | Coins needed to unlock the ponytail |
+| `PONYTAIL_COLOR` / `PONYTAIL_TIE_COLOR` | Hair and hair-tie colors |
+
+## Ponytail add-on
+
+Next to the spawn there's a pink shop pad with a head showing off a ponytail. Walk up and hold **E**
+to buy it for 50 coins. After that, the same prompt takes it off or puts it back on. Owning it and
+wearing it are both saved, and it comes back every time you respawn.
 
 To add a new obstacle type, add a function to the `obstacles` table. It receives the checkpoint's `z`,
 the height `y`, and the stage color.
