@@ -302,6 +302,7 @@ static const char *kComposite =
     "uniform vec4 uInSun;\n"
     "uniform vec3 uGrassDark, uGrassLight;\n"
     "uniform float uTilt;\n"
+    "uniform vec3 uCineZoom;\n"     // cinematic camera: focus (uv), zoom
     "uniform int uMood;\n"
     "uniform int uSeason;\n"        // 0 spring, 1 summer, 2 autumn, 3 winter
     "uniform sampler2D uGi;\n"      // ray-traced light (native res)
@@ -326,6 +327,7 @@ static const char *kComposite =
     "uniform float uNightB;\n"
     "uniform vec3 uBLight;\n"       // colour of the light at this hour       // player's feet (GBA screen coords)       // lightning, 0-1          // key light: direction towards the light (x, y down, z up), strength      // fraction of scenery around: light shafts
     "vec2 gUpSize, gUpFw;\n"
+    "bool gZoomField = false;\n"   // field view is zoomed: the flattened frame (uFlat) no longer lines up
     // Sharp magnification of the upscaled layers: each upscaled pixel stays
     // solid and only the 1-output-pixel seam between neighbours is blended.
     "vec2 SharpUv(vec2 uv) {\n"
@@ -669,6 +671,7 @@ static const char *kComposite =
     "  return k.b > 0.6 && k.b - k.r > 0.18 && k.g > 0.5;\n"
     "}\n"
     "float WaterArt(vec2 q) {\n"   // how much this pixel of the art is open water (blue)
+    "  if (gZoomField) return 0.0;\n"
     "  vec3 k = TexS(uFlat, q).rgb;\n"
     "  return smoothstep(0.06, 0.16, k.b - max(k.r, k.g * 0.9)) * smoothstep(0.25, 0.4, k.b);\n"
     "}\n"
@@ -768,6 +771,11 @@ static const char *kComposite =
     "    uvc = vec2(0.5 + (uv.x - 0.5) * sx, sy);\n"
     "    npc = clamp(ivec2(floor(uvc * uDim)), ivec2(0), ivec2(uDim) - 1);\n"
     "  }\n"
+    "  if (uCineZoom.z > 1.001 && uFieldFx != 0 && uBattle == 0) {\n"   // cinematic push-in (text boxes stay put)
+    "    camOn = true;\n"
+    "    uvc = uCineZoom.xy + (uvc - uCineZoom.xy) / uCineZoom.z;\n"
+    "    npc = clamp(ivec2(floor(uvc * uDim)), ivec2(0), ivec2(uDim) - 1);\n"
+    "  }\n"
     "  if (uFieldFx != 0 && uLife.z > 0.0 && np.y > 0) {\n"   // heat rising off the ground
     "    vec2 gq = uv * uDim;\n"
     "    uvc.x += sin(gq.y * 0.55 + uTime * 5.5 + sin(gq.x * 0.08 + uTime) * 2.0) * 0.32 / uDim.x;\n"
@@ -809,6 +817,7 @@ static const char *kComposite =
     "      objPrio = M.g & 3u; semi = (M.g & 4u) != 0u;\n"
     "    }\n"
     "  }\n"
+    "  gZoomField = camOn && uBattle == 0;\n"
     "  vec2 uvScreen = uv;\n"
     "  if (camOn) uv = uvc;\n"   // every scene effect below works in the camera's view
     "  vec2 gp = vec2(vUv.x * uDim.x - uMargin, (1.0 - vUv.y) * uDim.y);\n"
@@ -861,7 +870,7 @@ static const char *kComposite =
     // A smoothed edge inside a pixel that was solid in the original would
     // reveal what the GBA keeps hidden underneath; use the upscaled original
     // frame there instead.
-    "  if (top != 5 && top != 0 && ((M.b >> uint(top)) & 1u) != 0u && lay[top].a < 0.999)\n"
+    "  if (top != 5 && top != 0 && ((M.b >> uint(top)) & 1u) != 0u && lay[top].a < 0.999 && !(camOn && uBattle == 0))\n"
     "    under = TexS(uFlat, uvc).rgb;\n"
     "  vec3 botCol = bot == 5 ? bd : lay[bot].rgb / max(lay[bot].a, 1e-4);\n"
     "  vec3 res = under;\n"
@@ -1053,7 +1062,7 @@ static const char *kComposite =
     "  if (uFieldFx != 0 && top >= 1 && top <= 3 && uKey.w > 0.0) {\n"
     "    vec2 gr = vec2(Solid(gp + vec2(6.0, 0.0)) - Solid(gp - vec2(6.0, 0.0)), Solid(gp + vec2(0.0, 6.0)) - Solid(gp - vec2(0.0, 6.0)));\n"
     "    float gl = length(gr);\n"
-    "    if (gl > 0.02 && Solid(gp) < 0.5 && wm < 0.01) {\n"
+    "    if (gl > 0.02 && Solid(gp) < 0.5 && wm < 0.01 && !gZoomField) {\n"
     "      vec2 sp = gp + gr / gl * 9.0;\n"
     "      vec3 bc = TexS(uFlat, vec2((sp.x + uMargin) / uDim.x, sp.y / uDim.y)).rgb;\n"
     "      vec3 tintc = bc / max(dot(bc, vec3(0.333)), 0.08);\n"
@@ -1636,6 +1645,8 @@ static const char *kPresent =
     "uniform float uShatter;\n"      // intro time 0-1 (< 0: off)
     "uniform float uAspect;\n"
     "uniform int uIntroKind;\n"
+    "uniform vec4 uCine;\n"         // x top bar, y bottom bar, z grade amount, w time
+    "uniform int uCineStyle;\n"
     "uniform sampler2D uOverlay;\n"   // settings screen
     "uniform int uOverlayOn;\n"  // battles: x = left edge u, y = right edge u, z = message box top (v, from top)
     "void main() {\n"
@@ -1792,6 +1803,35 @@ static const char *kPresent =
     "    }\n"
     "    c = mix(c, snap, keep);\n"
     "  }\n"
+    // Cinematic look for story moments: colour grade, vignette, a pulse of
+    // coloured light for legendaries, and letterbox bars.
+    "  if (uCine.z > 0.001 && uCineStyle > 0) {\n"
+    "    const vec3 kTint[17] = vec3[17](vec3(1.0), vec3(1.0, 0.97, 0.95), vec3(1.02, 1.0, 0.97), vec3(0.92, 0.98, 1.05),\n"
+    "      vec3(1.28, 0.82, 0.7), vec3(0.74, 0.92, 1.28), vec3(0.84, 1.22, 0.9), vec3(1.08, 0.98, 0.82), vec3(1.02, 0.96, 1.1),\n"
+    "      vec3(1.1, 0.86, 0.86), vec3(0.96, 0.86, 1.12), vec3(0.88, 0.98, 1.15), vec3(1.12, 0.95, 0.8), vec3(1.14, 1.04, 0.82),\n"
+    "      vec3(1.06, 1.03, 0.9), vec3(1.0, 0.98, 0.97), vec3(1.03, 1.0, 0.98));\n"
+    "    const float kSat[17] = float[17](1.0, 1.1, 1.15, 0.75, 1.1, 1.05, 1.05, 0.65, 0.9, 0.95, 0.9, 0.85, 1.05, 1.1, 1.05, 0.88, 1.15);\n"
+    "    const float kCon[17] = float[17](1.0, 1.08, 1.1, 1.12, 1.15, 1.12, 1.1, 1.08, 1.0, 1.15, 1.1, 1.05, 1.12, 1.1, 1.0, 1.1, 1.08);\n"
+    "    const float kVig[17] = float[17](0.0, 0.35, 0.4, 0.5, 0.55, 0.55, 0.5, 0.5, 0.35, 0.55, 0.55, 0.45, 0.5, 0.4, 0.25, 0.45, 0.35);\n"
+    "    const vec4 kPulse[17] = vec4[17](vec4(0.0), vec4(0.0), vec4(0.0), vec4(0.0), vec4(1.0, 0.3, 0.1, 0.3),\n"
+    "      vec4(0.2, 0.5, 1.0, 0.3), vec4(0.3, 1.0, 0.5, 0.26), vec4(1.0, 0.8, 0.4, 0.08), vec4(0.8, 0.6, 1.0, 0.14),\n"
+    "      vec4(1.0, 0.2, 0.2, 0.08), vec4(0.6, 0.3, 1.0, 0.1), vec4(0.6, 0.9, 1.0, 0.08), vec4(1.0, 0.5, 0.1, 0.08),\n"
+    "      vec4(1.0, 0.85, 0.4, 0.12), vec4(1.0, 0.9, 0.5, 0.2), vec4(0.0), vec4(0.0));\n"
+    "    int st = clamp(uCineStyle, 0, 16);\n"
+    "    vec3 g = c;\n"
+    "    float l = dot(g, vec3(0.2126, 0.7152, 0.0722));\n"
+    "    g = mix(vec3(l), g, kSat[st]);\n"
+    "    g = (g - 0.5) * kCon[st] + 0.5;\n"
+    "    g *= kTint[st];\n"
+    "    vec2 d = vUv - 0.5;\n"
+    "    float vig = smoothstep(0.25, 0.85, length(d * vec2(1.25, 1.0)));\n"
+    "    g *= 1.0 - vig * kVig[st];\n"
+    "    vec4 pu = kPulse[st];\n"
+    "    g += pu.rgb * pu.a * (0.6 + 0.4 * sin(uCine.w * 1.8)) * (0.4 + vig);\n"
+    "    c = mix(c, clamp(g, 0.0, 1.0), uCine.z);\n"
+    "  }\n"
+    "  if (uCine.x > 0.001 && vUv.y > 1.0 - 0.105 * uCine.x) c = vec3(0.0);\n"
+    "  if (uCine.y > 0.001 && vUv.y < 0.105 * uCine.y) c = vec3(0.0);\n"
     "  if (uOverlayOn != 0) { vec4 o = texture(uOverlay, vec2(vUv.x, 1.0 - vUv.y)); c = mix(c, o.rgb, o.a); }\n"
     "  oColor = vec4(c, 1.0);\n"
     "}\n";
@@ -2510,6 +2550,60 @@ static void UpdateLiveWeather(int on, float *lw, float *wetOut, int *wxOut)
     }
 }
 
+// Cinematic moments: eased amount, bars, push-in and style.
+static float sCineAmt, sCineBarT, sCineBarB, sCineZoom = 1.0f, sCineFx = 0.5f, sCineFy = 0.5f;
+static int sCineStyle, sCineWant, sCineHold, sBattleFrames;
+static void UpdateCinematic(void)
+{
+    int field = PcFieldWideActive() && !gPcBattleFrame;
+    int want = 0, style = 0, boxOpen = 0, x, y, m = (gPcScreenW - GBA_W) / 2;
+    float zoom = 1.0f, target, barT, barB;
+    static unsigned lastF;
+    unsigned fnow = (unsigned)PortFrameCount();
+    int steps = (int)(fnow - lastF);
+    lastF = fnow;
+    if (steps < 1) steps = 1;
+    if (steps > 60) steps = 60;
+#define EASE(v, t, k) ((v) += ((t) - (v)) * (1.0f - powf(1.0f - (k), (float)steps)))
+    if (getenv("EMERALD_NOCINE") || !sLighting) { sCineAmt = sCineBarT = sCineBarB = 0; sCineZoom = 1; return; }
+    // Is a message box open (BG0 across the bottom of the screen)?
+    for (y = 118; y < 156 && !boxOpen; y += 6)
+        for (x = 40; x < 200; x += 8)
+            if (gPpuLayers.layer[0][y][x + m] >> 24) { boxOpen = 1; break; }
+    if (field)
+    {
+        sBattleFrames = 0;
+        if (gPcCine.want) sCineWant += steps; else sCineWant = 0;
+        if (sCineWant > 10 || (gPcCine.want && gPcCine.style == CINE_SPOTTED)) sCineHold = 50;
+        if (sCineHold > 0) { want = 1; sCineHold -= steps; }
+        if (gPcCine.want) style = gPcCine.style;
+        zoom = gPcCine.zoom;
+        if (want && gPcCine.want)
+        {
+            EASE(sCineFx, (gPcCine.fx + m) / (float)gPcScreenW, 0.05f);
+            EASE(sCineFy, gPcCine.fy / (float)GBA_H, 0.05f);
+        }
+    }
+    else if (gPcBattleFrame && gPcBattleFx.boss)
+    {
+        // Boss battles: the style's grade throughout, stronger for the opening.
+        sBattleFrames += steps;
+        want = 1;
+        style = gPcBattleFx.boss;
+        zoom = 1.0f;
+    }
+    if (style) sCineStyle = style;
+    target = want ? (gPcBattleFrame ? (sBattleFrames < 300 ? 1.0f : 0.6f) : 1.0f) : 0.0f;
+    EASE(sCineAmt, target, 0.04f);
+    barT = want && !gPcBattleFrame ? 1.0f : 0.0f;
+    barB = barT && !boxOpen ? 1.0f : 0.0f;
+    EASE(sCineBarT, barT, 0.07f);
+    EASE(sCineBarB, barB, 0.12f);
+    EASE(sCineZoom, want && field ? zoom : 1.0f, 0.03f);
+#undef EASE
+    if (getenv("EMERALD_CINEDEBUG")) { static int k; if (k++ % 20 == 0) fprintf(stderr, "rcine: field=%d want=%d gw=%d amt=%.2f barT=%.2f zoom=%.3f box=%d\n", field, want, gPcCine.want, sCineAmt, sCineBarT, sCineZoom, boxOpen); }
+}
+
 // Render the HD composite into sCompFbo.
 static void RenderHd(const uint32_t *frame, int outW, int outH)
 {
@@ -2788,6 +2882,8 @@ static void RenderHd(const uint32_t *frame, int outW, int outH)
                 if (getenv("EMERALD_SEASON")) season = atoi(getenv("EMERALD_SEASON"));
                 glUniform1i(glGetUniformLocation(sProgComp, "uSeason"), field && sLighting ? season : -1);
             }
+            UpdateCinematic();
+            glUniform3f(glGetUniformLocation(sProgComp, "uCineZoom"), sCineFx, sCineFy, sCineZoom);
             glUniform1i(glGetUniformLocation(sProgComp, "uMood"), field && sLighting ? gPcFieldFx.mood : 0);
             glUniform1f(glGetUniformLocation(sProgComp, "uTilt"), field && sLighting ? sTilt : 0.0f);
             glUniform2f(glGetUniformLocation(sProgComp, "uPlayer"), (float)gPcFieldFx.playerX, (float)gPcFieldFx.playerY);
@@ -2931,6 +3027,8 @@ static void DrawPresent(int hdMode, int winW, int winH)
         glUniform1f(glGetUniformLocation(sProgPresent, "uUScale"), 1.0f);
         glUniform1f(glGetUniformLocation(sProgPresent, "uBloom"), sGrade ? 0.25f + sNight * 0.9f : 0.0f);
         glUniform1f(glGetUniformLocation(sProgPresent, "uSharpen"), sGrade ? 1.0f : 0.0f);
+        glUniform4f(glGetUniformLocation(sProgPresent, "uCine"), sCineBarT, sCineBarB, sCineAmt, (float)(PortFrameCount() % 36000) / 59.73f);
+        glUniform1i(glGetUniformLocation(sProgPresent, "uCineStyle"), sCineStyle);
         {
             extern int gPcIntroKind;
             float t = ((int)PortFrameCount() - sIntroFrame) / (gPcIntroKind < 5 ? 48.0f : 54.0f);
@@ -2970,6 +3068,7 @@ static void DrawPresent(int hdMode, int winW, int winH)
         glUniform1f(glGetUniformLocation(sProgPresent, "uBloom"), 0.0f);
         glUniform1f(glGetUniformLocation(sProgPresent, "uSharpen"), 0.0f);
         glUniform1f(glGetUniformLocation(sProgPresent, "uShatter"), -1.0f);
+        glUniform4f(glGetUniformLocation(sProgPresent, "uCine"), 0, 0, 0, 0);
         glUniform2f(glGetUniformLocation(sProgPresent, "uContentUv"), -1.0f, 2.0f);
         glUniform3f(glGetUniformLocation(sProgPresent, "uSoftSides"), 0.0f, 1.0f, 0.0f);
     }

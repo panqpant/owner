@@ -52,12 +52,27 @@ struct PcBattleFx {
     int outdoors;
     int scene;   // new backdrop: -1 keep the game's, else PC_BSCENE_*
     int count;
+    int boss;            // CINE_* style of a boss battle (0 = ordinary)
     int anim;            // a move animation is playing
     int attacker, target, moveType;
     float shake;         // 0-1: a hit just landed
     struct { short x, y, w, h; unsigned short tile; unsigned char side, visible; } mon[4]; // sprite rects (GBA screen coords), first OBJ tile
 };
 extern struct PcBattleFx gPcBattleFx;
+
+// Cinematic story moments (fieldfx.c): letterbox, camera push, colour grade.
+enum { CINE_NONE, CINE_SPOTTED, CINE_GYM, CINE_VILLAIN, CINE_LEGEND_RED, CINE_LEGEND_BLUE, CINE_LEGEND_GREEN,
+       CINE_ANCIENT, CINE_MYSTIC, CINE_E4_SIDNEY, CINE_E4_PHOEBE, CINE_E4_GLACIA, CINE_E4_DRAKE, CINE_CHAMPION,
+       CINE_HALL_OF_FAME, CINE_STORY, CINE_RIVAL, CINE_COUNT };
+struct PcCine {
+    int want;            // a cinematic moment is happening now
+    int style;           // CINE_*
+    int mapStyle;        // the current map's own style (also used for its battles)
+    short fx, fy;        // camera focus, GBA screen coords
+    float zoom;          // target zoom (1 = none)
+};
+extern struct PcCine gPcCine;
+int PcBattleBoss(void);  // style for the current battle (0 = ordinary)
 void PcUpdateBattleFx(void);
 extern int gPcHdEffects; // renderer is drawing HD weather (hide the original sprites in HD layers)
 void PcUpdateFieldFx(void);

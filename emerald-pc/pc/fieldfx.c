@@ -1,3 +1,4 @@
+#include <stdio.h>
 // Overworld lighting data for the renderer: light sources (building doors)
 // and character positions (for soft shadows), in GBA screen coordinates.
 // Called once per overworld frame. Compiled with the game's headers.
@@ -24,12 +25,167 @@
 #include "pokemon.h"
 #include "constants/moves.h"
 #include "constants/map_groups.h"
+bool8 ArePlayerFieldControlsLocked(void); // (game script.h; pc/script.h shadows it)
+#include "trainer_see.h"
 #include "fieldfx.h"
 
 struct PcFieldFx gPcFieldFx;
 struct PcAmbient gPcAmbient;
 struct PcBattleFx gPcBattleFx;
+struct PcCine gPcCine;
 int gPcHdEffects;
+
+static int MapCineStyle(u16 id)
+{
+    switch (id)
+    {
+    case MAP_RUSTBORO_CITY_GYM: case MAP_DEWFORD_TOWN_GYM: case MAP_MAUVILLE_CITY_GYM: case MAP_LAVARIDGE_TOWN_GYM_1F:
+    case MAP_PETALBURG_CITY_GYM: case MAP_FORTREE_CITY_GYM: case MAP_MOSSDEEP_CITY_GYM: case MAP_SOOTOPOLIS_CITY_GYM_1F:
+    case MAP_SOOTOPOLIS_CITY_GYM_B1F:
+        return CINE_GYM;
+    case MAP_MT_CHIMNEY: case MAP_AQUA_HIDEOUT_B2F: case MAP_MAGMA_HIDEOUT_4F: case MAP_SLATEPORT_CITY_HARBOR:
+    case MAP_ROUTE119_WEATHER_INSTITUTE_2F: case MAP_MT_PYRE_SUMMIT:
+        return CINE_VILLAIN;
+    case MAP_TERRA_CAVE_END:
+        return CINE_LEGEND_RED;
+    case MAP_SEAFLOOR_CAVERN_ROOM9: case MAP_MARINE_CAVE_END:
+        return CINE_LEGEND_BLUE;
+    case MAP_SKY_PILLAR_TOP:
+        return CINE_LEGEND_GREEN;
+    case MAP_CAVE_OF_ORIGIN_B1F: case MAP_SOOTOPOLIS_CITY:
+        return gWeatherPtr->currWeather == WEATHER_DROUGHT ? CINE_LEGEND_RED
+             : gWeatherPtr->currWeather == WEATHER_DOWNPOUR ? CINE_LEGEND_BLUE
+             : id == MAP_SOOTOPOLIS_CITY ? CINE_STORY : CINE_ANCIENT;
+    case MAP_DESERT_RUINS: case MAP_ISLAND_CAVE: case MAP_ANCIENT_TOMB:
+        return CINE_ANCIENT;
+    case MAP_SOUTHERN_ISLAND_INTERIOR: case MAP_FARAWAY_ISLAND_INTERIOR: case MAP_BIRTH_ISLAND_EXTERIOR:
+    case MAP_NAVEL_ROCK_TOP: case MAP_NAVEL_ROCK_BOTTOM:
+        return CINE_MYSTIC;
+    case MAP_EVER_GRANDE_CITY_SIDNEYS_ROOM: return CINE_E4_SIDNEY;
+    case MAP_EVER_GRANDE_CITY_PHOEBES_ROOM: return CINE_E4_PHOEBE;
+    case MAP_EVER_GRANDE_CITY_GLACIAS_ROOM: return CINE_E4_GLACIA;
+    case MAP_EVER_GRANDE_CITY_DRAKES_ROOM:  return CINE_E4_DRAKE;
+    case MAP_EVER_GRANDE_CITY_CHAMPIONS_ROOM: return CINE_CHAMPION;
+    case MAP_EVER_GRANDE_CITY_HALL_OF_FAME: return CINE_HALL_OF_FAME;
+    }
+    return CINE_NONE;
+}
+
+static void SpriteFeet(struct ObjectEvent *obj, int *x, int *y)
+{
+    struct Sprite *sp = &gSprites[obj->spriteId];
+    *x = sp->x + sp->x2 + (sp->coordOffsetEnabled ? gSpriteCoordOffsetX : 0);
+    *y = sp->y + sp->y2 + (sp->coordOffsetEnabled ? gSpriteCoordOffsetY : 0);
+}
+
+// Decide whether a cinematic moment is happening: a trainer spotting the
+// player, or a cutscene (a script holds the controls while characters move
+// by themselves), or anything scripted on a story map.
+static void CineDebug(void);
+static void CineForce(void);
+static int *s_cineWasLocked;
+static void PcUpdateCinematic(void)
+{
+    struct PcCine *c = &gPcCine;
+    u16 id = gSaveBlock1Ptr->location.mapNum | (gSaveBlock1Ptr->location.mapGroup << 8);
+    int locked = ArePlayerFieldControlsLocked(), moving = 0, sx = 0, sy = 0, n = 0, i;
+    c->mapStyle = MapCineStyle(id);
+    c->want = 0;
+    c->style = c->mapStyle;
+    c->zoom = 1.0f;
+    if (gPlayerAvatar.objectEventId < OBJECT_EVENTS_COUNT && gObjectEvents[gPlayerAvatar.objectEventId].spriteId < MAX_SPRITES)
+    {
+        SpriteFeet(&gObjectEvents[gPlayerAvatar.objectEventId], &sx, &sy);
+        n = 1;
+    }
+    else
+    {
+        sx = 120; sy = 80; n = 1;
+    }
+    if (!locked)
+    {
+        if (s_cineWasLocked) *s_cineWasLocked = 0;
+        if (c->mapStyle == CINE_HALL_OF_FAME) { c->want = 1; c->zoom = 1.04f; }
+        c->fx = sx; c->fy = sy;
+        return;
+    }
+    // A cutscene: while a script holds the controls, someone other than the
+    // player actually walks (turning to face the player doesn't count). It
+    // lasts until the script lets go.
+    {
+        static s16 startX[OBJECT_EVENTS_COUNT], startY[OBJECT_EVENTS_COUNT];
+        static int wasLocked, latched;
+        static u16 lockMap;
+        if (!wasLocked || lockMap != id)
+        {
+            for (i = 0; i < OBJECT_EVENTS_COUNT; i++)
+            {
+                startX[i] = gObjectEvents[i].currentCoords.x;
+                startY[i] = gObjectEvents[i].currentCoords.y;
+            }
+            latched = 0;
+            lockMap = id;
+        }
+        wasLocked = 1;
+        for (i = 0; i < OBJECT_EVENTS_COUNT; i++)
+        {
+            struct ObjectEvent *o = &gObjectEvents[i];
+            int x, y;
+            if (!o->active || o->invisible || o->spriteId >= MAX_SPRITES)
+                continue;
+            if (i != gPlayerAvatar.objectEventId && (o->currentCoords.x != startX[i] || o->currentCoords.y != startY[i]))
+                latched = 1;
+            if (i != gPlayerAvatar.objectEventId && o->heldMovementActive && !o->heldMovementFinished && !o->frozen)
+            {
+                SpriteFeet(o, &x, &y);
+                sx += x; sy += y; n++;
+            }
+        }
+        moving = latched;
+        s_cineWasLocked = &wasLocked;
+    }
+    if (gNoOfApproachingTrainers > 0 || gTrainerApproachedPlayer)
+    {
+        struct ObjectEvent *t = &gObjectEvents[gApproachingTrainers[0].objectEventId & 15];
+        c->want = 1;
+        c->style = c->mapStyle ? c->mapStyle : CINE_SPOTTED;
+        c->zoom = 1.12f;
+        if (t->active && t->spriteId < MAX_SPRITES)
+        {
+            int x, y;
+            SpriteFeet(t, &x, &y);
+            sx += x * 2; sy += y * 2; n += 2;
+        }
+    }
+    else if (moving > 0 || (c->mapStyle != CINE_NONE && c->mapStyle != CINE_GYM))
+    {
+        c->want = 1;
+        if (!c->mapStyle) c->style = CINE_STORY;
+        c->zoom = 1.08f;
+    }
+    c->fx = sx / n;
+    c->fy = sy / n - 12;
+}
+static void CineForce(void)
+{
+    if (getenv("EMERALD_CINESTYLE"))
+    {
+        gPcCine.want = 1;
+        gPcCine.style = atoi(getenv("EMERALD_CINESTYLE"));
+        gPcCine.zoom = 1.08f;
+    }
+}
+static void CineDebug(void)
+{
+    static int k;
+    if (getenv("EMERALD_CINEDEBUG") && k++ % 20 == 0)
+    {
+        int i, held = 0, fr = 0;
+        for (i = 0; i < OBJECT_EVENTS_COUNT; i++)
+            if (gObjectEvents[i].active) { held |= gObjectEvents[i].heldMovementActive << i; fr |= gObjectEvents[i].frozen << i; }
+        fprintf(stderr, "cine: locked=%d want=%d style=%d held=%x frozen=%x appr=%d\n", ArePlayerFieldControlsLocked(), gPcCine.want, gPcCine.style, held, fr, gNoOfApproachingTrainers);
+    }
+}
 
 void PcUpdateFieldFx(void)
 {
@@ -117,6 +273,10 @@ void PcUpdateFieldFx(void)
                 fx->grid[row][col] = f;
             }
     }
+
+    PcUpdateCinematic();
+    CineForce();
+    CineDebug();
 
     // Ambient sound: what is around the player, and on which side.
     {
@@ -213,6 +373,7 @@ void PcUpdateBattleFx(void)
     struct PcBattleFx *b = &gPcBattleFx;
     int i;
     b->outdoors = IsMapTypeOutdoors(gMapHeader.mapType);
+    b->boss = PcBattleBoss();
     // Which new backdrop to draw; special battles keep their own art.
     b->scene = -1;
     if (!(gBattleTypeFlags & (BATTLE_TYPE_LINK | BATTLE_TYPE_FRONTIER | BATTLE_TYPE_EREADER_TRAINER | BATTLE_TYPE_RECORDED_LINK
@@ -290,4 +451,31 @@ void PcUpdateBattleFx(void)
         b->mon[i].tile = sp->oam.tileNum;
         b->mon[i].visible = 1;
     }
+}
+
+// Style for the current battle: the map's own cinematic style if it has
+// one (Elite Four rooms, legendary lairs), else by opponent.
+int PcBattleBoss(void)
+{
+    u16 id = gSaveBlock1Ptr->location.mapNum | (gSaveBlock1Ptr->location.mapGroup << 8);
+    int ms = MapCineStyle(id);
+    if (gBattleTypeFlags & (BATTLE_TYPE_LEGENDARY | BATTLE_TYPE_REGI | BATTLE_TYPE_GROUDON | BATTLE_TYPE_KYOGRE | BATTLE_TYPE_RAYQUAZA | BATTLE_TYPE_KYOGRE_GROUDON))
+    {
+        if (gBattleTypeFlags & BATTLE_TYPE_GROUDON) return CINE_LEGEND_RED;
+        if (gBattleTypeFlags & BATTLE_TYPE_KYOGRE) return CINE_LEGEND_BLUE;
+        if (gBattleTypeFlags & BATTLE_TYPE_RAYQUAZA) return CINE_LEGEND_GREEN;
+        if (gBattleTypeFlags & BATTLE_TYPE_REGI) return CINE_ANCIENT;
+        return ms ? ms : CINE_MYSTIC;
+    }
+    if (gBattleTypeFlags & BATTLE_TYPE_TRAINER)
+    {
+        u8 tc = gTrainers[gTrainerBattleOpponent_A].trainerClass;
+        if (ms >= CINE_E4_SIDNEY && ms <= CINE_CHAMPION) return ms;
+        if (tc == TRAINER_CLASS_CHAMPION) return CINE_CHAMPION;
+        if (tc == TRAINER_CLASS_ELITE_FOUR) return CINE_E4_SIDNEY;
+        if (tc == TRAINER_CLASS_LEADER) return CINE_GYM;
+        if (tc == TRAINER_CLASS_MAGMA_LEADER || tc == TRAINER_CLASS_AQUA_LEADER) return CINE_VILLAIN;
+        if (tc == TRAINER_CLASS_RIVAL) return CINE_RIVAL;
+    }
+    return CINE_NONE;
 }

@@ -692,8 +692,9 @@ static void ExportLine(int line, const int *bgOn, const int *bgPrio, int forcedB
             u16 c = sBg[i][x];
             if (c == TRANSPARENT)
                 dst[x] = 0;
-            else if (sTopLayer[x] != i && !sBlended[x])
-                dst[x] = ToRgba(sFinal[x]); // hidden: what is actually visible here
+            else if (sTopLayer[x] != i && !sBlended[x] && sTopLayer[x] >= 1 && sTopLayer[x] <= 3)
+                dst[x] = ToRgba(sFinal[x]); // hidden under another map layer: what is actually visible here
+                                            // (never a text box or sprite, which a moving camera would duplicate)
             else
                 dst[x] = ToRgba(c);
         }
@@ -721,7 +722,7 @@ static void ExportLine(int line, const int *bgOn, const int *bgPrio, int forcedB
         {
             if (sObjColor[x] == TRANSPARENT || sObjHidden[x])
                 dst[x] = 0;
-            else if (sTopLayer[x] != L_OBJ && !sBlended[x])
+            else if (sTopLayer[x] != L_OBJ && !sBlended[x] && sTopLayer[x] != 0)
                 dst[x] = ToRgba(sFinal[x]);
             else
                 dst[x] = ToRgba(sObjColor[x]);
