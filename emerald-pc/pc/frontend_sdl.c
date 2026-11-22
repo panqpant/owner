@@ -216,6 +216,7 @@ int FrontendInit(int argc, char **argv)
         if (sGl && !getenv("EMERALD_NOGL") && HdInit() == 0)
         {
             sUseGl = 1;
+            HdSetLighting(HdGetLighting());   // also turns on HD menus before any menu is drawn
             LoadSettings();
             if (getenv("EMERALD_MENU"))
                 MenuOpen(1);

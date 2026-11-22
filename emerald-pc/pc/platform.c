@@ -280,6 +280,8 @@ void PcSetFieldMaps(uint16_t *bg1, uint16_t *bg2, uint16_t *bg3, int base1, int 
 int gPcOutdoors;
 void PcMarkBattleFrame(void) { sBattleSeen = 1; }
 void PcMarkMenuFrame(int kind) { sMenuSeen = kind; }
+unsigned char gPcPartyBars;
+int gPcHdMenus;   // set by the GL renderer while its lighting is on
 int gPcIntroSerial, gPcIntroKind;
 // Wild battles get one of five gentle intros, trainers one of four bolder
 // ones, legendaries and gym leaders the full shatter.

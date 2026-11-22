@@ -1,5 +1,5 @@
 diff --git a/include/gba/macro.h b/include/gba/macro.h
-index 8566762..097e815 100644
+index 8566762fe..097e81577 100644
 --- a/include/gba/macro.h
 +++ b/include/gba/macro.h
 @@ -54,6 +54,11 @@
@@ -23,10 +23,10 @@ index 8566762..097e815 100644
  #if MODERN
  // NOTE: Assumes 16-bit DMAs.
 diff --git a/include/global.h b/include/global.h
-index f624850..7990d3f 100644
+index f62485065..70eae0a43 100644
 --- a/include/global.h
 +++ b/include/global.h
-@@ -17,6 +17,32 @@
+@@ -17,6 +17,34 @@
  #include "constants/easy_chat.h"
  #include "constants/trainer_hill.h"
  
@@ -44,6 +44,8 @@ index f624850..7990d3f 100644
 +void PcUpdateBattleFx(void);
 +void PcBattleIntro(void);
 +void PcMarkMenuFrame(int kind);   // this frame is a menu screen (1 = party)         // a battle transition starts: the PC renderer shatters the screen      // battler positions for battle lighting (pc/fieldfx.c)
++extern int gPcHdMenus;            // HD menus on: the PC renderer draws party slot cards and HP bars
++extern unsigned char gPcPartyBars; // party slots whose HP bar is shown (bit per window)
 +void PcSetMapPopup(int shown);    // map-name sign: drawn at the widescreen corner
 +// High-resolution text (pc/texthd.c): keep per-pixel glyph tags in step with windows.
 +struct TextPrinter;
@@ -60,7 +62,7 @@ index f624850..7990d3f 100644
  #define BLOCK_CROSS_JUMP asm("");
  
 diff --git a/src/battle_anim.c b/src/battle_anim.c
-index fb2817a..3e22b57 100644
+index fb2817af9..3e22b57c2 100644
 --- a/src/battle_anim.c
 +++ b/src/battle_anim.c
 @@ -205,9 +205,17 @@ void DoMoveAnim(u16 move)
@@ -82,7 +84,7 @@ index fb2817a..3e22b57 100644
      if (!IsContest())
      {
 diff --git a/src/battle_main.c b/src/battle_main.c
-index 11fc168..083e191 100644
+index 11fc16860..083e19166 100644
 --- a/src/battle_main.c
 +++ b/src/battle_main.c
 @@ -1862,8 +1862,14 @@ static void CB2_HandleStartMultiBattle(void)
@@ -101,7 +103,7 @@ index 11fc168..083e191 100644
      UpdatePaletteFade();
      RunTasks();
 diff --git a/src/battle_transition.c b/src/battle_transition.c
-index 59fb57e..95cdee2 100644
+index 59fb57ef2..95cdee2e6 100644
 --- a/src/battle_transition.c
 +++ b/src/battle_transition.c
 @@ -1025,12 +1025,18 @@ static void UNUSED TestBattleTransition(u8 transitionId)
@@ -124,7 +126,7 @@ index 59fb57e..95cdee2 100644
  }
  
 diff --git a/src/bg.c b/src/bg.c
-index 2c82a42..fbc3a87 100644
+index 2c82a425e..fbc3a87f6 100644
 --- a/src/bg.c
 +++ b/src/bg.c
 @@ -1238,9 +1238,12 @@ bool32 IsInvalidBg32(u8 bg)
@@ -142,7 +144,7 @@ index 2c82a42..fbc3a87 100644
      else
          return FALSE;
 diff --git a/src/dma3_manager.c b/src/dma3_manager.c
-index d774efe..4afb132 100644
+index d774efe8c..4afb132ee 100644
 --- a/src/dma3_manager.c
 +++ b/src/dma3_manager.c
 @@ -164,6 +164,14 @@ s16 CheckForSpaceForDma3Request(s16 index)
@@ -161,7 +163,7 @@ index d774efe..4afb132 100644
      {
          while (i < MAX_DMA_REQUESTS)
 diff --git a/src/event_object_movement.c b/src/event_object_movement.c
-index 02e1fce..ea94a2b 100644
+index 02e1fced7..ea94a2b78 100644
 --- a/src/event_object_movement.c
 +++ b/src/event_object_movement.c
 @@ -1651,6 +1651,10 @@ void TrySpawnObjectEvents(s16 cameraX, s16 cameraY)
@@ -211,7 +213,7 @@ index 02e1fce..ea94a2b 100644
      if (y >= DISPLAY_HEIGHT + 16 || y2 < -16)
          sprite->invisible = TRUE;
 diff --git a/src/field_camera.c b/src/field_camera.c
-index e76ba3d..cc2d6a9 100644
+index e76ba3d85..cc2d6a977 100644
 --- a/src/field_camera.c
 +++ b/src/field_camera.c
 @@ -16,7 +16,11 @@ EWRAM_DATA bool8 gUnusedBikeCameraAheadPanback = FALSE;
@@ -411,7 +413,7 @@ index e76ba3d..cc2d6a9 100644
      x *= 2;
      if (x >= 32 || x < 0)
 diff --git a/src/item_menu.c b/src/item_menu.c
-index 86b1bf9..06b66bd 100755
+index 86b1bf941..06b66bd00 100755
 --- a/src/item_menu.c
 +++ b/src/item_menu.c
 @@ -642,6 +642,9 @@ void GoToBagMenu(u8 location, u8 pocket, MainCallback exitCallback)
@@ -425,7 +427,7 @@ index 86b1bf9..06b66bd 100755
      AnimateSprites();
      BuildOamBuffer();
 diff --git a/src/librfu_intr.c b/src/librfu_intr.c
-index 5ae53ab..36b7e5d 100644
+index 5ae53ab4e..36b7e5d8a 100644
 --- a/src/librfu_intr.c
 +++ b/src/librfu_intr.c
 @@ -395,6 +395,22 @@ static void STWI_init_slave(void)
@@ -457,7 +459,7 @@ index 5ae53ab..36b7e5d 100644
  }
 +#endif // PLATFORM_PC
 diff --git a/src/librfu_sio32id.c b/src/librfu_sio32id.c
-index c40bb82..364e543 100644
+index c40bb825b..364e54346 100644
 --- a/src/librfu_sio32id.c
 +++ b/src/librfu_sio32id.c
 @@ -26,6 +26,10 @@ s32 AgbRFU_checkID(u8 maxTries)
@@ -472,7 +474,7 @@ index c40bb82..364e543 100644
      if (REG_IME == 0)
          return -1;
 diff --git a/src/librfu_stwi.c b/src/librfu_stwi.c
-index 13a7e34..38a06ef 100644
+index 13a7e3408..38a06ef40 100644
 --- a/src/librfu_stwi.c
 +++ b/src/librfu_stwi.c
 @@ -66,8 +66,10 @@ void AgbRFU_SoftReset(void)
@@ -487,7 +489,7 @@ index 13a7e34..38a06ef 100644
      REG_RCNT = 0x80A0;
      REG_SIOCNT = SIO_INTR_ENABLE | SIO_32BIT_MODE | SIO_115200_BPS;
 diff --git a/src/m4a.c b/src/m4a.c
-index 1a2d541..0a712e8 100644
+index 1a2d54188..0a712e8c5 100644
 --- a/src/m4a.c
 +++ b/src/m4a.c
 @@ -420,11 +420,13 @@ void SampleFreqSet(u32 freq)
@@ -505,7 +507,7 @@ index 1a2d541..0a712e8 100644
      REG_TM0CNT_H = TIMER_ENABLE | TIMER_1CLK;
  }
 diff --git a/src/main.c b/src/main.c
-index 2a47ec5..1b21f1e 100644
+index 2a47ec51a..1b21f1e38 100644
 --- a/src/main.c
 +++ b/src/main.c
 @@ -411,8 +411,14 @@ static void WaitForVBlank(void)
@@ -524,7 +526,7 @@ index 2a47ec5..1b21f1e 100644
  
  void SetTrainerHillVBlankCounter(u32 *counter)
 diff --git a/src/menu.c b/src/menu.c
-index 094ccd7..e79fbe9 100644
+index 094ccd7aa..e79fbe9f0 100644
 --- a/src/menu.c
 +++ b/src/menu.c
 @@ -145,6 +145,9 @@ void InitStandardTextBoxWindows(void)
@@ -558,7 +560,7 @@ index 094ccd7..e79fbe9 100644
  
  void AddTextPrinterWithCallbackForMessage(bool8 canSpeedUp, TextPrinterCallback callback)
 diff --git a/src/multiboot.c b/src/multiboot.c
-index 15b062e..fa904f8 100644
+index 15b062ed6..fa904f80a 100644
 --- a/src/multiboot.c
 +++ b/src/multiboot.c
 @@ -436,6 +436,11 @@ static int MultiBootHandShake(struct MultiBootParam *mp)
@@ -582,7 +584,7 @@ index 15b062e..fa904f8 100644
  static void MultiBootWaitSendDone(void)
  {
 diff --git a/src/naming_screen.c b/src/naming_screen.c
-index ca3be25..0cd0de9 100644
+index ca3be258b..0cd0de93d 100644
 --- a/src/naming_screen.c
 +++ b/src/naming_screen.c
 @@ -2008,6 +2008,12 @@ static void PrintControls(void)
@@ -599,7 +601,7 @@ index ca3be25..0cd0de9 100644
      BuildOamBuffer();
      UpdatePaletteFade();
 diff --git a/src/overworld.c b/src/overworld.c
-index 1d6b81c..228eb56 100644
+index 1d6b81c1f..228eb5669 100644
 --- a/src/overworld.c
 +++ b/src/overworld.c
 @@ -1404,9 +1404,19 @@ static void InitOverworldBgs(void)
@@ -644,7 +646,7 @@ index 1d6b81c..228eb56 100644
          SetVBlankCallback(NULL);
      OverworldBasic();
 diff --git a/src/party_menu.c b/src/party_menu.c
-index 1b23059..4fef069 100755
+index 1b230592d..5dae1eacf 100755
 --- a/src/party_menu.c
 +++ b/src/party_menu.c
 @@ -534,6 +534,9 @@ static void InitPartyMenu(u8 menuType, u8 layout, u8 partyAction, bool8 keepCurs
@@ -657,8 +659,62 @@ index 1b23059..4fef069 100755
      RunTasks();
      AnimateSprites();
      BuildOamBuffer();
+@@ -2075,6 +2078,9 @@ static void InitPartyMenuWindows(u8 layout)
+ {
+     u8 i;
+ 
++#ifdef PLATFORM_PC
++    gPcPartyBars = 0;
++#endif
+     switch (layout)
+     {
+     case PARTY_LAYOUT_SINGLE:
+@@ -2154,6 +2160,9 @@ static void BlitBitmapToPartyWindow(u8 windowId, const u8 *b, u8 c, u8 x, u8 y,
+ 
+     if (pixels != NULL)
+     {
++#ifdef PLATFORM_PC
++        if (!gPcHdMenus)   // HD menus: the PC renderer draws the slot cards; leave the window clear
++#endif
+         for (i = 0; i < height; i++)
+         {
+             for (j = 0; j < width; j++)
+@@ -2166,6 +2175,10 @@ static void BlitBitmapToPartyWindow(u8 windowId, const u8 *b, u8 c, u8 x, u8 y,
+ 
+ static void BlitBitmapToPartyWindow_LeftColumn(u8 windowId, u8 x, u8 y, u8 width, u8 height, bool8 hideHP)
+ {
++#ifdef PLATFORM_PC
++    if (hideHP)
++        gPcPartyBars &= ~(1 << windowId);
++#endif
+     if (width == 0 && height == 0)
+     {
+         width = 10;
+@@ -2179,6 +2192,10 @@ static void BlitBitmapToPartyWindow_LeftColumn(u8 windowId, u8 x, u8 y, u8 width
+ 
+ static void BlitBitmapToPartyWindow_RightColumn(u8 windowId, u8 x, u8 y, u8 width, u8 height, bool8 hideHP)
+ {
++#ifdef PLATFORM_PC
++    if (hideHP)
++        gPcPartyBars &= ~(1 << windowId);
++#endif
+     if (width == 0 && height == 0)
+     {
+         width = 18;
+@@ -2404,6 +2421,11 @@ static void DisplayPartyPokemonHPBar(u16 hp, u16 maxhp, struct PartyMenuBox *men
+     u8 palOffset = BG_PLTT_ID(GetWindowAttribute(menuBox->windowId, WINDOW_PALETTE_NUM));
+     u8 hpFraction;
+ 
++#ifdef PLATFORM_PC
++    gPcPartyBars |= 1 << menuBox->windowId;
++    if (gPcHdMenus)
++        return;   // HD menus: the PC renderer draws the HP bar
++#endif
+     switch (GetHPBarLevel(hp, maxhp))
+     {
+     case HP_BAR_GREEN:
 diff --git a/src/pokedex.c b/src/pokedex.c
-index 626ee30..dccdcc3 100644
+index 626ee304e..dccdcc3a0 100644
 --- a/src/pokedex.c
 +++ b/src/pokedex.c
 @@ -1647,6 +1647,9 @@ void CB2_OpenPokedex(void)
@@ -672,7 +728,7 @@ index 626ee30..dccdcc3 100644
      AnimateSprites();
      BuildOamBuffer();
 diff --git a/src/pokemon_summary_screen.c b/src/pokemon_summary_screen.c
-index 9640778..148e456 100644
+index 96407787b..148e4565d 100644
 --- a/src/pokemon_summary_screen.c
 +++ b/src/pokemon_summary_screen.c
 @@ -1153,6 +1153,9 @@ void ShowPokemonSummaryScreenHandleDeoxys(u8 mode, struct BoxPokemon *mons, u8 m
@@ -686,7 +742,7 @@ index 9640778..148e456 100644
      AnimateSprites();
      BuildOamBuffer();
 diff --git a/src/text.c b/src/text.c
-index 398aaba..a3a2af2 100644
+index 398aaba26..a3a2af26c 100644
 --- a/src/text.c
 +++ b/src/text.c
 @@ -644,6 +644,9 @@ void CopyGlyphToWindow(struct TextPrinter *textPrinter)
@@ -700,7 +756,7 @@ index 398aaba..a3a2af2 100644
  
  void ClearTextSpan(struct TextPrinter *textPrinter, u32 width)
 diff --git a/src/trade.c b/src/trade.c
-index e9c2984..59fcd54 100644
+index e9c298408..59fcd5475 100644
 --- a/src/trade.c
 +++ b/src/trade.c
 @@ -3347,6 +3347,18 @@ static void BufferTradeSceneStrings(void)
@@ -738,7 +794,7 @@ index e9c2984..59fcd54 100644
      }
  }
 diff --git a/src/window.c b/src/window.c
-index 644048f..6f153a1 100644
+index 644048fad..6f153a18a 100644
 --- a/src/window.c
 +++ b/src/window.c
 @@ -218,6 +218,9 @@ int AddWindowWithoutTileMap(const struct WindowTemplate *template)

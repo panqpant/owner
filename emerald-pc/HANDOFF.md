@@ -62,6 +62,10 @@ the FluidR3 GM soundfont via `hd/orchestra.bin`, built by
 `pc/tools/sf2extract.py`; `EMERALD_NO_ORCH=1` turns it off); minimap removed,
 M / pad X opens the game's own Hoenn region map; camera tilt now off by default
 (owner: tilt looks bad with 2D sprites; it also disabled the water remake).
+HD menus, step 1: party screen redrawn (glass cards, glowing cursor, smooth HP
+bars, calm background). The game skips its own slot art/HP bars when
+`gPcHdMenus` is on; `PcPartyUi()` (fieldfx.c) feeds the renderer. Next screens:
+summary, bag, Pokédex, PC boxes, start menu.
 
 ## The owner's preferences (important)
 
@@ -83,7 +87,7 @@ M / pad X opens the game's own Hoenn region map; camera tilt now off by default
 ## Open items / ideas not yet done
 
 - Owner's order from session 2: water (done) -> orchestral audio (first pass
-  done, needs a listen) -> full HD menu redesign -> Switch-era conveniences
+  done, needs a listen) -> full HD menu redesign (party screen done) -> Switch-era conveniences
   (autosave, instant text, run toggle, difficulty, phys/spec split, EXP Share)
   -> 3D world from the tiles with sprites standing up (no new 3D models).
 - Surf Pokémon sprite renders with a black lower half (seen before session 2's changes).

@@ -94,3 +94,8 @@ void PcUpdateBattleFx(void);
 extern int gPcHdEffects; // renderer is drawing HD weather (hide the original sprites in HD layers)
 void PcUpdateFieldFx(void);
 #endif
+
+// HD party screen (fieldfx.c): each slot's window rect and HP bar, GBA px
+// (without the widescreen margin). state: 1 present, 2 cursor, 4 fainted, 8 picked to move.
+struct PcPartyCard { float x, y, w, h, barX, barY, barW, hp; int state; };
+int PcPartyUi(struct PcPartyCard out[6]);   // number of slot windows (0: not the party screen)

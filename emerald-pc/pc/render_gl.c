@@ -96,6 +96,8 @@ typedef unsigned char GLboolean;
     X(void, glUniform3f, (GLint, GLfloat, GLfloat, GLfloat)) \
     X(void, glUniform1iv, (GLint, GLsizei, const GLint *)) \
     X(void, glUniform3fv, (GLint, GLsizei, const GLfloat *)) \
+    X(void, glUniform4fv, (GLint, GLsizei, const GLfloat *)) \
+    X(void, glUniform1fv, (GLint, GLsizei, const GLfloat *)) \
     X(void, glGenVertexArrays, (GLsizei, GLuint *)) \
     X(void, glBindVertexArray, (GLuint)) \
     X(void, glGenFramebuffers, (GLsizei, GLuint *)) \
@@ -148,6 +150,8 @@ GLFUNCS
 #define glUniform3f p_glUniform3f
 #define glUniform1iv p_glUniform1iv
 #define glUniform3fv p_glUniform3fv
+#define glUniform4fv p_glUniform4fv
+#define glUniform1fv p_glUniform1fv
 #define glGenVertexArrays p_glGenVertexArrays
 #define glBindVertexArray p_glBindVertexArray
 #define glGenFramebuffers p_glGenFramebuffers
@@ -315,7 +319,11 @@ static const char *kComposite =
     "uniform sampler2D uGi;\n"      // ray-traced light (native res)
     "uniform float uGiOn;\n"
     "uniform int uMenu;\n"          // menu screen kind (0 none)
-    "uniform vec3 uMenuBg1, uMenuBg2;\n"   // the menu's background pattern colours        // HD-2D tilt strength (0 = flat)   // this screen's tall grass colours        // indoors: direction sunlight travels from windows (x, y), strength, night         // x: water fraction on screen, y: volcanic ash, z: heat haze
+    "uniform vec3 uMenuBg1, uMenuBg2;\n"
+    "uniform int uCards;\n"         // party screen: slot cards drawn by the renderer (0 none)
+    "uniform vec4 uCard[6];\n"      // x, y, w, h (native px incl. margin)
+    "uniform vec4 uCardBar[6];\n"   // HP bar x, y, w (0: none), HP fraction
+    "uniform float uCardState[6];\n"   // 1 present, 2 cursor, 4 fainted, 8 picked to move   // the menu's background pattern colours        // HD-2D tilt strength (0 = flat)   // this screen's tall grass colours        // indoors: direction sunlight travels from windows (x, y), strength, night         // x: water fraction on screen, y: volcanic ash, z: heat haze
     "uniform int uBattle;\n"        // battle scene lighting on
     "uniform vec4 uMon[4];\n"       // battler sprite rects x, y, w, h (w = 0: none)
     "uniform vec3 uMonFeet[4];\n"   // feet x, y; half width
@@ -924,11 +932,11 @@ static const char *kComposite =
     "  if (uFieldFx != 0 && top >= 1 && top <= 3) {\n"
     "    ivec2 c0 = ivec2(floor(CellPos(gp)));\n"
     "    wm = WaterArt(uv);\n"
-    // water art counts on water tiles, and on broad blue right beside them
+    // water art counts on and beside water tiles, and broad blue diagonally beside them
     // (water drawn under boats and piers), so the remake doesn't stop at a tile edge
     "    bool nearWater = false;\n"
     "    if (wm > 0.0) {\n"
-    "      if ((here & 2) != 0) nearWater = true;\n"
+    "      if (((here | Cell(c0 + ivec2(1, 0)) | Cell(c0 - ivec2(1, 0)) | Cell(c0 + ivec2(0, 1)) | Cell(c0 - ivec2(0, 1))) & 2) != 0) nearWater = true;\n"
     "      else {\n"   // beside water: only broad blue (open water drawn under boats/piers), not glass or trim
     "        float big = min(min(WaterArt(uv + vec2(6.0, 0.0) / uDim), WaterArt(uv - vec2(6.0, 0.0) / uDim)), min(WaterArt(uv + vec2(0.0, 6.0) / uDim), WaterArt(uv - vec2(0.0, 6.0) / uDim)));\n"
     "        if (big > 0.5) for (int j = -1; j <= 1 && !nearWater; j++) for (int i = -1; i <= 1; i++) if ((Cell(c0 + ivec2(i, j)) & 2) != 0) { nearWater = true; break; }\n"
@@ -1131,8 +1139,17 @@ static const char *kComposite =
     "    vec2 mp = vec2(vUv.x * uDim.x, (1.0 - vUv.y) * uDim.y);\n"
     "    bool side = float(np.x) < uContent.x || float(np.x) >= uContent.y;\n"
     "    float bm = side ? 1.0 : MenuMask(mp);\n"
-    "    if (bm > 0.0) {\n"
+    "    if (uCards > 0 && !side) {\n"   // party: the whole BG1 pattern goes, except the message box and buttons (bottom strip)
+    "      vec2 g = mp - vec2(uContent.x, 0.0);\n"
+    "      bool keep = (g.y >= 129.0 && g.x < 186.0) || (g.y >= 131.0 && g.x >= 184.0);\n"
+    "      vec3 fk = TexS(uFlat, uv).rgb;\n"
+    "      float yel = smoothstep(0.82, 0.7, fk.b / max(min(fk.r, fk.g), 0.05)) * step(0.25, fk.g);\n"   // the stripes are yellow-olive; box frames and buttons are not
+    "      bm = (lay[0].a < 0.5 && lay[2].a < 0.5 && lay[4].a < 0.5) ? (keep ? yel : 1.0) : 0.0;\n"
+    "    }\n"
+    "    vec3 mbg = vec3(0.0);\n"
+    "    if (bm > 0.0 || uCards > 0) {\n"
     "      vec3 a = mix(uMenuBg1, uMenuBg2, 0.5);\n"
+    "      if (uCards > 0) a = vec3(0.16, 0.22, 0.34);\n"   // party: a calm deep blue behind the cards
     "      vec3 c1 = a * 0.55 + vec3(0.05, 0.06, 0.12), c2 = a * 0.9 + vec3(0.08);\n"
     "      float g = mp.y / uDim.y + 0.15 * sin(mp.x * 0.02 + uTime * 0.3);\n"
     "      vec3 b = mix(c2, c1, clamp(g, 0.0, 1.0));\n"
@@ -1143,9 +1160,62 @@ static const char *kComposite =
     "      }\n"
     "      float sh = 0.0;\n"   // shadow cast by panels above and to the left
     "      for (int k = 1; k <= 3; k++) sh = max(sh, (1.0 - MenuMask(mp - vec2(float(k) * 1.3))) * (1.0 - float(k) / 4.0));\n"
-    "      if (!side) b *= 1.0 - sh * 0.4;\n"
+    "      if (!side && uCards == 0) b *= 1.0 - sh * 0.4;\n"
+    "      mbg = b;\n"
     "      if (side) { oColor = vec4(b, 1.0); return; }\n"
     "      res = mix(res, b, bm);\n"
+    "    }\n"
+    // ---- Party screen: glass cards with rounded corners, a glowing cursor,
+    // smooth HP bars. The game's text (BG0) and icons (OBJ) go on top. ----
+    "    for (int k = 0; k < 6; k++) {\n"
+    "      if (k >= uCards) break;\n"
+    "      vec4 r = uCard[k]; float st = uCardState[k];\n"
+    "      vec2 hs = r.zw * 0.5 - 1.0, ce = r.xy + r.zw * 0.5;\n"
+    "      float rad = r.w > 30.0 ? 6.0 : 5.0;\n"
+    "      vec2 dq = abs(mp - ce) - (hs - rad);\n"
+    "      float sd = length(max(dq, 0.0)) + min(max(dq.x, dq.y), 0.0) - rad;\n"
+    "      vec2 dqs = abs(mp - vec2(1.2, 1.8) - ce) - (hs - rad);\n"
+    "      float sds = length(max(dqs, 0.0)) + min(max(dqs.x, dqs.y), 0.0) - rad;\n"
+    "      bool cur = mod(st, 4.0) >= 2.0, faint = mod(st, 8.0) >= 4.0, pick = st >= 8.0, here = mod(st, 2.0) >= 1.0;\n"
+    "      float glowR = cur || pick ? 5.0 : 0.0;\n"
+    "      if (sd > 4.0 + glowR && sds > 4.0) continue;\n"
+    "      float aa = max(fwidth(sd), 0.02);\n"
+    "      float inside = 1.0 - smoothstep(-aa, aa, sd);\n"
+    "      vec3 top = vec3(0.21, 0.31, 0.48), bot = vec3(0.11, 0.17, 0.31);\n"
+    "      if (cur) { top = vec3(0.40, 0.52, 0.74); bot = vec3(0.22, 0.32, 0.52); }\n"
+    "      if (faint) { top = mix(top, vec3(0.50, 0.20, 0.24), 0.75); bot = mix(bot, vec3(0.27, 0.09, 0.12), 0.75); }\n"
+    "      float fy = clamp((mp.y - r.y) / r.w, 0.0, 1.0);\n"
+    "      vec3 cc = mix(top, bot, fy);\n"
+    "      cc += 0.08 * (1.0 - smoothstep(0.0, 0.45, fy));\n"   // glass highlight along the top
+    "      if (cur) {\n"   // light sweeping across the selected card
+    "        float sx = mp.x - r.x - fract(uTime * 0.3) * (r.z + 80.0) + 40.0 + (mp.y - r.y) * 0.6;\n"
+    "        cc += vec3(0.14) * exp(-sx * sx / 60.0);\n"
+    "      }\n"
+    "      float ca = here ? 0.94 : 0.35;\n"
+    "      vec3 bc = vec3(0.60, 0.75, 1.0); float ba = 0.45;\n"
+    "      if (cur) { bc = vec3(1.0, 0.78, 0.32); ba = 1.0; }\n"
+    "      if (pick) { bc = vec3(0.45, 0.95, 1.0); ba = 1.0; }\n"
+    "      float ring = 1.0 - smoothstep(0.0, aa * 1.5 + (cur || pick ? 0.7 : 0.3), abs(sd + 0.6));\n"
+    "      vec3 col = mix(mbg, mix(mbg, cc, ca), inside);\n"
+    "      col *= 1.0 - (1.0 - inside) * (1.0 - smoothstep(-1.0, 3.5, sds)) * 0.45;\n"   // soft drop shadow
+    "      if (glowR > 0.0 && sd > 0.0) col += bc * exp(-sd / 2.6) * (0.7 + 0.25 * sin(uTime * 4.0));\n"
+    "      col = mix(col, bc, ring * ba);\n"
+    "      vec4 hb = uCardBar[k];\n"
+    "      if (hb.z > 0.0 && here) {\n"   // HP bar: dark pill track, coloured fill with a bright edge
+    "        vec2 bce = vec2(hb.x + hb.z * 0.5, hb.y + 1.5), bhs = vec2(hb.z * 0.5, 2.2);\n"
+    "        vec2 bq = abs(mp - bce) - (bhs - 2.0);\n"
+    "        float bsd = length(max(bq, 0.0)) + min(max(bq.x, bq.y), 0.0) - 2.0;\n"
+    "        float bin = 1.0 - smoothstep(-aa, aa, bsd);\n"
+    "        float f = hb.w;\n"
+    "        vec3 hc = f > 0.5 ? vec3(0.32, 0.90, 0.55) : f > 0.2 ? vec3(1.0, 0.80, 0.25) : vec3(1.0, 0.33, 0.33);\n"
+    "        float filled = 1.0 - smoothstep(-aa, aa, mp.x - (hb.x + hb.z * f));\n"
+    "        float by = (mp.y - (bce.y - bhs.y)) / (bhs.y * 2.0);\n"
+    "        vec3 fillc = hc * (1.15 - 0.35 * by) + 0.25 * (1.0 - smoothstep(0.0, 0.35, by));\n"
+    "        col = mix(col, mix(vec3(0.04, 0.06, 0.10), fillc, filled * (1.0 - smoothstep(-aa, aa, bsd + 0.6))), bin);\n"
+    "      }\n"
+    "      col = col * (1.0 - lay[0].a) + lay[0].rgb;\n"   // the game's text on top
+    "      col = col * (1.0 - lay[4].a) + lay[4].rgb;\n"   // then icons and badges
+    "      res = col;\n"
     "    }\n"
     "  }\n"
     // Following Pokémon: drawn behind roofs and tree tops, and in front of or
@@ -2246,7 +2316,7 @@ void HdSetScale(int scale)
 int HdGetScale(void) { return sScale; }
 void HdSetGrade(int on) { sGrade = on; }
 int HdGetGrade(void) { return sGrade; }
-void HdSetLighting(int on) { sLighting = on; }
+void HdSetLighting(int on) { extern int gPcHdMenus; sLighting = on; gPcHdMenus = on && !getenv("EMERALD_NOMENU"); }
 int HdGetLighting(void) { return sLighting; }
 
 static float LocalHour(void)
@@ -2286,16 +2356,46 @@ static void TimeOfDayTint(float *rgb);
 // strip along the left edge of the original screen: the background pattern.
 static void SetMenuUniforms(void)
 {
-    extern int gPcMenuFrame;
+    extern int gPcMenuFrame, gPcHdMenus;
     int m = (gPcScreenW - GBA_W) / 2, x, y, l, i, best[2] = { -1, -1 }, cnt[2] = { 0, 0 };
     static uint32_t cols[64]; static int n[64]; int nc = 0;
     int on = gPcMenuFrame && sLighting && !getenv("EMERALD_NOMENU");
     glUniform1i(glGetUniformLocation(sProgComp, "uMenu"), on ? gPcMenuFrame : 0);
     if (getenv("EMERALD_MENUDEBUG")) fprintf(stderr, "menu=%d light=%d\n", gPcMenuFrame, sLighting);
+    gPcHdMenus = sLighting && !getenv("EMERALD_NOMENU");
+    {
+        // Party screen cards: slot rects and states from the game, HP eased so bars glide.
+        struct PcPartyCard pc[6];
+        static float shown[6];
+        int nc2 = on && gPcMenuFrame == 1 ? PcPartyUi(pc) : 0, k;
+        float card[6][4], bar[6][4], st[6];
+        static unsigned lastF;
+        unsigned fnow = (unsigned)PortFrameCount();
+        float ease = 1.0f - powf(0.8f, (float)(fnow - lastF > 60 ? 60 : fnow - lastF));   // per game frame, so bars glide at any refresh rate
+        lastF = fnow;
+        for (k = 0; k < nc2; k++)
+        {
+            shown[k] += (pc[k].hp - shown[k]) * ease;
+            if (fabsf(pc[k].hp - shown[k]) < 0.002f) shown[k] = pc[k].hp;
+            card[k][0] = pc[k].x + m; card[k][1] = pc[k].y; card[k][2] = pc[k].w; card[k][3] = pc[k].h;
+            bar[k][0] = pc[k].barX + m; bar[k][1] = pc[k].barY; bar[k][2] = pc[k].barW; bar[k][3] = shown[k];
+            st[k] = (float)pc[k].state;
+        }
+        glUniform1i(glGetUniformLocation(sProgComp, "uCards"), nc2);
+        if (nc2)
+        {
+            glUniform4fv(glGetUniformLocation(sProgComp, "uCard"), nc2, &card[0][0]);
+            glUniform4fv(glGetUniformLocation(sProgComp, "uCardBar"), nc2, &bar[0][0]);
+            glUniform1fv(glGetUniformLocation(sProgComp, "uCardState"), nc2, st);
+        }
+    }
     if (!on)
         return;
-    for (y = 4; y < GBA_H - 4; y += 2)
-        for (x = m; x < m + 6; x++)
+    // Sample the background pattern: the left edge, or on the party screen the
+    // open area below the first card (its stripes reach no edge).
+    int sx0 = gPcMenuFrame == 1 ? m + 40 : m, sy0 = gPcMenuFrame == 1 ? 90 : 4, sy1 = gPcMenuFrame == 1 ? 140 : GBA_H - 4;
+    for (y = sy0; y < sy1; y += 2)
+        for (x = sx0; x < sx0 + 6; x++)
             for (l = 0; l < 4; l++)
             {
                 uint32_t c = gPpuLayers.layer[l][y][x];

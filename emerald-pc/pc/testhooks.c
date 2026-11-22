@@ -13,6 +13,7 @@
 #include "constants/items.h"
 #include "field_screen_effect.h"
 #include "field_weather.h"
+#include "event_data.h"
 
 void TestHookRun(const char *cmd)
 {
@@ -25,6 +26,7 @@ void TestHookRun(const char *cmd)
     if (!strcmp(name, "givemon"))
     {
         ScriptGiveMon(a, b ? b : 5, ITEM_NONE, 0, 0, 0);
+        FlagSet(FLAG_SYS_POKEMON_GET);   // start menu shows POKéMON
     }
     else if (!strcmp(name, "battle"))
     {

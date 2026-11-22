@@ -12,6 +12,9 @@
 #include "sprite.h"
 #include "field_weather.h"
 #include "port.h"
+#include "window.h"
+#include "party_menu.h"
+#include "constants/party_menu.h"
 #include "palette.h"
 #include "sound.h"
 #include "constants/songs.h"
@@ -684,4 +687,35 @@ static void PcUpdateFollower(void)
         }
     }
     f->show = 1;
+}
+
+int PcPartyUi(struct PcPartyCard out[6])
+{
+    int i, n = 0;
+    for (i = 0; i < PARTY_SIZE; i++)
+    {
+        const struct WindowTemplate *w = &gWindows[i].window;
+        struct PcPartyCard *c = &out[i];
+        int left;
+        if (w->bg != 0 || (w->width != 10 && w->width != 18) || gWindows[i].tileData == NULL)
+            break;
+        left = w->width == 10;
+        c->x = w->tilemapLeft * 8; c->y = w->tilemapTop * 8;
+        c->w = w->width * 8; c->h = w->height * 8;
+        c->barX = c->x + (left ? 24 : 88); c->barY = c->y + (left ? 35 : 10); c->barW = 48;
+        c->state = 0; c->hp = 0;
+        if (i < gPlayerPartyCount && GetMonData(&gPlayerParty[i], MON_DATA_SPECIES) != SPECIES_NONE)
+        {
+            u16 hp = GetMonData(&gPlayerParty[i], MON_DATA_HP), max = GetMonData(&gPlayerParty[i], MON_DATA_MAX_HP);
+            c->state |= 1;
+            c->hp = max ? (float)hp / max : 0;
+            if (hp == 0 && !GetMonData(&gPlayerParty[i], MON_DATA_IS_EGG)) c->state |= 4;
+        }
+        if (!(gPcPartyBars & (1 << i)))
+            c->barW = 0;   // this screen hides HP (eggs, TM compatibility)
+        if (gPartyMenu.slotId == i) c->state |= 2;
+        if (gPartyMenu.action == PARTY_ACTION_SWITCHING && gPartyMenu.slotId2 == i) c->state |= 8;
+        n++;
+    }
+    return n;
 }
