@@ -78,6 +78,13 @@ start menu can't save and over a different file). Hard mode (trainers +10%
 levels, min +2): Birch asks after the name; stored as FLAG_PC_HARD_MODE
 (FLAG_UNUSED_0x020). Test hooks: `call flag N`, `call pc`.
 
+Item 1 (3D world), first pass: top-down camera (no tilt); per-pixel heights
+measured from the art on the CPU (`UploadObjectMask`, render_gl.c: solid tiles,
+ground colours beside small objects stay down, big blocks solid, height = run of
+object pixels below, capped 40 px), ray-marched in the composite shader
+(`uRelief`, default 0.002 lean per px; `EMERALD_RELIEF=0` turns it off).
+Known: steps on the big Slateport building's left side; rocks in water smear.
+
 ## The owner's preferences (important)
 
 - Wants big, visible upgrades, "think big". Answers short; often types quickly.

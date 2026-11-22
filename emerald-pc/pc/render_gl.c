@@ -305,6 +305,8 @@ static const char *kComposite =
     "uniform vec4 uKey;\n"
     "uniform float uFlash;\n"
     "uniform vec2 uPlayer;\n"
+    "uniform float uRelief;\n"
+    "uniform sampler2D uObj;\n"     // 3D world: height of each native pixel (R * 255 = px above its base)     // 3D world: camera lean per px of height (0 = flat)
     "uniform vec3 uWake[12];\n"     // player's recent world positions (map px) and when (uTime); z < 0 unused
     "uniform vec3 uLife;\n"
     "uniform vec4 uInSun;\n"
@@ -399,6 +401,14 @@ static const char *kComposite =
     "  float a = float(Cell(i) >> 6), b = float(Cell(i + ivec2(1, 0)) >> 6);\n"
     "  float c = float(Cell(i + ivec2(0, 1)) >> 6), d = float(Cell(i + ivec2(1, 1)) >> 6);\n"
     "  return mix(mix(a, b, f.x), mix(c, d, f.x), f.y) / 3.0;\n"
+    "}\n"
+    // 3D world: height (px) of scenery at screen point g, measured on the CPU
+    // from the art (see UploadObjectMask).
+    "float HeightAt(vec2 g) {\n"
+    "  float h = texelFetch(uObj, clamp(ivec2(g + vec2(uMargin, 0.0)), ivec2(0), ivec2(uDim) - 1), 0).r * 255.0;\n"
+    "  if (h > 0.0) return h;\n"
+    "  vec2 cp = CellPos(g);\n"
+    "  return (Cell(ivec2(floor(cp))) & 16) != 0 ? 6.0 * (1.0 - fract(cp.y)) : 0.0;\n"   // ledges: a low step
     "}\n"
     "float LumL(int k, vec2 q, float centre) {\n"   // relief height: art luminance for scenery, outline for sprites
     "  if (k == 4) return texture(uLayer[4], q).a;\n"
@@ -804,6 +814,29 @@ static const char *kComposite =
     "    uvc = uCineZoom.xy + (uvc - uCineZoom.xy) / uCineZoom.z;\n"
     "    npc = clamp(ivec2(floor(uvc * uDim)), ivec2(0), ivec2(uDim) - 1);\n"
     "  }\n"
+    // ---- 3D world: a camera above the player looks straight down at the
+    // height field; tall scenery leans out from the centre of the screen and
+    // hides the ground behind it. March down the ray by height, first hit wins. ----
+    "  bool relief = false; float reliefSide = 0.0;\n"
+    "  if (uRelief > 0.0 && uFieldFx != 0 && uBattle == 0 && uMenu == 0) {\n"
+    "    vec2 o = uvc * uDim - vec2(uMargin, 0.0);\n"
+    "    vec2 C = vec2(uDim.x * 0.5 - uMargin, uDim.y * 0.5);\n"
+    "    const int N = 16; const float HMAX = 40.0;\n"
+    "    float hit = 0.0, stp = HMAX / float(N);\n"
+    "    for (int i = 0; i < N; i++) {\n"
+    "      float h = HMAX - float(i) * stp;\n"
+    "      if (HeightAt(C + (o - C) / (1.0 + uRelief * h)) >= h) { hit = h; break; }\n"
+    "    }\n"
+    "    if (hit > 0.0) {\n"   // refine between the hit and the step above it
+    "      float lo = hit, hi = min(hit + stp, HMAX);\n"
+    "      for (int j = 0; j < 4; j++) { float m = 0.5 * (lo + hi); if (HeightAt(C + (o - C) / (1.0 + uRelief * m)) >= m) lo = m; else hi = m; }\n"
+    "      vec2 p = C + (o - C) / (1.0 + uRelief * lo);\n"
+    "      uvc = (p + vec2(uMargin, 0.0)) / uDim;\n"
+    "      npc = clamp(ivec2(floor(uvc * uDim)), ivec2(0), ivec2(uDim) - 1);\n"
+    "      relief = true;\n"
+    "      reliefSide = clamp((HeightAt(p) - lo - 3.0) / 10.0, 0.0, 1.0);\n"   // entered through a wall: shade it, don't trust the stretched art
+    "    }\n"
+    "  }\n"
     "  if (uFieldFx != 0 && uLife.z > 0.0 && np.y > 0) {\n"   // heat rising off the ground
     "    vec2 gq = uv * uDim;\n"
     "    uvc.x += sin(gq.y * 0.55 + uTime * 5.5 + sin(gq.x * 0.08 + uTime) * 2.0) * 0.32 / uDim.x;\n"
@@ -847,9 +880,9 @@ static const char *kComposite =
     "  }\n"
     "  gZoomField = camOn && uBattle == 0;\n"
     "  vec2 uvScreen = uv;\n"
-    "  if (camOn) uv = uvc;\n"   // every scene effect below works in the camera's view
+    "  if (camOn || relief) uv = uvc;\n"   // every scene effect below works in the camera's view
     "  vec2 gp = vec2(vUv.x * uDim.x - uMargin, (1.0 - vUv.y) * uDim.y);\n"
-    "  if (camOn) gp = uvc * uDim - vec2(uMargin, 0.0);\n"
+    "  if (camOn || relief) gp = uvc * uDim - vec2(uMargin, 0.0);\n"
     "  vec2 wp = gp - uGridPos.xy + uGridPos.zw * 16.0;\n"   // world position (map pixels)
     "  int here = uFieldFx != 0 ? Cell(ivec2(floor(CellPos(gp)))) : 0;\n"
     // Wind: grass and tree leaves sway, anchored at the top and bottom of each tile.
@@ -1792,6 +1825,7 @@ static const char *kComposite =
     "      res = pc;\n"
     "    }\n"
     "  }\n"
+    "  if (relief && top != 4) res *= 1.0 - 0.45 * reliefSide;\n"   // side walls of raised scenery, in shade
     "  for (int k = ti - 1; k >= 0; k--) if (order[k] == 0) { vec4 c = lay[0]; res = res * (1.0 - c.a) + c.rgb; }\n"
     "  oColor = vec4(res, 1.0);\n"
     "}\n";
@@ -2133,6 +2167,126 @@ static int sCompW, sCompH; // composite size = on-screen size of the game image
 static int sLastWinW, sLastWinH;
 static int sGrade = 1;
 static int sLighting = 1;
+static float sRelief = 0.002f;   // 3D world: camera lean per px of height
+static GLuint sObjTex;
+
+// 3D world: the height of every pixel. In solid tiles (and tiles sandwiched
+// between solid ones, like a door in a facade), colours that also appear in
+// the open ground beside the tile are ground showing through (grass around a
+// tree's canopy); everything else is the object. The art is palette-indexed,
+// so exact colour matches are reliable. A 3x3 majority pass closes stray
+// holes; then, as the art is a 3/4 view, each object pixel's height is how far
+// it is above the object's base: the run of object pixels below it.
+static void UploadObjectMask(void)
+{
+    static unsigned char mask[GBA_H][PC_MAX_W][2], raw[GBA_H][PC_MAX_W];
+    const struct PcFieldFx *f = &gPcFieldFx;
+    int m = (gPcScreenW - GBA_W) / 2, row, col, x, y;
+    memset(raw, 0, sizeof(raw));
+    for (row = 0; row < PC_GRID_H; row++)
+        for (col = 0; col < PC_GRID_W; col++)
+        {
+            static const int nb[4][2] = { { 0, 1 }, { -1, 0 }, { 1, 0 }, { 0, -1 } };
+            uint32_t ground[32];
+            int ng = 0, k, x0 = f->gridX + col * 16 + m, y0 = f->gridY + row * 16;
+            if (!(f->grid[row][col] & PC_CELL_SOLID)
+             && !(row > 0 && row < PC_GRID_H - 1 && (f->grid[row - 1][col] & PC_CELL_SOLID) && (f->grid[row + 1][col] & PC_CELL_SOLID)))
+                continue;
+            for (k = 0; k < 4 && ng < 24; k++)   // colours of the open ground beside it
+            {
+                int r2 = row + nb[k][1], c2 = col + nb[k][0];
+                if (r2 < 0 || c2 < 0 || r2 >= PC_GRID_H || c2 >= PC_GRID_W || (f->grid[r2][c2] & PC_CELL_SOLID))
+                    continue;
+                for (y = 1; y < 16; y += 2)
+                    for (x = 1; x < 16; x += 2)
+                    {
+                        int px = f->gridX + c2 * 16 + m + x, py = f->gridY + r2 * 16 + y, l, i;
+                        uint32_t c = 0;
+                        if (px < 0 || py < 0 || px >= gPcScreenW || py >= GBA_H) continue;
+                        for (l = 1; l <= 3 && !c; l++) if (gPpuLayers.layer[l][py][px] >> 24) c = gPpuLayers.layer[l][py][px] & 0xFFFFFF;
+                        for (i = 0; i < ng && ground[i] != c; i++) ;
+                        if (i == ng && ng < 32) ground[ng++] = c;
+                    }
+            }
+            {
+                // Big blocks (buildings, cliffs: solid on both sides) are all object;
+                // the ground-colour test is only for small things (trees, signs, rocks).
+                int sl = col > 0 && (f->grid[row][col - 1] & PC_CELL_SOLID), sr = col < PC_GRID_W - 1 && (f->grid[row][col + 1] & PC_CELL_SOLID);
+                if (sl && sr) ng = 0;
+            }
+            for (y = 0; y < 16; y++)
+                for (x = 0; x < 16; x++)
+                {
+                    int px = x0 + x, py = y0 + y, l, i;
+                    uint32_t c = 0;
+                    if (px < 0 || py < 0 || px >= gPcScreenW || py >= GBA_H) continue;
+                    for (l = 1; l <= 3 && !c; l++) if (gPpuLayers.layer[l][py][px] >> 24) c = gPpuLayers.layer[l][py][px] & 0xFFFFFF;
+                    for (i = 0; i < ng && ground[i] != c; i++) ;
+                    raw[py][px] = (i == ng) ? (ng ? 1 : 2) : 0;   // 1 object, 2 object in a big block
+                }
+        }
+    for (y = 0; y < GBA_H; y++)
+        for (x = 0; x < gPcScreenW; x++)
+        {
+            int n = 0, dx, dy;
+            for (dy = -1; dy <= 1; dy++) for (dx = -1; dx <= 1; dx++)
+            {
+                int yy = y + dy, xx = x + dx;
+                if (yy >= 0 && yy < GBA_H && xx >= 0 && xx < gPcScreenW) n += raw[yy][xx] != 0;
+            }
+            mask[y][x][1] = raw[y][x] == 2 ? 2 : n >= 5;   // object (temporary); 2: in a big block
+        }
+    for (x = 0; x < gPcScreenW; x++)   // thin ground-coloured lines inside an object (plank seams) are the object too
+        for (y = 1; y < GBA_H; y++)
+            if (!mask[y][x][1] && mask[y - 1][x][1])
+            {
+                int g = 0;
+                while (y + g < GBA_H && !mask[y + g][x][1] && g < 4) g++;
+                if (g <= 3 && y + g < GBA_H && mask[y + g][x][1])
+                    while (g--) mask[y + g][x][1] = 1;
+            }
+    for (x = 0; x < gPcScreenW; x++)   // height: object pixels stacked below, capped
+    {
+        int h = 0;
+        for (y = GBA_H - 1; y >= 0; y--)
+        {
+            h = mask[y][x][1] ? (h < 40 ? h + 1 : 40) : 0;
+            mask[y][x][0] = (unsigned char)h;
+        }
+    }
+    {
+        // Big blocks: a facade is one wall, so a pixel takes the tallest height
+        // within 16 px along its row (a door below must not cut the wall above it).
+        static unsigned char row[PC_MAX_W];
+        for (y = 0; y < GBA_H; y++)
+        {
+            for (x = 0; x < gPcScreenW; x++) row[x] = mask[y][x][0];
+            for (x = 0; x < gPcScreenW; x++)
+                if (mask[y][x][1] == 2)
+                {
+                    int k, mx = row[x];
+                    for (k = -16; k <= 16; k++)
+                        if (x + k >= 0 && x + k < gPcScreenW && mask[y][x + k][1] == 2 && row[x + k] > mx) mx = row[x + k];
+                    mask[y][x][0] = (unsigned char)mx;
+                }
+        }
+    }
+    glActiveTexture(GL_TEXTURE0 + 18);
+    if (!sObjTex)
+    {
+        glGenTextures(1, &sObjTex);
+        glBindTexture(GL_TEXTURE_2D, sObjTex);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RG8, PC_MAX_W, GBA_H, 0, GL_RG, GL_UNSIGNED_BYTE, NULL);
+    }
+    glBindTexture(GL_TEXTURE_2D, sObjTex);
+    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, PC_MAX_W, GBA_H, GL_RG, GL_UNSIGNED_BYTE, mask);
+    glActiveTexture(GL_TEXTURE0);
+    glUniform1i(glGetUniformLocation(sProgComp, "uObj"), 18);
+}
 static float sTilt = 0.0f;   // HD-2D tilt (off by default): F8 cycles off / gentle / strong
 void HdCycleTilt(void) { sTilt = sTilt <= 0.0f ? 0.25f : sTilt < 0.3f ? 0.4f : sTilt < 0.5f ? 0.6f : 0.0f; }
 float HdGetTilt(void) { return sTilt; }
@@ -2328,6 +2482,7 @@ void HdDebugEnv(void)
 {
     if (getenv("EMERALD_NOLIGHT")) sLighting = 0;
     if (getenv("EMERALD_TILT")) sTilt = (float)atof(getenv("EMERALD_TILT"));
+    if (getenv("EMERALD_RELIEF")) sRelief = (float)atof(getenv("EMERALD_RELIEF"));
 }
 void HdSetScale(int scale)
 {
@@ -3009,6 +3164,8 @@ static void RenderHd(const uint32_t *frame, int outW, int outH)
             glUniform4f(glGetUniformLocation(sProgComp, "uGridPos"), gPcFieldFx.gridX, gPcFieldFx.gridY,
                         gPcFieldFx.gridWX, gPcFieldFx.gridWY);
             glUniform1iv(glGetUniformLocation(sProgComp, "uGrid"), cells / 4, packed);
+            if (field)
+                UploadObjectMask();
             glUniform1i(glGetUniformLocation(sProgComp, "uMapType"), gPcFieldFx.mapType);
             glUniform1f(glGetUniformLocation(sProgComp, "uForest"), (float)solid / cells);
             {
@@ -3131,6 +3288,7 @@ static void RenderHd(const uint32_t *frame, int outW, int outH)
                 glUniform2f(glGetUniformLocation(sProgComp, "uFollowOn"), 0.0f, fo->feetY);   // drawn by the PPU now
             }
             glUniform1f(glGetUniformLocation(sProgComp, "uTilt"), field && sLighting ? sTilt : 0.0f);
+            glUniform1f(glGetUniformLocation(sProgComp, "uRelief"), field && sLighting && gPcFieldFx.outdoors && sTilt <= 0.0f ? sRelief : 0.0f);
             glUniform2f(glGetUniformLocation(sProgComp, "uPlayer"), (float)gPcFieldFx.playerX, (float)gPcFieldFx.playerY);
             {
                 // Wake trail from the field update: game frames -> shader time.
