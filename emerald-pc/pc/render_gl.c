@@ -301,6 +301,7 @@ static const char *kComposite =
     "uniform vec3 uGrassDark, uGrassLight;\n"
     "uniform float uTilt;\n"
     "uniform int uMood;\n"
+    "uniform int uSeason;\n"        // 0 spring, 1 summer, 2 autumn, 3 winter
     "uniform sampler2D uGi;\n"      // ray-traced light (native res)
     "uniform float uGiOn;\n"
     "uniform int uMenu;\n"          // menu screen kind (0 none)
@@ -974,6 +975,56 @@ static const char *kComposite =
     "      }\n"
     "    }\n"
     "  }\n"
+    // ---- Seasons (a new one each day) ----
+    "  if (uFieldFx != 0 && top >= 1 && top <= 3 && (uMapType >= 1 && uMapType <= 3 || uMapType == 6) && wm < 0.5) {\n"
+    "    vec3 k = res;\n"
+    "    float l = dot(k, vec3(0.299, 0.587, 0.114));\n"
+    "    bool leafy = k.g > k.r * 1.05 && k.g > k.b * 1.05;\n"
+    "    ivec2 cc = ivec2(floor(CellPos(gp)));\n"
+    "    float sat = k.g - max(k.r, k.b);\n"
+    "    bool tree = leafy && sat / max(k.g, 0.05) > 0.28 && (here & 4) == 0;\n"   // strongly coloured foliage, never the pale ground
+    "    bool ground = (Cell(cc) & 1) == 0;\n"
+    "    float th = Noise(wp * 0.025 + 3.0);\n"   // smooth variation across the map (no tile seams)
+    "    if (uSeason == 0) {\n"   // spring: fresh greens, some trees in blossom
+    "      if (leafy) res = mix(k, k * vec3(0.95, 1.08, 0.92) + 0.03, 0.8);\n"
+    "      if (tree) res = mix(res, vec3(1.0, 0.72, 0.84) * (0.55 + 0.6 * l), smoothstep(0.3, 0.6, l) * 0.85 * smoothstep(0.55, 0.7, th));\n"
+    "    } else if (uSeason == 1) {\n"   // summer: deep saturated greens, warm light
+    "      if (leafy) res = mix(vec3(l), k, 1.15) * vec3(1.0, 1.02, 0.95);\n"
+    "      res *= vec3(1.04, 1.01, 0.96);\n"
+    "    } else if (uSeason == 2) {\n"   // autumn: trees turn orange, red and gold; leaves on the paths
+    "      if (leafy) {\n"
+    "        vec3 pal = mix(mix(vec3(0.92, 0.3, 0.14), vec3(1.0, 0.55, 0.16), smoothstep(0.25, 0.5, th)), vec3(1.0, 0.78, 0.25), smoothstep(0.55, 0.8, th));\n"
+    "        if (!tree) pal = vec3(0.85, 0.75, 0.35);\n"   // grass goes golden
+    "        res = mix(k, pal * (l / dot(pal, vec3(0.299, 0.587, 0.114))) * 0.95, tree ? 0.85 : 0.35);\n"
+    "      }\n"
+    "      if (!tree && top >= 1 && top <= 3) {\n"   // fallen leaves: thick drifts, heaviest under trees
+    "        float pile = smoothstep(0.35, 0.65, Noise(wp * 0.05 + 11.0)) * 0.7 + Solid(gp + vec2(0.0, -6.0)) * 0.6;\n"
+    "        for (int L = 0; L < 2; L++) {\n"
+    "          float cs = L == 0 ? 3.5 : 2.5;\n"
+    "          vec2 base = floor(wp / cs + float(L) * 0.5);\n"
+    "          for (int i = -1; i <= 1; i++) for (int j = -1; j <= 1; j++) {\n"   // neighbours too, so leaves are never cut off
+    "            vec2 lc = base + vec2(float(i), float(j)); float lh = Hash(lc + 13.0 + float(L) * 7.0);\n"
+    "            if (lh > 0.15 + 0.75 * clamp(pile, 0.0, 1.0)) continue;\n"
+    "            vec2 lp = (lc - float(L) * 0.5 + 0.5 + 0.35 * (vec2(Hash(lc), Hash(lc + 2.0)) - 0.5)) * cs;\n"
+    "            int lcell = Cell(ivec2(floor((lp - uGridPos.zw * 16.0) / 16.0)));\n"
+    "            if ((lcell & 7) != 0) continue;\n"   // only on open ground (decided per leaf, so edges are ragged)
+    "            float an = lh * 40.0; vec2 d = mat2(cos(an), -sin(an), sin(an), cos(an)) * (wp - lp);\n"
+    "            float leaf = 1.0 - smoothstep(0.7, 1.15, length(d / vec2(1.6, 0.95)));\n"
+    "            if (leaf <= 0.0) continue;\n"
+    "            vec3 lcol = mix(mix(vec3(0.85, 0.28, 0.12), vec3(0.95, 0.55, 0.15), Hash(lc + 5.0)), vec3(0.98, 0.78, 0.25), step(0.75, Hash(lc + 9.0)));\n"
+    "            res = mix(res, lcol * (0.8 + 0.25 * Hash(lc + 3.0)), leaf);\n"
+    "          }\n"
+    "        }\n"
+    "      }\n"
+    "    } else {\n"   // winter: snow on the ground, trees and roofs; icy water edges
+    "      vec3 snow = vec3(0.93, 0.96, 1.0);\n"
+    "      float n = Noise(wp * 0.12) * 0.6 + Noise(wp * 0.4) * 0.4;\n"
+    "      if (ground && (here & 4) == 0 && !tree) res = mix(k, snow * (0.9 + 0.1 * n), smoothstep(0.12, 0.3, n) * 0.92);\n"
+    "      else if (leafy) res = mix(k * vec3(0.8, 0.9, 0.95), snow, smoothstep(0.35, 0.65, l) * 0.8);\n"
+    "      else res = mix(k, snow, smoothstep(0.45, 0.8, l) * 0.6);\n"   // roofs and walls: snow on the lit tops
+    "      res *= vec3(0.96, 0.99, 1.04);\n"
+    "    }\n"
+    "  }\n"
     // Per-pixel surface lighting: a normal for every pixel from the art's
     // shading (fine relief), sprite outlines (rounded characters) and depth
     // inside solid scenery (domed trees, roofs, cliffs); lit by the key light.
@@ -1231,7 +1282,26 @@ static const char *kComposite =
     "    bool outside = uMapType != 4 && uMapType != 8 && uMapType != 9;\n"
     "    float day = uSun.w;\n"
     // Falling leaves in wooded areas, drifting with the wind, with shadows.
-    "    if (uMapType == 3 && uForest > 0.32 && uWeather == 0) {\n"
+    "    if (outside && uSeason == 3 && uWeather == 0) {\n"   // winter: falling snow
+    "      for (int L = 0; L < 3; L++) {\n"
+    "        float sz = 0.7 + float(L) * 0.45;\n"
+    "        vec2 q = gp - vec2(sin(uTime * 0.5 + float(L)) * 6.0, uTime * (9.0 + float(L) * 7.0)) + float(L) * 37.0;\n"
+    "        vec2 c = floor(q / 10.0); float h = Hash(c + float(L) * 3.0);\n"
+    "        if (h > 0.5) continue;\n"
+    "        vec2 ctr = (c + 0.5) * 10.0 + vec2(sin(uTime * 1.5 + h * 30.0) * 2.5, 0.0);\n"
+    "        res = mix(res, vec3(1.0), (1.0 - smoothstep(sz * 0.4, sz, length(q - ctr))) * 0.9);\n"
+    "      }\n"
+    "    }\n"
+    "    if (outside && uSeason == 0 && uWeather == 0) {\n"   // spring: drifting blossom petals
+    "      vec2 q = gp - vec2(-12.0, 9.0) * uTime;\n"
+    "      vec2 c = floor(q / 26.0); float h = Hash(c + 21.0);\n"
+    "      if (h < 0.35) {\n"
+    "        vec2 ctr = (c + 0.5) * 26.0 + vec2(sin(uTime * 1.3 + h * 20.0) * 5.0, cos(uTime * 0.9 + h * 9.0) * 3.0);\n"
+    "        float an = uTime * 2.0 + h * 10.0; vec2 d = mat2(cos(an), -sin(an), sin(an), cos(an)) * (q - ctr);\n"
+    "        res = mix(res, vec3(1.0, 0.78, 0.88), 1.0 - smoothstep(0.7, 1.0, length(d / vec2(1.8, 1.1))));\n"
+    "      }\n"
+    "    }\n"
+    "    if ((uMapType == 3 && uForest > 0.32 || uSeason == 2 && outside) && uWeather == 0) {\n"
     "      for (int L = 0; L < 2; L++) {\n"
     "        vec2 vel = vec2(-9.0, 13.0) * (L == 0 ? 1.0 : 0.7);\n"
     "        for (int S = 0; S < 2; S++) {\n"   // S = 0 shadow, 1 leaf
@@ -2618,6 +2688,14 @@ static void RenderHd(const uint32_t *frame, int outW, int outH)
                     glUniform4f(glGetUniformLocation(sProgComp, "uInSun"), dx / n, dy / n,
                                 field && sLighting ? str * 0.9f : 0.0f, field && sLighting ? nightIn : 0.0f);
                 }
+            }
+            {
+                // A new season each day: spring, summer, autumn, winter, repeating.
+                time_t now = time(NULL);
+                struct tm *lt = localtime(&now);
+                int day = lt->tm_year * 366 + lt->tm_yday, season = day % 4;
+                if (getenv("EMERALD_SEASON")) season = atoi(getenv("EMERALD_SEASON"));
+                glUniform1i(glGetUniformLocation(sProgComp, "uSeason"), field && sLighting ? season : -1);
             }
             glUniform1i(glGetUniformLocation(sProgComp, "uMood"), field && sLighting ? gPcFieldFx.mood : 0);
             glUniform1f(glGetUniformLocation(sProgComp, "uTilt"), field && sLighting ? sTilt : 0.0f);
