@@ -45,6 +45,16 @@ struct PcAmbient {
 };
 extern struct PcAmbient gPcAmbient;
 
+// Minimap (fieldfx.c): one texel per metatile around the player, coloured by
+// what is there, plus markers for people, trainers, items and doors.
+#define PC_MINI 48
+struct PcMinimap {
+    int valid;
+    int facing;                           // player facing: 1 S, 2 N, 3 W, 4 E
+    unsigned int rgba[PC_MINI][PC_MINI];  // 0xAABBGGRR
+};
+extern struct PcMinimap gPcMinimap;
+
 enum { PC_BSCENE_ROUTE, PC_BSCENE_TOWN, PC_BSCENE_SEA, PC_BSCENE_POND, PC_BSCENE_SAND,
        PC_BSCENE_MOUNTAIN, PC_BSCENE_CAVE, PC_BSCENE_INDOOR, PC_BSCENE_UNDERWATER, PC_BSCENE_TALLGRASS };
 // Battle scene data for the renderer (fieldfx.c, filled each battle frame).

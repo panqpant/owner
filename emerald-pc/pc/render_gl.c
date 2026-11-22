@@ -1647,6 +1647,8 @@ static const char *kPresent =
     "uniform int uIntroKind;\n"
     "uniform vec4 uCine;\n"         // x top bar, y bottom bar, z grade amount, w time
     "uniform int uCineStyle;\n"
+    "uniform sampler2D uMini;\n"     // minimap (one texel per metatile)
+    "uniform vec3 uMiniOn;\n"        // x on, y fade, z player facing
     "uniform sampler2D uOverlay;\n"   // settings screen
     "uniform int uOverlayOn;\n"  // battles: x = left edge u, y = right edge u, z = message box top (v, from top)
     "void main() {\n"
@@ -1832,6 +1834,33 @@ static const char *kPresent =
     "  }\n"
     "  if (uCine.x > 0.001 && vUv.y > 1.0 - 0.105 * uCine.x) c = vec3(0.0);\n"
     "  if (uCine.y > 0.001 && vUv.y < 0.105 * uCine.y) c = vec3(0.0);\n"
+    // Minimap: a round map of the surroundings in the top-right corner.
+    "  if (uMiniOn.x > 0.5 && uMiniOn.y > 0.01) {\n"
+    "    float R = 0.17;\n"
+    "    vec2 ctr = vec2(1.0 - R / uAspect - 0.02 / uAspect, 1.0 - R - 0.03);\n"
+    "    vec2 d = (vUv - ctr) * vec2(uAspect, 1.0) / R;\n"   // -1..1 inside the disc
+    "    float r = length(d);\n"
+    "    if (r < 1.06) {\n"
+    "      vec2 mq = vec2(0.5 + d.x * 0.42, 0.5 - d.y * 0.42);\n"   // 0.84 of the 48 tiles across
+    "      vec2 cell = mq * 48.0;\n"
+    "      vec3 m = texture(uMini, (floor(cell) + 0.5) / 48.0).rgb;\n"
+    "      vec2 f = fract(cell);\n"
+    "      vec3 mr = texture(uMini, (floor(cell) + vec2(1.5, 0.5)) / 48.0).rgb, md = texture(uMini, (floor(cell) + vec2(0.5, 1.5)) / 48.0).rgb;\n"
+    "      float edge = (distance(m, mr) > 0.08 ? smoothstep(0.82, 1.0, f.x) : 0.0) + (distance(m, md) > 0.08 ? smoothstep(0.82, 1.0, f.y) : 0.0);\n"
+    "      m *= 1.0 - min(edge, 1.0) * 0.35;\n"
+    "      vec2 pc = (cell - 24.5);\n"   // player arrow at the centre
+    "      vec2 fd = uMiniOn.z < 1.5 ? vec2(0.0, 1.0) : uMiniOn.z < 2.5 ? vec2(0.0, -1.0) : uMiniOn.z < 3.5 ? vec2(-1.0, 0.0) : vec2(1.0, 0.0);\n"
+    "      vec2 side = vec2(-fd.y, fd.x);\n"
+    "      float along = dot(pc, fd), across = abs(dot(pc, side));\n"
+    "      float arrow = step(-0.9, along) * step(along, 1.4) * step(across, (1.4 - along) * 0.55);\n"
+    "      m = mix(m, vec3(1.0, 0.95, 0.3), arrow);\n"
+    "      float a = 1.0 - smoothstep(0.96, 1.0, r);\n"
+    "      vec3 ring = vec3(0.95);\n"
+    "      vec3 outc = mix(m, ring, smoothstep(0.93, 0.97, r));\n"
+    "      float alpha = max(a, (1.0 - smoothstep(1.0, 1.06, r)) * smoothstep(0.93, 1.0, r) * 0.95) * uMiniOn.y;\n"
+    "      c = mix(c * (1.0 - 0.35 * (1.0 - smoothstep(1.0, 1.06, r)) * uMiniOn.y), outc, alpha);\n"
+    "    }\n"
+    "  }\n"
     "  if (uOverlayOn != 0) { vec4 o = texture(uOverlay, vec2(vUv.x, 1.0 - vUv.y)); c = mix(c, o.rgb, o.a); }\n"
     "  oColor = vec4(c, 1.0);\n"
     "}\n";
@@ -1923,7 +1952,11 @@ static const char *kGi =
     "}\n";
 
 static GLuint sProgGi, sGiTex, sGiFbo;
-static GLuint sSnapTex, sOverlayTex;
+static GLuint sSnapTex, sOverlayTex, sMiniTex;
+static int sMiniEnabled = 1;
+static float sMiniFade;
+void HdSetMinimap(int on) { sMiniEnabled = on; }
+int HdGetMinimap(void) { return sMiniEnabled; }
 static int sOverlayOn, sGiEnabled = 1, sShatterEnabled = 1;
 void HdSetGi(int on) { sGiEnabled = on; }
 int HdGetGi(void) { return sGiEnabled; }
@@ -3027,6 +3060,39 @@ static void DrawPresent(int hdMode, int winW, int winH)
         glUniform1f(glGetUniformLocation(sProgPresent, "uUScale"), 1.0f);
         glUniform1f(glGetUniformLocation(sProgPresent, "uBloom"), sGrade ? 0.25f + sNight * 0.9f : 0.0f);
         glUniform1f(glGetUniformLocation(sProgPresent, "uSharpen"), sGrade ? 1.0f : 0.0f);
+        {
+            // Minimap: shown on the overworld (not in battles, menus or cutscenes).
+            int show = sMiniEnabled && PcFieldWideActive() && !gPcBattleFrame && gPcMinimap.valid && sCineBarT < 0.2f;
+            {
+                extern int gPcMenuFrame;
+                if (gPcMenuFrame) show = 0;
+            }
+            {
+                static unsigned lastMf;
+                unsigned fnow = (unsigned)PortFrameCount();
+                int steps = (int)(fnow - lastMf);
+                lastMf = fnow;
+                if (steps < 1) steps = 1;
+                if (steps > 60) steps = 60;
+                sMiniFade += ((show ? 1.0f : 0.0f) - sMiniFade) * (1.0f - powf(0.85f, (float)steps));
+            }
+            if (!sMiniTex)
+            {
+                glGenTextures(1, &sMiniTex);
+                glBindTexture(GL_TEXTURE_2D, sMiniTex);
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+            }
+            glActiveTexture(GL_TEXTURE0 + 3);
+            glBindTexture(GL_TEXTURE_2D, sMiniTex);
+            if (show)
+                glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, PC_MINI, PC_MINI, 0, GL_RGBA, GL_UNSIGNED_BYTE, gPcMinimap.rgba);
+            glActiveTexture(GL_TEXTURE0);
+            glUniform1i(glGetUniformLocation(sProgPresent, "uMini"), 3);
+            glUniform3f(glGetUniformLocation(sProgPresent, "uMiniOn"), sMiniTex ? 1.0f : 0.0f, sMiniFade, (float)gPcMinimap.facing);
+        }
         glUniform4f(glGetUniformLocation(sProgPresent, "uCine"), sCineBarT, sCineBarB, sCineAmt, (float)(PortFrameCount() % 36000) / 59.73f);
         glUniform1i(glGetUniformLocation(sProgPresent, "uCineStyle"), sCineStyle);
         {

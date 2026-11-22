@@ -27,10 +27,13 @@
 #include "constants/map_groups.h"
 bool8 ArePlayerFieldControlsLocked(void); // (game script.h; pc/script.h shadows it)
 #include "trainer_see.h"
+#include "constants/event_objects.h"
+#include "constants/trainer_types.h"
 #include "fieldfx.h"
 
 struct PcFieldFx gPcFieldFx;
 struct PcAmbient gPcAmbient;
+struct PcMinimap gPcMinimap;
 struct PcBattleFx gPcBattleFx;
 struct PcCine gPcCine;
 int gPcHdEffects;
@@ -82,6 +85,7 @@ static void SpriteFeet(struct ObjectEvent *obj, int *x, int *y)
 // player, or a cutscene (a script holds the controls while characters move
 // by themselves), or anything scripted on a story map.
 static void CineDebug(void);
+static void PcUpdateMinimap(void);
 static void CineForce(void);
 static int *s_cineWasLocked;
 static void PcUpdateCinematic(void)
@@ -274,6 +278,7 @@ void PcUpdateFieldFx(void)
             }
     }
 
+    PcUpdateMinimap();
     PcUpdateCinematic();
     CineForce();
     CineDebug();
@@ -478,4 +483,65 @@ int PcBattleBoss(void)
         if (tc == TRAINER_CLASS_RIVAL) return CINE_RIVAL;
     }
     return CINE_NONE;
+}
+
+// ---- Minimap ----
+#define MM_RGB(r, g, b) (0xFF000000u | ((u32)(b) << 16) | ((u32)(g) << 8) | (u32)(r))
+static void PcUpdateMinimap(void)
+{
+    struct PcMinimap *m = &gPcMinimap;
+    struct ObjectEvent *pl = &gObjectEvents[gPlayerAvatar.objectEventId];
+    int px = pl->currentCoords.x, py = pl->currentCoords.y, x, y, i, indoor;
+    int x0 = px - PC_MINI / 2, y0 = py - PC_MINI / 2;
+    m->facing = pl->facingDirection;
+    indoor = !IsMapTypeOutdoors(gMapHeader.mapType);
+    for (y = 0; y < PC_MINI; y++)
+        for (x = 0; x < PC_MINI; x++)
+        {
+            int mx = x0 + x, my = y0 + y;
+            u8 b = MapGridGetMetatileBehaviorAt(mx, my);
+            u32 c;
+            if (MetatileBehavior_IsSurfableWaterOrUnderwater(b))
+                c = MetatileBehavior_IsDeepOrOceanWater(b) ? MM_RGB(40, 92, 170) : MM_RGB(64, 132, 210);
+            else if (MapGridGetCollisionAt(mx, my))
+                c = indoor ? MM_RGB(70, 62, 78) : MM_RGB(52, 92, 58);
+            else if (MetatileBehavior_IsTallGrass(b) || MetatileBehavior_IsLongGrass(b))
+                c = MM_RGB(96, 170, 84);
+            else if (MetatileBehavior_IsSandOrDeepSand(b))
+                c = MM_RGB(222, 200, 140);
+            else if (MetatileBehavior_IsJumpEast(b) || MetatileBehavior_IsJumpWest(b) || MetatileBehavior_IsJumpNorth(b) || MetatileBehavior_IsJumpSouth(b))
+                c = MM_RGB(150, 120, 80);
+            else if (MetatileBehavior_IsIce(b))
+                c = MM_RGB(190, 225, 240);
+            else
+                c = indoor ? MM_RGB(200, 186, 160) : MM_RGB(150, 205, 128);
+            m->rgba[y][x] = c;
+        }
+    // Doors and exits.
+    if (gMapHeader.events)
+        for (i = 0; i < gMapHeader.events->warpCount; i++)
+        {
+            int wx = gMapHeader.events->warps[i].x + MAP_OFFSET - x0, wy = gMapHeader.events->warps[i].y + MAP_OFFSET - y0;
+            if (wx >= 0 && wy >= 0 && wx < PC_MINI && wy < PC_MINI)
+                m->rgba[wy][wx] = MM_RGB(250, 130, 60);
+        }
+    // People (white), trainers (red), items (yellow).
+    {
+        for (i = 0; i < OBJECT_EVENTS_COUNT; i++)
+        {
+            struct ObjectEvent *o = &gObjectEvents[i];
+            int ox, oy;
+            u32 c;
+            if (!o->active || o->invisible || i == gPlayerAvatar.objectEventId)
+                continue;
+            ox = o->currentCoords.x - x0; oy = o->currentCoords.y - y0;
+            if (ox < 0 || oy < 0 || ox >= PC_MINI || oy >= PC_MINI)
+                continue;
+            if (o->graphicsId == OBJ_EVENT_GFX_ITEM_BALL) c = MM_RGB(255, 220, 60);
+            else if (o->trainerType != TRAINER_TYPE_NONE) c = MM_RGB(235, 60, 60);
+            else c = MM_RGB(245, 245, 245);
+            m->rgba[oy][ox] = c;
+        }
+    }
+    m->valid = 1;
 }
