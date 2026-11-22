@@ -62,7 +62,7 @@ local function grid(roads: { Road }, buildings: { Building }, parks: { Park })
 		for j = 0, n - 1 do
 			local x, z = (i + 0.5) * B, (j + 0.5) * B
 			local s = Terrain.sample(x, z)
-			if s.land > 40 and s.h > 0 then
+			if s.land > 40 and not s.water then
 				local dens = if s.shape == "barrier" then 1 else Districts.urban(x, z)
 				if dens > 0 then
 					local id = Districts.at(x, z, s)
@@ -153,9 +153,9 @@ local function highway(points: { { number } }, roads: { Road })
 				bridge = bridge,
 			})
 		end
-		local runStart, runBridge = 0, Terrain.sample(ax, az).h <= 0
+		local runStart, runBridge = 0, Terrain.sample(ax, az).water ~= nil
 		for k = 1, n do
-			local wet = Terrain.sample(ax + (bx - ax) * k / n, az + (bz - az) * k / n).h <= 0
+			local wet = Terrain.sample(ax + (bx - ax) * k / n, az + (bz - az) * k / n).water ~= nil
 			if wet ~= runBridge then
 				emit(runStart, k, runBridge or wet) -- the step that crosses the shore is bridged
 				runStart, runBridge = k, wet

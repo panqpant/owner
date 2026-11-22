@@ -137,4 +137,25 @@ Config.EASTER_EGGS = {
 	{ kind = "message_bottle", name = "Message in a Bottle", count = 6, biomes = { "beach" }, rural = false },
 }
 
+-- Terrain learned from 12 real USGS 3DEP elevation regions (tools/terrain_stats.py): mean elevation (m)
+-- and RMS height per wavelength band (m) per land type. `cal` is fitted by tools/train_terrain.py.
+Config.STUD_PER_M = 2.4 -- horizontal compression (matches tools/fetch_roads.py)
+Config.VERT = 3.5 -- studs per metre vertically (true scale)
+Config.TERRAIN = {
+	bands_m = { 150, 300, 600, 1200, 2400, 4800 },
+	mean = { coast = 7.0, farm = 33.4, scrub = 16.7, wetland = 3.0 },
+	amps = {
+		coast = { 0.272, 0.320, 0.405, 0.516, 0.444, 0.281 },
+		farm = { 0.244, 0.567, 1.132, 1.747, 1.998, 2.558 },
+		scrub = { 0.092, 0.125, 0.166, 0.295, 0.494, 0.759 },
+		wetland = { 0.079, 0.091, 0.075, 0.063, 0.066, 0.065 },
+	},
+	cal = {
+		coast = { 1.000, 1.000, 1.000, 1.000, 1.000, 1.000 },
+		farm = { 0.206, 2.286, 7.959, 2.020, 0.978, 0.978 },
+		scrub = { 0.251, 0.100, 0.100, 0.100, 0.100, 0.100 },
+		wetland = { 3.302, 0.416, 0.100, 0.100, 0.100, 0.100 },
+	},
+}
+
 return Config

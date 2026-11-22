@@ -16,7 +16,7 @@ local SEC = Config.SECTION
 
 local function ruralOk(x: number, z: number): boolean
 	local s = Terrain.sample(x, z)
-	if s.h <= 0 or s.land < 80 or s.wet > 0.3 then
+	if s.water or s.land < 80 or s.wet > 0.3 then
 		return false
 	end
 	if s.biome ~= "farm" and s.biome ~= "scrub" then

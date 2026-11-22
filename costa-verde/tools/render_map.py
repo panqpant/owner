@@ -17,6 +17,7 @@ BIOME = {"beach": (214, 200, 160), "mangrove": (40, 70, 40), "wetland": (120, 11
          "farm": (95, 120, 60), "scrub": (90, 110, 65)}
 MAT = {"Grass": (110, 135, 60), "LeafyGrass": (70, 100, 45), "Ground": (110, 90, 60), "Mud": (70, 75, 55), "Sand": (214, 200, 160)}
 h = np.array(hm["h"], dtype=float).reshape(n, n)
+wl = np.array(hm["water"], dtype=float).reshape(n, n)
 rgb = np.zeros((n, n, 3), dtype=float)
 for idx, (bi, m) in enumerate(zip(hm["biome"], hm["material"])):
     c = MAT[m] if bi in ("farm", "wetland") and m in MAT else BIOME.get(bi, (90, 110, 65))
@@ -24,12 +25,12 @@ for idx, (bi, m) in enumerate(zip(hm["biome"], hm["material"])):
         c = (128, 128, 122)  # built-up ground
     rgb[idx // n, idx % n] = c
 biome = np.array(hm["biome"]).reshape(n, n)
-depth = np.clip(-h / 40, 0, 1)[..., None]
+depth = np.clip((wl - h) / 40, 0, 1)[..., None]
 sea = np.array([95, 200, 200]) * (1 - depth) + np.array([20, 55, 105]) * depth  # turquoise shelf -> deep blue
 bay = np.array([70, 120, 105]) * (1 - depth) + np.array([40, 95, 100]) * depth  # seagrass bay
 lake = np.array([25, 45, 50])
 marsh = np.array([55, 70, 60])
-water = h <= 0
+water = wl > -9000
 rgb = np.where(water[..., None] & (biome == "bay")[..., None], bay, np.where(water[..., None] & (biome == "lake")[..., None], lake, np.where(water[..., None] & np.isin(biome, ["marsh", "wetland", "hammock"])[..., None], marsh, np.where(water[..., None], sea, rgb))))
 img = Image.fromarray(rgb.clip(0, 255).astype(np.uint8)).resize((PX, PX), Image.BILINEAR)
 d = ImageDraw.Draw(img)

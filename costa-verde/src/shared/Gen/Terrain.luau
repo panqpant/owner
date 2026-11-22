@@ -10,7 +10,9 @@ local Hash = require("./Hash")
 local Terrain = {}
 
 export type Sample = {
-	h: number, -- surface height, studs (water where h < SEA)
+	h: number, -- ground height, studs
+	ltype: string, -- dominant learned terrain type: "farm" | "scrub" | "coast" | "wetland"
+	water: number?, -- water surface if submerged (sea = 0; lakes and marsh sit at their own level)
 	land: number, -- signed distance to shore, studs (+ on land)
 	shape: string, -- "main" | "barrier" | "key" | "islet" | "lake" | "sea" | "bay"
 	biome: string, -- "sea" | "bay" | "beach" | "mangrove" | "wetland" | "hammock" | "farm" | "scrub" | "lake"
@@ -116,82 +118,142 @@ function Terrain.sample(x: number, z: number): Sample
 	end
 	seaD = math.max(seaD, kd)
 
-	-- Lakes: one big rough lake + scattered round sinkhole lakes.
-	local lake = false
-	if shape == "main" and d > 0.01 then
-		local L = Config.BIG_LAKE
-		local ld = L[3] * (1 + 0.3 * Noise.fbm(u * 25, v * 25, S + 40)) - math.sqrt((u - L[1]) ^ 2 + (v - L[2]) ^ 2)
-		local cs = 0.028
-		local ci, cj = math.floor(u / cs), math.floor(v / cs)
-		for di = -1, 1 do
-			for dj = -1, 1 do
-				local i, j = ci + di, cj + dj
-				if Hash.float(i, j, S + 41) < 0.22 then
-					local cx = (i + 0.2 + 0.6 * Hash.float(i, j, S + 42)) * cs
-					local cy = (j + 0.2 + 0.6 * Hash.float(i, j, S + 43)) * cs
-					local r = 0.0015 + 0.005 * Hash.float(i, j, S + 44) ^ 2
-					ld = math.max(ld, r - math.sqrt((u - cx) ^ 2 + (v - cy) ^ 2))
-				end
-			end
-		end
-		if ld > 0 then
-			lake = true
-			d = -ld
-		end
-	end
-
 	local landStuds = d * W
-	-- Wetlands: big low-frequency region in the south-west, edges blended with noise.
+	local T = Config.TERRAIN
+	local VERT = Config.VERT
+	local north = clamp01((0.5 - v) * 3)
+
+	-- Continuous land-type weights (no seams): wetland, coast, farm/ridge, scrub.
 	local WL = Config.WETLANDS
 	local wd = math.sqrt(((u - WL[1]) / WL[3]) ^ 2 + ((v - WL[2]) / WL[4]) ^ 2)
 	local wet = if shape == "main" then clamp01((1 - wd * (1 + 0.4 * Noise.fbm(u * 6, v * 6, S + 50))) * 3) else 0
+	local coastW = clamp01(1 - math.max(landStuds, 0) / 3000)
+	local farmMask = clamp01((north + 0.35 * Noise.fbm(u * 10, v * 10, S + 11) - 0.2) * 3)
+	-- Regional elevation changes slowly (10+ km in the real data), so heights use smooth weights;
+	-- farmMask only decides where fields go.
+	local farmR = clamp01((north + 0.3 * Noise.fbm(u * 2.5, v * 2.5, S + 13) - 0.2) * 4)
+	local wW = clamp01((wet - 0.1) * 5) -- wide flat plateau, short rise at the edge (as in real wetland DEMs)
+	local wC = (1 - wW) * coastW
+	local wF = (1 - wW) * (1 - coastW) * farmR
+	local wS = (1 - wW) * (1 - coastW) * (1 - farmR)
+	local ltype = "wetland"
+	local best = wW
+	if wC > best then
+		ltype, best = "coast", wC
+	end
+	if wF > best then
+		ltype, best = "farm", wF
+	end
+	if wS > best then
+		ltype = "scrub"
+	end
+
+	-- Learned elevation: mean per type + noise at each measured wavelength (tools/terrain_stats.py).
+	local meanM = wW * T.mean.wetland + wC * T.mean.coast + wF * T.mean.farm + wS * T.mean.scrub
+	local amps = table.create(#T.bands_m)
+	for i in T.bands_m do
+		amps[i] = wW * T.amps.wetland[i] * T.cal.wetland[i] + wC * T.amps.coast[i] * T.cal.coast[i]
+			+ wF * T.amps.farm[i] * T.cal.farm[i] + wS * T.amps.scrub[i] * T.cal.scrub[i]
+	end
+	local ramp = clamp01(math.max(landStuds, 0) / 700) -- ramps down to the beach
+	-- Height (m) at any nearby point with this point's land-type weights (used for lake levels too).
+	local function heightAt(px: number, pz: number): number
+		local hh = meanM
+		for i, lam in T.bands_m do
+			local ls = lam * Config.STUD_PER_M
+			hh += amps[i] * Noise.value(px / ls, pz / ls, S + 80 + i)
+		end
+		return 0.6 + (hh - 0.6) * ramp
+	end
+	local hM = heightAt(x, z)
+
+	-- Sinkholes (dry hollows and lakes) cluster in ridge country; one big lake.
+	local water: number? = nil
+	local lakeBottom = math.huge
+	if shape == "main" and d > 0.004 then
+		local L = Config.BIG_LAKE
+		local ld = L[3] * (1 + 0.3 * Noise.fbm(u * 25, v * 25, S + 40)) - math.sqrt((u - L[1]) ^ 2 + (v - L[2]) ^ 2)
+		local bigLevel = (heightAt(L[1] * W, L[2] * W) - 1.5) * VERT
+		if ld > 0 then
+			water = bigLevel
+			lakeBottom = bigLevel - math.min(ld * W * 0.02, 18)
+		elseif ld > -0.012 then -- shore slopes down to the water instead of a cliff
+			hM = math.min(hM, bigLevel / VERT + 0.3 + (hM - bigLevel / VERT) * clamp01(-ld / 0.012))
+		end
+		-- Real karst: sinkholes 100-600 m across, clustered in zones, often merging, irregular rims.
+		local cs = 0.02
+		local karst = clamp01(Noise.fbm(u * 4, v * 4, S + 47) * 1.5 + 0.2)
+		local ci, cj = math.floor(u / cs), math.floor(v / cs)
+		for di = -2, 2 do
+			for dj = -2, 2 do
+				local i, j = ci + di, cj + dj
+				if Hash.float(i, j, S + 41) < (0.03 + 0.8 * wF * karst) * (1 - wW) then -- none in the wetlands
+					local cx = (i + 0.15 + 0.7 * Hash.float(i, j, S + 42)) * cs
+					local cy = (j + 0.15 + 0.7 * Hash.float(i, j, S + 43)) * cs
+					local r = 0.004 + 0.012 * Hash.float(i, j, S + 44) ^ 2
+					local t = math.sqrt((u - cx) ^ 2 + (v - cy) ^ 2) / r * (1 + 0.18 * Noise.fbm(u * 60, v * 60, S + i * 13 + j))
+					if t < 1.5 then
+						local level = heightAt(cx * W, cy * W) - 0.8 -- water sits just below the local ground
+						local wetLake = Hash.float(i, j, S + 46) < 0.8
+						if t < 1 and wetLake then
+							local depthM = 2 + 6 * Hash.float(i, j, S + 45)
+							water = math.max(water or -math.huge, level * VERT)
+							lakeBottom = math.min(lakeBottom, (level - depthM * (1 - t * t) - 0.3) * VERT)
+						elseif t < 1 then
+							hM = math.min(hM, level - 3 * (1 - t * t)) -- dry sinkhole
+						else
+							hM = math.min(hM, level + 0.4 + (hM - level) * (t - 1) / 0.5) -- gentle shore
+						end
+					end
+				end
+			end
+		end
+	end
 
 	local h, material, biome
 	if landStuds <= 0 then
-		-- Shelf: shallow and wide on Gulf side, narrow then a drop-off on the Atlantic side.
+		-- Sea: shelf shallow and wide on the Gulf side, narrow then a drop-off on the Atlantic side.
 		local shelf = 0.012 + 0.04 * rough
 		local off = math.max(-seaD, 0)
 		local Bc = Config.BARRIER
-		-- Bay behind the barrier chain blends smoothly into open sea at its ends.
 		local bayness = if u > 0.6 then math.clamp(math.min(v - Bc.v0, Bc.v1 - v) / 0.04, 0, 1) * math.clamp((Bc.offset - -coast) / 0.012, 0, 1) else 0
-		if lake then
-			h, biome, shape = -math.min(3 + -landStuds * 0.04, 20), "lake", "lake"
-		elseif coast > 0 then
-			h, biome, shape = -1.5, "marsh", "marsh" -- pools and sloughs inside the land
+		if coast > 0 then
+			h, biome, shape, water = -1.5, "marsh", "marsh", 0 -- tidal pools inside the outline
 		else
 			local sea = if off < shelf then -(2 + 18 * (off / shelf) ^ 1.5) else -math.min(20 + (off - shelf) * W * 0.08, 200)
 			local bay = -math.min(3 + off * W * 0.004, 10)
 			h = sea + (bay - sea) * bayness
 			biome = if bayness > 0.5 then "bay" else "sea"
-			shape = biome
+			shape, water = biome, 0
 		end
 		material = "Sand"
+	elseif water then
+		h, biome, shape, material = lakeBottom, "lake", "lake", "Mud"
+		landStuds = -1 -- lakes count as water for districts/roads
 	else
-		local inland = math.min(landStuds, 2000) / 2000
-		local north = clamp01((0.45 - v) * 4)
-		h = 2 + inland * 14 + 18 * math.max(0, Noise.fbm(u * 7, v * 7, S + 7)) * north * inland
-		h += (1.2 - h) * wet
-		biome = "scrub"
-		material = "LeafyGrass"
+		h = hM * VERT
+		biome, material = "scrub", "LeafyGrass"
 		if landStuds < 90 + 140 * (1 - rough) and rough < 0.55 then
 			biome, material = "beach", "Sand"
 		elseif rough >= 0.55 and landStuds < 600 * rough then
 			biome, material = "mangrove", "LeafyGrass"
-			h = math.min(h, 1.5)
+			h = math.min(h, 1.2 * VERT)
 		elseif wet > 0.15 then
-			-- Flow runs NE -> SW: stretch noise along that axis for sloughs and teardrop tree islands.
+			-- Flow runs NE -> SW: stretched noise gives sloughs (sheet water) and teardrop tree islands.
 			local along = (u + v) * 0.7071
 			local across = (u - v) * 0.7071
 			local slough = Noise.fbm(along * 8, across * 90, S + 51, 3)
 			local hammock = Noise.fbm(along * 30, across * 75, S + 52, 2)
 			if slough > 0.38 and wet > 0.4 then
-				h, biome, material = -1.5, "wetland", "Mud"
+				biome, material, shape = "marsh", "Mud", "marsh"
+				water = h + 0.4 * VERT
+				landStuds = -1
 			elseif hammock > 0.35 then
-				h, biome, material = h + 2, "hammock", "LeafyGrass"
+				h, biome, material = h + 0.4 * VERT, "hammock", "LeafyGrass"
 			else
 				biome, material = "wetland", "Grass"
 			end
-		elseif north + 0.35 * Noise.fbm(u * 10, v * 10, S + 11) > 0.35 and Noise.fbm(u * 9, v * 9, S + 12) > -0.15 then
+		elseif farmMask > 0.5 and Noise.fbm(u * 9, v * 9, S + 12) > -0.15 then
 			-- Fields subdivide the road sections (so every field touches a county road), tracks between.
 			local SEC = Config.SECTION
 			local si, sj = math.floor(x / SEC), math.floor(z / SEC)
@@ -208,7 +270,7 @@ function Terrain.sample(x: number, z: number): Sample
 		end
 	end
 
-	return { h = h, land = landStuds, shape = shape, biome = biome, wet = wet, rough = rough, material = material }
+	return { h = h, water = water, ltype = ltype, land = landStuds, shape = shape, biome = biome, wet = wet, rough = rough, material = material }
 end
 
 return Terrain

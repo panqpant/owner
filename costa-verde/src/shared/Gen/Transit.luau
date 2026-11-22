@@ -44,7 +44,7 @@ function Transit.generate(settlements: { { x: number, z: number, name: string } 
 			local len = math.sqrt((bx - ax) ^ 2 + (bz - az) ^ 2)
 			local mx, mz = (ax + bx) / 2, (az + bz) / 2
 			local s = Terrain.sample(mx, mz)
-			table.insert(tracks, { ax = ax, az = az, bx = bx, bz = bz, line = line.name, kind = line.kind, bridge = s.h <= 0, elevated = line.kind == "metro" })
+			table.insert(tracks, { ax = ax, az = az, bx = bx, bz = bz, line = line.name, kind = line.kind, bridge = s.water ~= nil, elevated = line.kind == "metro" })
 			sinceStation += len
 			local urban = Districts.urban(mx, mz) > 0 or s.shape == "barrier"
 			local near: string? = nil
@@ -53,7 +53,7 @@ function Transit.generate(settlements: { { x: number, z: number, name: string } 
 					near = st.name
 				end
 			end
-			if s.h > 0 and sinceStation >= line.spacing and (urban or near) then
+			if not s.water and sinceStation >= line.spacing and (urban or near) then
 				count += 1
 				local district = Districts.byId[Districts.at(mx, mz, s)]
 				table.insert(stations, {

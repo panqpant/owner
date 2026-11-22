@@ -101,11 +101,15 @@ def terrain():
     faces = [(j * n + i, j * n + i + 1, (j + 1) * n + i + 1, (j + 1) * n + i) for j in range(n - 1) for i in range(n - 1)]
     me.from_pydata(verts, [], faces)
     col = me.color_attributes.new("col", "FLOAT_COLOR", "POINT")
-    C = {"Sand": (0.78, 0.68, 0.45), "Grass": (0.2, 0.32, 0.1), "LeafyGrass": (0.13, 0.27, 0.08), "Mud": (0.17, 0.16, 0.08)}
+    # linear-space colours matched by eye to the USGS references
+    C = {"Sand": (0.62, 0.55, 0.36), "Grass": (0.12, 0.17, 0.04), "LeafyGrass": (0.05, 0.1, 0.025), "Mud": (0.08, 0.08, 0.04), "Ground": (0.16, 0.1, 0.05)}
+    B = {"mangrove": (0.02, 0.05, 0.015), "hammock": (0.025, 0.06, 0.015), "scrub": (0.09, 0.12, 0.05), "wetland": (0.16, 0.14, 0.06)}
+    urban = {"downtown", "midtown", "docks", "calle", "beach", "northshore", "westside", "palmgrove", "university", "gulftown"}
     for k, m in enumerate(hm["material"]):
-        c = C.get(m, (0.3, 0.3, 0.3))
-        if hm["district"][k] in ("downtown", "midtown", "docks", "calle", "beach") and m != "Sand":
-            c = (0.35, 0.35, 0.33)  # paved city ground
+        bi = hm["biome"][k]
+        c = B.get(bi) if bi in B and not (bi == "wetland" and m == "Mud") else C.get(m, (0.1, 0.12, 0.05))
+        if hm["district"][k] in urban and bi != "beach":
+            c = (0.2, 0.2, 0.19)  # paved city ground
         col.data[k].color = (*c, 1)
     for p in me.polygons:
         p.use_smooth = True
@@ -175,6 +179,14 @@ STYLE_COL = {
     "house": ((0.92, 0.9, 0.84), (0.15, 0.18, 0.2)),
     "campus": ((0.66, 0.32, 0.24), (0.12, 0.15, 0.18)),
     "shack": ((0.45, 0.36, 0.26), (0.1, 0.1, 0.1)),
+    "farmhouse": ((0.9, 0.9, 0.86), (0.12, 0.12, 0.12)),
+    "barn": ((0.45, 0.06, 0.04), (0.3, 0.05, 0.04)),
+    "silo": ((0.7, 0.72, 0.74), (0.7, 0.72, 0.74)),
+    "store": ((0.3, 0.45, 0.7), (0.1, 0.12, 0.15)),
+    "gas": ((0.9, 0.75, 0.1), (0.1, 0.12, 0.15)),
+    "church": ((0.95, 0.95, 0.95), (0.2, 0.25, 0.4)),
+    "diner": ((0.85, 0.3, 0.5), (0.1, 0.12, 0.15)),
+    "trailer": ((0.8, 0.8, 0.76), (0.2, 0.2, 0.2)),
 }
 ROOF = {"house": (0.55, 0.2, 0.14), "shack": (0.35, 0.33, 0.3)}
 
@@ -209,6 +221,26 @@ def buildings(night, region=None):
     for s in styles:
         facade, glass = STYLE_COL[s]
         me.materials.append(window_mat(s, facade, glass, night))
+
+
+def rails():
+    me = bpy.data.meshes.new("rails")
+    bm = bmesh.new()
+    for t in W["tracks"]:
+        a, b = Vector((t["ax"], t["az"])), Vector((t["bx"], t["bz"]))
+        d = b - a
+        if d.length < 1:
+            continue
+        nrm = Vector((-d.y, d.x)).normalized() * (9 if t["kind"] == "metro" else 7)
+        lift = 40 if t["elevated"] else (24 if t["bridge"] else 1.2)
+        ha, hb = max(ground_h(*a), 0) + lift, max(ground_h(*b), 0) + lift
+        vs = [bm.verts.new(P(*(a + nrm), ha)), bm.verts.new(P(*(b + nrm), hb)), bm.verts.new(P(*(b - nrm), hb)), bm.verts.new(P(*(a - nrm), ha))]
+        f = bm.faces.new(vs)
+        bmesh.ops.solidify(bm, geom=[f], thickness=4)
+    bm.to_mesh(me)
+    o = bpy.data.objects.new("rails", me)
+    bpy.context.collection.objects.link(o)
+    me.materials.append(mat("rail", (0.25, 0.24, 0.22), 0.7))
 
 
 def parks():
@@ -275,16 +307,16 @@ D = {d["id"]: d for d in W["districts"]}
 
 def shot_sunset():
     reset()
-    terrain(); water(); roads(False); parks(); buildings(False)
+    terrain(); water(); roads(False); rails(); parks(); buildings(False)
     sky(6, 250)
     dt = D["downtown"]
-    camera(P(dt["x"] + 5200, dt["z"] + 3600, 1400), P(dt["x"] - 300, dt["z"] - 400, 120), 32)
+    camera(P(dt["x"] + 6500, dt["z"] + 4200, 1700), P(dt["x"] - 600, dt["z"] - 900, 120), 30)
     render("aerial_sunset")
 
 
 def shot_day_beach():
     reset()
-    terrain(); water(); roads(False); parks(); buildings(False)
+    terrain(); water(); roads(False); rails(); parks(); buildings(False)
     sky(45, 120)
     b = D["beach"]
     camera(P(b["x"] + 1500, b["z"] + 2300, 520), P(b["x"] - 200, b["z"] - 600, 40), 30)
@@ -293,7 +325,7 @@ def shot_day_beach():
 
 def shot_night():
     reset()
-    terrain(); water(); roads(True); parks(); buildings(True)
+    terrain(); water(); roads(True); rails(); parks(); buildings(True)
     sky(0, 0, night=True)
     dt = D["downtown"]
     camera(P(dt["x"] + 2900, dt["z"] + 1700, 700), P(dt["x"], dt["z"] - 200, 150), 35)
@@ -303,12 +335,21 @@ def shot_night():
 
 def shot_keys():
     reset()
-    terrain(); water(); roads(False); parks(); buildings(False)
+    terrain(); water(); roads(False); rails(); parks(); buildings(False)
     sky(25, 200)
     camera(P(0.47 * SIZE, 0.84 * SIZE, 900), P(0.33 * SIZE, 0.94 * SIZE, 0), 28)
     render("keys_bridge")
 
 
-SHOTS = {"sunset": shot_sunset, "beach": shot_day_beach, "night": shot_night, "keys": shot_keys}
+def shot_country():
+    reset()
+    terrain(); water(); roads(False); rails(); parks(); buildings(False)
+    sky(30, 160)
+    st = next(s for s in W["stations"] if s["line"] == "Gulf Line") if W["stations"] else D["truckstop"]
+    camera(P(st["x"] + 2200, st["z"] + 1800, 900), P(st["x"] - 600, st["z"] - 700, 0), 30)
+    render("countryside")
+
+
+SHOTS = {"country": shot_country, "sunset": shot_sunset, "beach": shot_day_beach, "night": shot_night, "keys": shot_keys}
 for name in (sys.argv[1:] or SHOTS):
     SHOTS[name]()

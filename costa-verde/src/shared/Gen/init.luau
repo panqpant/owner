@@ -15,18 +15,21 @@ Gen.Noise = require("@self/Noise")
 -- Heightmap grid for previews / minimap: rows of {h, materialIndex, districtIndex}.
 function Gen.heightmap(cell: number)
 	local n = math.floor(Gen.Config.SIZE / cell)
-	local h, mat, dist, biome = table.create(n * n), table.create(n * n), table.create(n * n), table.create(n * n)
+	local ltype = table.create(n * n)
+	local h, wat, mat, dist, biome = table.create(n * n), table.create(n * n), table.create(n * n), table.create(n * n), table.create(n * n)
 	for j = 0, n - 1 do
 		for i = 0, n - 1 do
 			local x, z = (i + 0.5) * cell, (j + 0.5) * cell
 			local s = Gen.Terrain.sample(x, z)
 			table.insert(h, math.floor(s.h * 10 + 0.5) / 10)
+			table.insert(wat, if s.water then math.floor(s.water * 10 + 0.5) / 10 else -9999)
 			table.insert(mat, s.material)
 			table.insert(dist, Gen.Districts.at(x, z, s))
 			table.insert(biome, s.biome)
+			table.insert(ltype, s.ltype)
 		end
 	end
-	return { n = n, cell = cell, h = h, material = mat, district = dist, biome = biome }
+	return { n = n, cell = cell, h = h, water = wat, material = mat, district = dist, biome = biome, ltype = ltype }
 end
 
 return Gen
