@@ -60,6 +60,8 @@ static SDL_Renderer *sRenderer;
 static SDL_Texture *sTexture;
 static SDL_AudioDeviceID sAudio;
 static SDL_GameController *sPad;
+extern void HdSetTilt(float t);
+extern float HdGetTilt(void);
 static int sQuit;
 static int sFastForward;
 static uint64_t sNextFrame;
@@ -304,6 +306,13 @@ static void PumpEvents(void)
         case SDL_QUIT:
             sQuit = 1;
             break;
+        case SDL_MOUSEWHEEL:   // mouse wheel tilts the camera
+            HdSetTilt(HdGetTilt() + e.wheel.y * 0.08f);
+            break;
+        case SDL_MOUSEMOTION:  // or drag with the right mouse button
+            if (e.motion.state & SDL_BUTTON_RMASK)
+                HdSetTilt(HdGetTilt() - e.motion.yrel * 0.005f);
+            break;
         case SDL_KEYDOWN:
             if (e.key.keysym.sym == SDLK_F11
              || (e.key.keysym.sym == SDLK_RETURN && (e.key.keysym.mod & KMOD_ALT)))
@@ -329,6 +338,15 @@ static void PumpEvents(void)
                 extern void M4aPcSetHdAudio(int on);
                 M4aPcSetHdAudio(!gPcHdAudio);
                 SDL_SetWindowTitle(sWindow, gPcHdAudio ? "Pokémon Emerald  [HD audio]" : "Pokémon Emerald  [original audio]");
+            }
+            else if (e.key.keysym.sym == SDLK_F8 && sUseGl)
+            {
+                extern void HdCycleTilt(void);
+                extern float HdGetTilt(void);
+                char t[64];
+                HdCycleTilt();
+                snprintf(t, sizeof(t), "Pokémon Emerald  [tilt %s]", HdGetTilt() <= 0 ? "off" : HdGetTilt() < 0.3f ? "gentle" : HdGetTilt() < 0.5f ? "normal" : "strong");
+                SDL_SetWindowTitle(sWindow, t);
             }
             else if (e.key.keysym.sym == SDLK_F7)
             {
@@ -471,6 +489,12 @@ void FrontendPresent(const uint32_t *fb)
 
 uint16_t FrontendPollKeys(void)
 {
+    {
+        // Keyboard: Page Up / Page Down (or I / K) tilt the camera.
+        const Uint8 *ks = SDL_GetKeyboardState(NULL);
+        if (ks[SDL_SCANCODE_PAGEUP] || ks[SDL_SCANCODE_I]) HdSetTilt(HdGetTilt() + 0.02f);
+        if (ks[SDL_SCANCODE_PAGEDOWN] || ks[SDL_SCANCODE_K]) HdSetTilt(HdGetTilt() - 0.02f);
+    }
     const uint8_t *k = SDL_GetKeyboardState(NULL);
     uint16_t keys = 0;
 
@@ -507,6 +531,12 @@ uint16_t FrontendPollKeys(void)
         if (SDL_GameControllerGetButton(sPad, SDL_CONTROLLER_BUTTON_DPAD_LEFT) || lx < -16000) keys |= PC_KEY_LEFT;
         if (SDL_GameControllerGetButton(sPad, SDL_CONTROLLER_BUTTON_DPAD_RIGHT) || lx > 16000) keys |= PC_KEY_RIGHT;
         if (SDL_GameControllerGetAxis(sPad, SDL_CONTROLLER_AXIS_TRIGGERRIGHT) > 16000) sFastForward = 1;
+        {
+            // Right stick up/down tilts the camera.
+            int16_t ry = SDL_GameControllerGetAxis(sPad, SDL_CONTROLLER_AXIS_RIGHTY);
+            if (ry > 6000 || ry < -6000)
+                HdSetTilt(HdGetTilt() - ry / 32768.0f * 0.025f);
+        }
     }
 
     // Opposite directions can't be pressed together on a real D-pad.

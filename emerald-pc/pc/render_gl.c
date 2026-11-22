@@ -296,7 +296,8 @@ static const char *kComposite =
     "uniform vec2 uPlayer;\n"
     "uniform vec3 uLife;\n"
     "uniform vec4 uInSun;\n"
-    "uniform vec3 uGrassDark, uGrassLight;\n"   // this screen's tall grass colours        // indoors: direction sunlight travels from windows (x, y), strength, night         // x: water fraction on screen, y: volcanic ash, z: heat haze
+    "uniform vec3 uGrassDark, uGrassLight;\n"
+    "uniform float uTilt;\n"        // HD-2D tilt strength (0 = flat)   // this screen's tall grass colours        // indoors: direction sunlight travels from windows (x, y), strength, night         // x: water fraction on screen, y: volcanic ash, z: heat haze
     "uniform int uBattle;\n"        // battle scene lighting on
     "uniform vec4 uMon[4];\n"       // battler sprite rects x, y, w, h (w = 0: none)
     "uniform vec3 uMonFeet[4];\n"   // feet x, y; half width
@@ -734,6 +735,16 @@ static const char *kComposite =
     "      if (uMoveType == 14) uvc += vec2(sin(gq.y * 0.25 + uTime * 5.0), cos(gq.x * 0.2 + uTime * 4.0)) * 0.6 * uMoveFx / uDim;\n"
     "    }\n"
     "    npc = clamp(ivec2(floor(uvc * uDim)), ivec2(0), ivec2(uDim) - 1);\n"
+    "  } else if (uTilt > 0.0 && uFieldFx != 0) {\n"
+    // HD-2D: the ground plane recedes toward the top of the screen. Rows near
+    // the top hold more of the map (foreshortened), rows near the bottom are
+    // closer (magnified); the message box and UI (BG0) stay flat.
+    "    camOn = true;\n"
+    "    float k = uTilt, y = uv.y;\n"
+    "    float sy = y * (1.0 + k) / (1.0 + k * y);\n"
+    "    float sx = 1.0 / (1.0 + k * y);\n"
+    "    uvc = vec2(0.5 + (uv.x - 0.5) * sx, sy);\n"
+    "    npc = clamp(ivec2(floor(uvc * uDim)), ivec2(0), ivec2(uDim) - 1);\n"
     "  }\n"
     "  if (uFieldFx != 0 && uLife.z > 0.0 && np.y > 0) {\n"   // heat rising off the ground
     "    vec2 gq = uv * uDim;\n"
@@ -762,10 +773,22 @@ static const char *kComposite =
     "    bool hbC = Mc.a == 2u && ((gc.y >= 70.0 && gc.y < 114.0 && gc.x >= 118.0) || (gc.y < 46.0 && gc.x < 120.0));\n"
     "    if (!hbS) {\n"
     "      lay[4] = hbC ? vec4(0.0) : TexS(uLayer[4], uvc);\n"
+    "      if (uTilt > 0.0 && uBattle == 0) {\n"   // depth of field: the far distance goes soft
+    "        float rr = uTilt * 4.0 * smoothstep(0.38, 0.0, uv.y);\n"
+    "        if (rr > 0.05) {\n"
+    "          vec2 o1 = vec2(rr, 0.0) / uDim, o2 = vec2(0.0, rr) / uDim;\n"
+    "          lay[1] = (lay[1] * 2.0 + TexS(uLayer[1], uvc + o1) + TexS(uLayer[1], uvc - o1) + TexS(uLayer[1], uvc + o2) + TexS(uLayer[1], uvc - o2)) / 6.0;\n"
+    "          lay[2] = (lay[2] * 2.0 + TexS(uLayer[2], uvc + o1) + TexS(uLayer[2], uvc - o1) + TexS(uLayer[2], uvc + o2) + TexS(uLayer[2], uvc - o2)) / 6.0;\n"
+    "          lay[3] = (lay[3] * 2.0 + TexS(uLayer[3], uvc + o1) + TexS(uLayer[3], uvc - o1) + TexS(uLayer[3], uvc + o2) + TexS(uLayer[3], uvc - o2)) / 6.0;\n"
+    "          lay[4] = (lay[4] * 2.0 + TexS(uLayer[4], uvc + o1) + TexS(uLayer[4], uvc - o1) + TexS(uLayer[4], uvc + o2) + TexS(uLayer[4], uvc - o2)) / 6.0;\n"
+    "        }\n"
+    "      }\n"
     "      M = uvec4(M.r, Mc.g, M.b, hbC ? 0u : Mc.a);\n"
     "      objPrio = M.g & 3u; semi = (M.g & 4u) != 0u;\n"
     "    }\n"
     "  }\n"
+    "  vec2 uvScreen = uv;\n"
+    "  if (camOn) uv = uvc;\n"   // every scene effect below works in the camera's view
     "  vec2 gp = vec2(vUv.x * uDim.x - uMargin, (1.0 - vUv.y) * uDim.y);\n"
     "  if (camOn) gp = uvc * uDim - vec2(uMargin, 0.0);\n"
     "  vec2 wp = gp - uGridPos.xy + uGridPos.zw * 16.0;\n"   // world position (map pixels)
@@ -1407,6 +1430,12 @@ static const char *kComposite =
     "      }\n"
     "    }\n"
     "  }\n"
+    "  if (uTilt > 0.0 && uFieldFx != 0 && uBattle == 0 && top != 0 && uMapType != 8 && uMapType != 9) {\n"   // distance haze
+    "    vec3 hz = mix(vec3(0.78, 0.86, 0.96), vec3(1.0, 0.78, 0.6), clamp((uTint.r - uTint.b) * 3.0, 0.0, 1.0));\n"
+    "    if (uTint.a > 0.5) hz *= uTint.rgb;\n"
+    "    if (uMapType == 4) hz = vec3(0.2, 0.18, 0.17);\n"
+    "    res = mix(res, hz, smoothstep(0.42, 0.0, uvScreen.y) * 0.30 * uTilt / 0.4);\n"
+    "  }\n"
     "  for (int k = ti - 1; k >= 0; k--) if (order[k] == 0) { vec4 c = lay[0]; res = res * (1.0 - c.a) + c.rgb; }\n"
     "  oColor = vec4(res, 1.0);\n"
     "}\n";
@@ -1503,6 +1532,10 @@ static int sCompW, sCompH; // composite size = on-screen size of the game image
 static int sLastWinW, sLastWinH;
 static int sGrade = 1;
 static int sLighting = 1;
+static float sTilt = 0.4f;   // HD-2D tilt: F8 cycles off / gentle / strong
+void HdCycleTilt(void) { sTilt = sTilt <= 0.0f ? 0.25f : sTilt < 0.3f ? 0.4f : sTilt < 0.5f ? 0.6f : 0.0f; }
+float HdGetTilt(void) { return sTilt; }
+void HdSetTilt(float t) { sTilt = t < 0 ? 0 : t > 1.2f ? 1.2f : t; }
 static float sNight;
 
 static int LoadGl(void)
@@ -1689,6 +1722,7 @@ int HdInit(void)
 void HdDebugEnv(void)
 {
     if (getenv("EMERALD_NOLIGHT")) sLighting = 0;
+    if (getenv("EMERALD_TILT")) sTilt = (float)atof(getenv("EMERALD_TILT"));
 }
 void HdSetScale(int scale)
 {
@@ -2168,6 +2202,7 @@ static void RenderHd(const uint32_t *frame, int outW, int outH)
                                 field && sLighting ? str * 0.9f : 0.0f, field && sLighting ? nightIn : 0.0f);
                 }
             }
+            glUniform1f(glGetUniformLocation(sProgComp, "uTilt"), field && sLighting ? sTilt : 0.0f);
             glUniform2f(glGetUniformLocation(sProgComp, "uPlayer"), (float)gPcFieldFx.playerX, (float)gPcFieldFx.playerY);
             SetBattleUniforms();
             glUniform1f(glGetUniformLocation(sProgComp, "uFlash"), field ? (getenv("EMERALD_FLASH") ? 1.0f : gPcFieldFx.flash / 16.0f) : 0.0f);

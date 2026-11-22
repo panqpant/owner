@@ -46,6 +46,8 @@ the game's assets.
 | F5 | HD audio / original GBA sound |
 | F6 | Dump tiles for HD packs |
 | F7 | Brass/strings/bass layer on / off |
+| F8 | Camera tilt presets |
+| Page Up/Down, I/K, mouse wheel, right-drag, right stick | Tilt the camera |
 | F11 or Alt+Enter | Fullscreen |
 | F12 | Screenshot |
 | Esc | Quit |
