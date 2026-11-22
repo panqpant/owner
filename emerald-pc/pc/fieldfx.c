@@ -1,3 +1,4 @@
+#include <math.h>
 #include <stdio.h>
 // Overworld lighting data for the renderer: light sources (building doors)
 // and character positions (for soft shadows), in GBA screen coordinates.
@@ -29,11 +30,15 @@ bool8 ArePlayerFieldControlsLocked(void); // (game script.h; pc/script.h shadows
 #include "trainer_see.h"
 #include "constants/event_objects.h"
 #include "constants/trainer_types.h"
+#include "pokemon_icon.h"
+#include "palette.h"
+#include "field_camera.h"
 #include "fieldfx.h"
 
 struct PcFieldFx gPcFieldFx;
 struct PcAmbient gPcAmbient;
 struct PcMinimap gPcMinimap;
+struct PcFollower gPcFollower;
 struct PcBattleFx gPcBattleFx;
 struct PcCine gPcCine;
 int gPcHdEffects;
@@ -86,6 +91,7 @@ static void SpriteFeet(struct ObjectEvent *obj, int *x, int *y)
 // by themselves), or anything scripted on a story map.
 static void CineDebug(void);
 static void PcUpdateMinimap(void);
+static void PcUpdateFollower(void);
 static void CineForce(void);
 static int *s_cineWasLocked;
 static void PcUpdateCinematic(void)
@@ -279,6 +285,7 @@ void PcUpdateFieldFx(void)
     }
 
     PcUpdateMinimap();
+    PcUpdateFollower();
     PcUpdateCinematic();
     CineForce();
     CineDebug();
@@ -336,6 +343,15 @@ void PcUpdateFieldFx(void)
         struct Sprite *sp = &gSprites[gPlayerAvatar.spriteId];
         fx->playerX = sp->x + sp->x2 + (sp->coordOffsetEnabled ? gSpriteCoordOffsetX : 0);
         fx->playerY = sp->y + sp->y2 + (sp->coordOffsetEnabled ? gSpriteCoordOffsetY : 0) - sp->centerToCornerVecY - 2;
+    }
+
+    // The following Pokémon casts a shadow too.
+    if (gPcFollower.show && fx->numShadows < PC_MAX_SHADOWS)
+    {
+        fx->shadows[fx->numShadows].x = gPcFollower.x + 16;
+        fx->shadows[fx->numShadows].y = gPcFollower.feetY;
+        fx->shadows[fx->numShadows].w = 14;
+        fx->numShadows++;
     }
 
     // Soft shadows under characters.
@@ -485,63 +501,231 @@ int PcBattleBoss(void)
     return CINE_NONE;
 }
 
-// ---- Minimap ----
-#define MM_RGB(r, g, b) (0xFF000000u | ((u32)(b) << 16) | ((u32)(g) << 8) | (u32)(r))
+// ---- Minimap: the real map art around the player, at half size ----
 static void PcUpdateMinimap(void)
 {
     struct PcMinimap *m = &gPcMinimap;
     struct ObjectEvent *pl = &gObjectEvents[gPlayerAvatar.objectEventId];
-    int px = pl->currentCoords.x, py = pl->currentCoords.y, x, y, i, indoor;
-    int x0 = px - PC_MINI / 2, y0 = py - PC_MINI / 2;
+    const struct MapLayout *lay = gMapHeader.mapLayout;
+    static int lastPx = -999, lastPy = -999, lastMap = -1, tick;
+    int px = pl->currentCoords.x, py = pl->currentCoords.y;
+    int x0 = px - PC_MINI_MW / 2, y0 = py - PC_MINI_MH / 2, mx, my, i;
+    u16 mapId = gSaveBlock1Ptr->location.mapNum | (gSaveBlock1Ptr->location.mapGroup << 8);
     m->facing = pl->facingDirection;
-    indoor = !IsMapTypeOutdoors(gMapHeader.mapType);
-    for (y = 0; y < PC_MINI; y++)
-        for (x = 0; x < PC_MINI; x++)
-        {
-            int mx = x0 + x, my = y0 + y;
-            u8 b = MapGridGetMetatileBehaviorAt(mx, my);
-            u32 c;
-            if (MetatileBehavior_IsSurfableWaterOrUnderwater(b))
-                c = MetatileBehavior_IsDeepOrOceanWater(b) ? MM_RGB(40, 92, 170) : MM_RGB(64, 132, 210);
-            else if (MapGridGetCollisionAt(mx, my))
-                c = indoor ? MM_RGB(70, 62, 78) : MM_RGB(52, 92, 58);
-            else if (MetatileBehavior_IsTallGrass(b) || MetatileBehavior_IsLongGrass(b))
-                c = MM_RGB(96, 170, 84);
-            else if (MetatileBehavior_IsSandOrDeepSand(b))
-                c = MM_RGB(222, 200, 140);
-            else if (MetatileBehavior_IsJumpEast(b) || MetatileBehavior_IsJumpWest(b) || MetatileBehavior_IsJumpNorth(b) || MetatileBehavior_IsJumpSouth(b))
-                c = MM_RGB(150, 120, 80);
-            else if (MetatileBehavior_IsIce(b))
-                c = MM_RGB(190, 225, 240);
-            else
-                c = indoor ? MM_RGB(200, 186, 160) : MM_RGB(150, 205, 128);
-            m->rgba[y][x] = c;
-        }
-    // Doors and exits.
-    if (gMapHeader.events)
-        for (i = 0; i < gMapHeader.events->warpCount; i++)
-        {
-            int wx = gMapHeader.events->warps[i].x + MAP_OFFSET - x0, wy = gMapHeader.events->warps[i].y + MAP_OFFSET - y0;
-            if (wx >= 0 && wy >= 0 && wx < PC_MINI && wy < PC_MINI)
-                m->rgba[wy][wx] = MM_RGB(250, 130, 60);
-        }
-    // People (white), trainers (red), items (yellow).
     {
-        for (i = 0; i < OBJECT_EVENTS_COUNT; i++)
+        // Smooth scrolling between tiles: how far the player sprite is from its tile.
+        struct Sprite *sp = &gSprites[pl->spriteId];
+        s16 sx, sy;
+        SetSpritePosToMapCoords(px, py, &sx, &sy);
+        m->offX = (sp->x + sp->x2 - (sx + 8)) / 2.0f;
+        m->offY = (sp->y + sp->y2 - (sy + 8 + (-sp->centerToCornerVecY - 16 + 8))) / 2.0f;
+        if (m->offX > 8 || m->offX < -8) m->offX = 0;
+        if (m->offY > 8 || m->offY < -8) m->offY = 0;
+    }
+    if (!lay || (px == lastPx && py == lastPy && mapId == lastMap && (tick++ % 20) && m->valid))
+        return;
+    lastPx = px; lastPy = py; lastMap = mapId;
+    for (my = 0; my < PC_MINI_MH; my++)
+        for (mx = 0; mx < PC_MINI_MW; mx++)
         {
-            struct ObjectEvent *o = &gObjectEvents[i];
-            int ox, oy;
-            u32 c;
-            if (!o->active || o->invisible || i == gPlayerAvatar.objectEventId)
-                continue;
-            ox = o->currentCoords.x - x0; oy = o->currentCoords.y - y0;
-            if (ox < 0 || oy < 0 || ox >= PC_MINI || oy >= PC_MINI)
-                continue;
-            if (o->graphicsId == OBJ_EVENT_GFX_ITEM_BALL) c = MM_RGB(255, 220, 60);
-            else if (o->trainerType != TRAINER_TYPE_NONE) c = MM_RGB(235, 60, 60);
-            else c = MM_RGB(245, 245, 245);
-            m->rgba[oy][ox] = c;
+            s32 id = MapGridGetMetatileIdAt(x0 + mx, y0 + my);
+            const u16 *mt;
+            u32 acc[8][8][3];
+            int l, t, yy, xx;
+            if (id < NUM_METATILES_IN_PRIMARY)
+                mt = lay->primaryTileset->metatiles + id * NUM_TILES_PER_METATILE;
+            else
+                mt = lay->secondaryTileset->metatiles + (id - NUM_METATILES_IN_PRIMARY) * NUM_TILES_PER_METATILE;
+            memset(acc, 0, sizeof(acc));
+            // Bottom layer, then top layer over it; each 16x16 metatile is
+            // box-filtered down to 8x8.
+            {
+                u16 pix[16][16];
+                memset(pix, 0, sizeof(pix));
+                for (l = 0; l < 2; l++)
+                    for (t = 0; t < 4; t++)
+                    {
+                        u16 e = mt[l * 4 + t];
+                        int tile = e & 0x3FF, hf = (e >> 10) & 1, vf = (e >> 11) & 1, pal = e >> 12;
+                        const u8 *src = (const u8 *)VRAM + tile * 32;
+                        for (yy = 0; yy < 8; yy++)
+                            for (xx = 0; xx < 8; xx++)
+                            {
+                                int sx2 = hf ? 7 - xx : xx, sy2 = vf ? 7 - yy : yy;
+                                u8 b = src[sy2 * 4 + sx2 / 2];
+                                int c = (sx2 & 1) ? b >> 4 : b & 15;
+                                if (!c && (l || pix[(t / 2) * 8 + yy][(t % 2) * 8 + xx])) continue;
+                                pix[(t / 2) * 8 + yy][(t % 2) * 8 + xx] = c ? (gPlttBufferFaded[pal * 16 + c] | 0x8000) : (gPlttBufferFaded[0] | 0x8000);
+                            }
+                    }
+                for (yy = 0; yy < 8; yy++)
+                    for (xx = 0; xx < 8; xx++)
+                    {
+                        u32 r = 0, g = 0, bl = 0;
+                        int k;
+                        for (k = 0; k < 4; k++)
+                        {
+                            u16 c = pix[yy * 2 + k / 2][xx * 2 + (k & 1)];
+                            r += c & 31; g += (c >> 5) & 31; bl += (c >> 10) & 31;
+                        }
+                        r = r * 255 / 124; g = g * 255 / 124; bl = bl * 255 / 124;
+                        m->rgba[my * 8 + yy][mx * 8 + xx] = 0xFF000000u | (bl << 16) | (g << 8) | r;
+                    }
+            }
         }
+    // People, trainers and items as small marked dots.
+    for (i = 0; i < OBJECT_EVENTS_COUNT; i++)
+    {
+        struct ObjectEvent *o = &gObjectEvents[i];
+        int ox, oy, dx, dy;
+        u32 c;
+        if (!o->active || o->invisible || i == gPlayerAvatar.objectEventId)
+            continue;
+        ox = (o->currentCoords.x - x0) * 8 + 4; oy = (o->currentCoords.y - y0) * 8 + 4;
+        if (ox < 2 || oy < 2 || ox >= PC_MINI_W - 2 || oy >= PC_MINI_H - 2)
+            continue;
+        if (o->graphicsId == OBJ_EVENT_GFX_ITEM_BALL) c = 0xFF30D8FFu;
+        else if (o->trainerType != TRAINER_TYPE_NONE) c = 0xFF3030F0u;
+        else c = 0xFFFFFFFFu;
+        for (dy = -2; dy <= 2; dy++)
+            for (dx = -2; dx <= 2; dx++)
+            {
+                int d2 = dx * dx + dy * dy;
+                if (d2 <= 2) m->rgba[oy + dy][ox + dx] = c;
+                else if (d2 <= 5) m->rgba[oy + dy][ox + dx] = 0xFF202020u;
+            }
     }
     m->valid = 1;
+    m->version++;
+}
+
+// ---- Following Pokémon ----
+#define TRAIL 64
+static void PcUpdateFollower(void)
+{
+    struct PcFollower *f = &gPcFollower;
+    static s16 tx[TRAIL], ty[TRAIL];
+    static int tn, lastSpecies = -1, bottom = 28, lastMap = -1, animT;
+    struct ObjectEvent *pl = &gObjectEvents[gPlayerAvatar.objectEventId];
+    struct Sprite *sp;
+    u16 mapId = gSaveBlock1Ptr->location.mapNum | (gSaveBlock1Ptr->location.mapGroup << 8);
+    int i, species = 0, wx, wy;
+    f->show = 0;
+    if (!getenv("EMERALD_FOLLOW"))   // following Pokémon: off (dropped)
+        return;
+    for (i = 0; i < PARTY_SIZE; i++)
+    {
+        u16 sp2 = GetMonData(&gPlayerParty[i], MON_DATA_SPECIES_OR_EGG);
+        if (sp2 != SPECIES_NONE && sp2 != SPECIES_EGG && GetMonData(&gPlayerParty[i], MON_DATA_HP) > 0)
+        {
+            species = sp2;
+            break;
+        }
+    }
+    if (!species || gPlayerAvatar.spriteId >= MAX_SPRITES
+        || (gPlayerAvatar.flags & (PLAYER_AVATAR_FLAG_SURFING | PLAYER_AVATAR_FLAG_UNDERWATER)))
+    {
+        tn = 0;
+        return;
+    }
+    // The icon image: two 32x32 frames of 4bpp tiles, coloured with its palette.
+    if (species != lastSpecies)
+    {
+        const u8 *tiles = GetMonIconPtr(species, GetMonData(&gPlayerParty[i], MON_DATA_PERSONALITY), TRUE);
+        const u16 *pal = GetValidMonIconPalettePtr(species);
+        int px, py, minB = 0;
+        for (py = 0; py < 64; py++)
+            for (px = 0; px < 32; px++)
+            {
+                int fr = py / 32, ly = py % 32;
+                int tile = fr * 16 + (ly / 8) * 4 + px / 8;
+                u8 b = tiles[tile * 32 + (ly % 8) * 4 + (px % 8) / 2];
+                int c = (px & 1) ? b >> 4 : b & 15;
+                u16 col = pal[c];
+                u32 r = (col & 31) << 3, g = ((col >> 5) & 31) << 3, bl = ((col >> 10) & 31) << 3;
+                f->rgba[py][px] = c ? (0xFF000000u | (bl | bl >> 5) << 16 | (g | g >> 5) << 8 | (r | r >> 5)) : 0;
+                f->col[py][px] = c ? (col & 0x7FFF) | 0x8000 : 0;
+                if (c && fr == 0 && ly > minB) minB = ly;
+            }
+        bottom = minB;
+        lastSpecies = species;
+        f->iconVersion++;
+    }
+    f->species = species;
+    // Trail of the player's feet in world pixels (screen minus camera offset).
+    sp = &gSprites[gPlayerAvatar.spriteId];
+    wx = sp->x + sp->x2;
+    wy = sp->y + sp->y2 - sp->centerToCornerVecY - 2;
+    if (mapId != lastMap)
+    {
+        tn = 0;
+        lastMap = mapId;
+    }
+    if (tn > 0 && (abs(wx - tx[0]) > 40 || abs(wy - ty[0]) > 40))
+        tn = 0;   // a jump (map connection, warp): start over
+    if (tn == 0 || wx != tx[0] || wy != ty[0])
+    {
+        memmove(tx + 1, tx, sizeof(tx) - sizeof(tx[0]));
+        memmove(ty + 1, ty, sizeof(ty) - sizeof(ty[0]));
+        tx[0] = wx; ty[0] = wy;
+        if (tn < TRAIL) tn++;
+    }
+    {
+        // Follow 16 px of path behind the player.
+        float dist = 0, fxp = tx[tn - 1], fyp = ty[tn - 1];
+        int moving = 0;
+        for (i = 1; i < tn; i++)
+        {
+            float dx = tx[i] - tx[i - 1], dy = ty[i] - ty[i - 1], seg = sqrtf(dx * dx + dy * dy);
+            if (dist + seg >= 16.0f)
+            {
+                float t = (16.0f - dist) / seg;
+                fxp = tx[i - 1] + dx * t;
+                fyp = ty[i - 1] + dy * t;
+                break;
+            }
+            dist += seg;
+        }
+        if (tn < 2)
+        {
+            // No path yet: stand one tile behind, opposite the facing direction.
+            int dir = pl->facingDirection;
+            fxp = wx + (dir == DIR_EAST ? -16 : dir == DIR_WEST ? 16 : 0);
+            fyp = wy + (dir == DIR_SOUTH ? -16 : dir == DIR_NORTH ? 16 : 0);
+        }
+        {
+            static float lastX, lastY;
+            moving = fabsf(fxp - lastX) + fabsf(fyp - lastY) > 0.1f;
+            if (fxp > lastX + 0.1f) f->flip = 1;
+            else if (fxp < lastX - 0.1f) f->flip = 0;
+            lastX = fxp; lastY = fyp;
+        }
+        animT += moving ? 2 : 1;
+        f->frame = (animT / 16) & 1;
+        f->feetY = (int)fyp + (sp->coordOffsetEnabled ? gSpriteCoordOffsetY : 0);
+        f->x = (int)fxp - 16 + (sp->coordOffsetEnabled ? gSpriteCoordOffsetX : 0);
+        f->y = f->feetY - bottom - 1;
+    }
+    f->prio = sp->oam.priority;
+    f->playerFeetY = wy + (sp->coordOffsetEnabled ? gSpriteCoordOffsetY : 0);
+    {
+        // Follow the palette fade the player's sprite is under (warps, cutscenes).
+        int pn = sp->oam.paletteNum, k, best = 1, bl = -1;
+        for (k = 1; k < 16; k++)
+        {
+            u16 u = gPlttBufferUnfaded[0x100 + pn * 16 + k];
+            int l = (u & 31) + ((u >> 5) & 31) + ((u >> 10) & 31);
+            if (l > bl) { bl = l; best = k; }
+        }
+        {
+            u16 u = gPlttBufferUnfaded[0x100 + pn * 16 + best], fd = gPlttBufferFaded[0x100 + pn * 16 + best];
+            for (k = 0; k < 3; k++)
+            {
+                float U = ((u >> (k * 5)) & 31) / 31.0f, F = ((fd >> (k * 5)) & 31) / 31.0f;
+                if (F <= U) { f->fadeMul[k] = U > 0.02f ? F / U : 1.0f; f->fadeAdd[k] = 0; }
+                else { float t = U < 0.98f ? (F - U) / (1.0f - U) : 0.0f; f->fadeMul[k] = 1.0f - t; f->fadeAdd[k] = t; }
+            }
+        }
+    }
+    f->show = 1;
 }

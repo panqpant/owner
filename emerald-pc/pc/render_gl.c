@@ -302,7 +302,10 @@ static const char *kComposite =
     "uniform vec4 uInSun;\n"
     "uniform vec3 uGrassDark, uGrassLight;\n"
     "uniform float uTilt;\n"
-    "uniform vec3 uCineZoom;\n"     // cinematic camera: focus (uv), zoom
+    "uniform vec3 uCineZoom;\n"
+    "uniform sampler2D uFollow;\n"   // following Pokémon icon (2 frames, 32x64)
+    "uniform vec4 uFollowPos;\n"     // top-left x, y (GBA px), flip, frame
+    "uniform vec2 uFollowOn;\n"      // x on, y feet y (draw order)     // cinematic camera: focus (uv), zoom
     "uniform int uMood;\n"
     "uniform int uSeason;\n"        // 0 spring, 1 summer, 2 autumn, 3 winter
     "uniform sampler2D uGi;\n"      // ray-traced light (native res)
@@ -1092,6 +1095,21 @@ static const char *kComposite =
     "      res = mix(res, b, bm);\n"
     "    }\n"
     "  }\n"
+    // Following Pokémon: drawn behind roofs and tree tops, and in front of or
+    // behind the player by whose feet are lower.
+    "  if (uFollowOn.x > 0.5 && uFieldFx != 0 && top != 0) {\n"
+    "    vec2 lp = gp - uFollowPos.xy;\n"
+    "    if (lp.x >= 0.0 && lp.y >= 0.0 && lp.x < 32.0 && lp.y < 32.0) {\n"
+    "      if (uFollowPos.z > 0.5) lp.x = 31.999 - lp.x;\n"
+    "      vec4 fc = texture(uFollow, vec2(lp.x / 32.0, (lp.y + uFollowPos.w * 32.0) / 64.0));\n"
+    "      bool behindSprite = top == 4 && uFollowOn.y <= uPlayer.y;\n"
+    "      if (fc.a > 0.5 && top != 1 && !behindSprite) {\n"
+    "        vec3 k = fc.rgb;\n"
+    "        if (uTint.a > 0.5) { float lk = dot(k, vec3(0.2126, 0.7152, 0.0722)); k = mix(k, vec3(lk), clamp((uTint.b - uTint.r) * 2.0, 0.0, 1.0) * 0.35) * uTint.rgb; }\n"
+    "        res = k;\n"
+    "      }\n"
+    "    }\n"
+    "  }\n"
     // Scenery lighting on the ground: ambient occlusion around solid
     // scenery, sun shadows that follow the time of day, drifting cloud shadows.
     "  float recv = (uFieldFx != 0 && top >= 1 && top <= 3 && uMapType != 8 && uMapType != 9) ? (1.0 - Solid(gp)) * (1.0 - wm) : 0.0;\n"   // how much this is open ground
@@ -1649,6 +1667,7 @@ static const char *kPresent =
     "uniform int uCineStyle;\n"
     "uniform sampler2D uMini;\n"     // minimap (one texel per metatile)
     "uniform vec3 uMiniOn;\n"        // x on, y fade, z player facing
+    "uniform vec2 uMiniOff;\n"
     "uniform sampler2D uOverlay;\n"   // settings screen
     "uniform int uOverlayOn;\n"  // battles: x = left edge u, y = right edge u, z = message box top (v, from top)
     "void main() {\n"
@@ -1834,31 +1853,34 @@ static const char *kPresent =
     "  }\n"
     "  if (uCine.x > 0.001 && vUv.y > 1.0 - 0.105 * uCine.x) c = vec3(0.0);\n"
     "  if (uCine.y > 0.001 && vUv.y < 0.105 * uCine.y) c = vec3(0.0);\n"
-    // Minimap: a round map of the surroundings in the top-right corner.
+    // Minimap: the map art around the player at reduced size, in a rounded
+    // frame in the top-right corner, scrolling smoothly.
     "  if (uMiniOn.x > 0.5 && uMiniOn.y > 0.01) {\n"
-    "    float R = 0.17;\n"
-    "    vec2 ctr = vec2(1.0 - R / uAspect - 0.02 / uAspect, 1.0 - R - 0.03);\n"
-    "    vec2 d = (vUv - ctr) * vec2(uAspect, 1.0) / R;\n"   // -1..1 inside the disc
-    "    float r = length(d);\n"
-    "    if (r < 1.06) {\n"
-    "      vec2 mq = vec2(0.5 + d.x * 0.42, 0.5 - d.y * 0.42);\n"   // 0.84 of the 48 tiles across
-    "      vec2 cell = mq * 48.0;\n"
-    "      vec3 m = texture(uMini, (floor(cell) + 0.5) / 48.0).rgb;\n"
-    "      vec2 f = fract(cell);\n"
-    "      vec3 mr = texture(uMini, (floor(cell) + vec2(1.5, 0.5)) / 48.0).rgb, md = texture(uMini, (floor(cell) + vec2(0.5, 1.5)) / 48.0).rgb;\n"
-    "      float edge = (distance(m, mr) > 0.08 ? smoothstep(0.82, 1.0, f.x) : 0.0) + (distance(m, md) > 0.08 ? smoothstep(0.82, 1.0, f.y) : 0.0);\n"
-    "      m *= 1.0 - min(edge, 1.0) * 0.35;\n"
-    "      vec2 pc = (cell - 24.5);\n"   // player arrow at the centre
+    "    float H = 0.34, W = H * (40.0 / 26.0) / uAspect;\n"
+    "    vec2 lo = vec2(1.0 - W - 0.012 / uAspect * 1.6, 1.0 - H - 0.02);\n"
+    "    vec2 q = (vUv - lo) / vec2(W, H);\n"
+    "    vec2 pxl = q * vec2(W * uAspect, H);\n"
+    "    vec2 hs = vec2(W * uAspect, H) * 0.5;\n"
+    "    float rad = 0.03;\n"
+    "    vec2 dd = abs(pxl - hs) - (hs - rad);\n"
+    "    float sd = length(max(dd, 0.0)) + min(max(dd.x, dd.y), 0.0) - rad;\n"   // rounded-rect distance
+    "    if (sd < 0.006) {\n"
+    "      vec2 mt = vec2(q.x, 1.0 - q.y) * vec2(320.0, 208.0);\n"
+    "      vec2 view = vec2(304.0, 192.0);\n"   // show a little less than stored, so scrolling never shows the edge
+    "      vec2 mp = (mt - vec2(160.0, 104.0)) * (view / vec2(320.0, 208.0)) + vec2(164.0, 108.0) + uMiniOff;\n"
+    "      vec3 m = texture(uMini, mp / vec2(320.0, 208.0)).rgb;\n"
+    "      vec2 pc = mp - vec2(164.0, 108.0) - uMiniOff;\n"   // player marker at the centre
     "      vec2 fd = uMiniOn.z < 1.5 ? vec2(0.0, 1.0) : uMiniOn.z < 2.5 ? vec2(0.0, -1.0) : uMiniOn.z < 3.5 ? vec2(-1.0, 0.0) : vec2(1.0, 0.0);\n"
     "      vec2 side = vec2(-fd.y, fd.x);\n"
     "      float along = dot(pc, fd), across = abs(dot(pc, side));\n"
-    "      float arrow = step(-0.9, along) * step(along, 1.4) * step(across, (1.4 - along) * 0.55);\n"
-    "      m = mix(m, vec3(1.0, 0.95, 0.3), arrow);\n"
-    "      float a = 1.0 - smoothstep(0.96, 1.0, r);\n"
-    "      vec3 ring = vec3(0.95);\n"
-    "      vec3 outc = mix(m, ring, smoothstep(0.93, 0.97, r));\n"
-    "      float alpha = max(a, (1.0 - smoothstep(1.0, 1.06, r)) * smoothstep(0.93, 1.0, r) * 0.95) * uMiniOn.y;\n"
-    "      c = mix(c * (1.0 - 0.35 * (1.0 - smoothstep(1.0, 1.06, r)) * uMiniOn.y), outc, alpha);\n"
+    "      float tri = step(-3.5, along) * step(along, 4.5) * step(across, (4.5 - along) * 0.6);\n"
+    "      float triO = step(-5.0, along) * step(along, 6.2) * step(across, (6.2 - along) * 0.62 + 0.5);\n"
+    "      m = mix(m, vec3(0.1), triO); m = mix(m, vec3(1.0, 0.85, 0.2), tri);\n"
+    "      float inside = 1.0 - smoothstep(-0.004, 0.0, sd);\n"
+    "      vec3 framec = vec3(0.95, 0.96, 1.0);\n"
+    "      vec3 outc = mix(framec, m, inside);\n"
+    "      float a = (1.0 - smoothstep(0.004, 0.006, sd)) * uMiniOn.y;\n"
+    "      c = mix(c, outc, a);\n"
     "    }\n"
     "  }\n"
     "  if (uOverlayOn != 0) { vec4 o = texture(uOverlay, vec2(vUv.x, 1.0 - vUv.y)); c = mix(c, o.rgb, o.a); }\n"
@@ -1952,7 +1974,8 @@ static const char *kGi =
     "}\n";
 
 static GLuint sProgGi, sGiTex, sGiFbo;
-static GLuint sSnapTex, sOverlayTex, sMiniTex;
+static GLuint sSnapTex, sOverlayTex, sMiniTex, sFollowTex;
+static int sFollowVersion = -1;
 static int sMiniEnabled = 1;
 static float sMiniFade;
 void HdSetMinimap(int on) { sMiniEnabled = on; }
@@ -2918,6 +2941,29 @@ static void RenderHd(const uint32_t *frame, int outW, int outH)
             UpdateCinematic();
             glUniform3f(glGetUniformLocation(sProgComp, "uCineZoom"), sCineFx, sCineFy, sCineZoom);
             glUniform1i(glGetUniformLocation(sProgComp, "uMood"), field && sLighting ? gPcFieldFx.mood : 0);
+            {
+                const struct PcFollower *fo = &gPcFollower;
+                if (!sFollowTex)
+                {
+                    glGenTextures(1, &sFollowTex);
+                    glBindTexture(GL_TEXTURE_2D, sFollowTex);
+                    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+                    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+                    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+                    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+                }
+                glActiveTexture(GL_TEXTURE0 + 17);
+                glBindTexture(GL_TEXTURE_2D, sFollowTex);
+                if (fo->iconVersion != sFollowVersion)
+                {
+                    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, 32, 64, 0, GL_RGBA, GL_UNSIGNED_BYTE, fo->rgba);
+                    sFollowVersion = fo->iconVersion;
+                }
+                glActiveTexture(GL_TEXTURE0);
+                glUniform1i(glGetUniformLocation(sProgComp, "uFollow"), 17);
+                glUniform4f(glGetUniformLocation(sProgComp, "uFollowPos"), fo->x, fo->y, fo->flip, fo->frame);
+                glUniform2f(glGetUniformLocation(sProgComp, "uFollowOn"), 0.0f, fo->feetY);   // drawn by the PPU now
+            }
             glUniform1f(glGetUniformLocation(sProgComp, "uTilt"), field && sLighting ? sTilt : 0.0f);
             glUniform2f(glGetUniformLocation(sProgComp, "uPlayer"), (float)gPcFieldFx.playerX, (float)gPcFieldFx.playerY);
             SetBattleUniforms();
@@ -3080,15 +3126,22 @@ static void DrawPresent(int hdMode, int winW, int winH)
             {
                 glGenTextures(1, &sMiniTex);
                 glBindTexture(GL_TEXTURE_2D, sMiniTex);
-                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
                 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
                 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
             }
             glActiveTexture(GL_TEXTURE0 + 3);
             glBindTexture(GL_TEXTURE_2D, sMiniTex);
-            if (show)
-                glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, PC_MINI, PC_MINI, 0, GL_RGBA, GL_UNSIGNED_BYTE, gPcMinimap.rgba);
+            {
+                static int ver = -1;
+                if (show && ver != gPcMinimap.version)
+                {
+                    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, PC_MINI_W, PC_MINI_H, 0, GL_RGBA, GL_UNSIGNED_BYTE, gPcMinimap.rgba);
+                    ver = gPcMinimap.version;
+                }
+            }
+            glUniform2f(glGetUniformLocation(sProgPresent, "uMiniOff"), gPcMinimap.offX, gPcMinimap.offY);
             glActiveTexture(GL_TEXTURE0);
             glUniform1i(glGetUniformLocation(sProgPresent, "uMini"), 3);
             glUniform3f(glGetUniformLocation(sProgPresent, "uMiniOn"), sMiniTex ? 1.0f : 0.0f, sMiniFade, (float)gPcMinimap.facing);

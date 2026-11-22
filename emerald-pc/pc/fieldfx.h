@@ -47,13 +47,32 @@ extern struct PcAmbient gPcAmbient;
 
 // Minimap (fieldfx.c): one texel per metatile around the player, coloured by
 // what is there, plus markers for people, trainers, items and doors.
-#define PC_MINI 48
+#define PC_MINI_MW 40                     // metatiles across
+#define PC_MINI_MH 26
+#define PC_MINI_W (PC_MINI_MW * 8)        // 8 px per metatile (the art at half size)
+#define PC_MINI_H (PC_MINI_MH * 8)
 struct PcMinimap {
-    int valid;
+    int valid, version;
     int facing;                           // player facing: 1 S, 2 N, 3 W, 4 E
-    unsigned int rgba[PC_MINI][PC_MINI];  // 0xAABBGGRR
+    float offX, offY;                     // player's sub-tile offset (px of the minimap) for smooth scrolling
+    unsigned int rgba[PC_MINI_H][PC_MINI_W];  // 0xAABBGGRR
 };
 extern struct PcMinimap gPcMinimap;
+
+// Following Pokémon (fieldfx.c): the lead party Pokémon walks behind the
+// player, drawn by the renderer from the game's own animated party icon.
+struct PcFollower {
+    int show;
+    int species, iconVersion;          // iconVersion changes when the image changes
+    int x, y;                          // icon top-left, GBA screen coords
+    int flip, frame;
+    int feetY;                         // for draw order against the player
+    unsigned int rgba[64][32];         // two 32x32 frames, 0xAABBGGRR
+    unsigned short col[64][32];        // the same in BGR555, bit 15 = opaque
+    int prio, playerFeetY;
+    float fadeMul[3], fadeAdd[3];      // the screen's current palette fade, applied to the icon
+};
+extern struct PcFollower gPcFollower;
 
 enum { PC_BSCENE_ROUTE, PC_BSCENE_TOWN, PC_BSCENE_SEA, PC_BSCENE_POND, PC_BSCENE_SAND,
        PC_BSCENE_MOUNTAIN, PC_BSCENE_CAVE, PC_BSCENE_INDOOR, PC_BSCENE_UNDERWATER, PC_BSCENE_TALLGRASS };

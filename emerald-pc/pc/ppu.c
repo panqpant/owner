@@ -531,6 +531,36 @@ static void RenderSprites(int line)
             }
         }
     }
+    // The following Pokémon, drawn as part of the sprite layer so it is
+    // upscaled, lit and layered under roofs and tree tops like any sprite.
+    if (gPcFollower.show && PcFieldWideActive() && line >= gPcFollower.y && line < gPcFollower.y + 32)
+    {
+        int ly = line - gPcFollower.y + gPcFollower.frame * 32, x;
+        int front = gPcFollower.feetY > gPcFollower.playerFeetY;
+        for (x = 0; x < 32; x++)
+        {
+            int sx = gPcFollower.flip ? 31 - x : x;
+            unsigned short c = gPcFollower.col[ly][sx];
+            int px = gPcFollower.x + x + sMargin, k, ch[3];
+            if (!(c & 0x8000) || px < xmin || px >= xmax)
+                continue;
+            if (sObjColor[px] != TRANSPARENT && !(front && sObjPrio[px] >= gPcFollower.prio))
+                continue;
+            for (k = 0; k < 3; k++)
+            {
+                float v = ((c >> (k * 5)) & 31) / 31.0f;
+                v = v * gPcFollower.fadeMul[k] + gPcFollower.fadeAdd[k];
+                ch[k] = (int)(v * 31.0f + 0.5f);
+                if (ch[k] > 31) ch[k] = 31;
+            }
+            sObjColor[px] = (u16)(ch[0] | (ch[1] << 5) | (ch[2] << 10));
+            sObjPrio[px] = gPcFollower.prio;
+            sObjTile[px] = 0xFFFF;
+            sObjSemi[px] = 0;
+            sObjHidden[px] = 0;
+            if (sDoRefs) { sRefSlot[4][px] = 0; sRefHash[4][px] = 0; }
+        }
+    }
 }
 
 static int InRange(int v, int a, int b)
