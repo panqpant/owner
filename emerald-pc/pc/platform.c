@@ -69,6 +69,8 @@ enum {
 static int sInIrq;
 int gPcBattleFrame;   // the frame being drawn belongs to a battle
 static int sBattleSeen; // the battle loop ran during the current frame
+static int sMenuSeen;
+int gPcMenuFrame;       // the frame shown was a menu screen (1 = party menu)
 
 static void RaiseIrq(uint16_t flag)
 {
@@ -235,6 +237,8 @@ static void StepLine(int line)
         // The frame just shown was a battle if the battle loop ran during it.
         gPcBattleFrame = sBattleSeen;
         sBattleSeen = 0;
+        gPcMenuFrame = sMenuSeen;
+        sMenuSeen = 0;
     }
 
     if (line < 160)
@@ -275,6 +279,7 @@ void PcSetFieldMaps(uint16_t *bg1, uint16_t *bg2, uint16_t *bg3, int base1, int 
 
 int gPcOutdoors;
 void PcMarkBattleFrame(void) { sBattleSeen = 1; }
+void PcMarkMenuFrame(int kind) { sMenuSeen = kind; }
 int gPcIntroSerial, gPcIntroKind;
 // Wild battles get one of five gentle intros, trainers one of four bolder
 // ones, legendaries and gym leaders the full shatter.

@@ -23,10 +23,10 @@ index 8566762..097e815 100644
  #if MODERN
  // NOTE: Assumes 16-bit DMAs.
 diff --git a/include/global.h b/include/global.h
-index f624850..8b4b94f 100644
+index f624850..7990d3f 100644
 --- a/include/global.h
 +++ b/include/global.h
-@@ -17,6 +17,31 @@
+@@ -17,6 +17,32 @@
  #include "constants/easy_chat.h"
  #include "constants/trainer_hill.h"
  
@@ -42,7 +42,8 @@ index f624850..8b4b94f 100644
 +void PcUpdateFieldFx(void);       // lights and character shadows (pc/fieldfx.c)
 +void PcMarkBattleFrame(void);     // this frame is a battle: render it widescreen
 +void PcUpdateBattleFx(void);
-+void PcBattleIntro(void);         // a battle transition starts: the PC renderer shatters the screen      // battler positions for battle lighting (pc/fieldfx.c)
++void PcBattleIntro(void);
++void PcMarkMenuFrame(int kind);   // this frame is a menu screen (1 = party)         // a battle transition starts: the PC renderer shatters the screen      // battler positions for battle lighting (pc/fieldfx.c)
 +void PcSetMapPopup(int shown);    // map-name sign: drawn at the widescreen corner
 +// High-resolution text (pc/texthd.c): keep per-pixel glyph tags in step with windows.
 +struct TextPrinter;
@@ -409,6 +410,20 @@ index e76ba3d..cc2d6a9 100644
      x -= gSaveBlock1Ptr->pos.x;
      x *= 2;
      if (x >= 32 || x < 0)
+diff --git a/src/item_menu.c b/src/item_menu.c
+index 86b1bf9..06b66bd 100755
+--- a/src/item_menu.c
++++ b/src/item_menu.c
+@@ -642,6 +642,9 @@ void GoToBagMenu(u8 location, u8 pocket, MainCallback exitCallback)
+ 
+ void CB2_BagMenuRun(void)
+ {
++#ifdef PLATFORM_PC
++    PcMarkMenuFrame(2);
++#endif
+     RunTasks();
+     AnimateSprites();
+     BuildOamBuffer();
 diff --git a/src/librfu_intr.c b/src/librfu_intr.c
 index 5ae53ab..36b7e5d 100644
 --- a/src/librfu_intr.c
@@ -628,6 +643,48 @@ index 1d6b81c..228eb56 100644
      if (fading)
          SetVBlankCallback(NULL);
      OverworldBasic();
+diff --git a/src/party_menu.c b/src/party_menu.c
+index 1b23059..4fef069 100755
+--- a/src/party_menu.c
++++ b/src/party_menu.c
+@@ -534,6 +534,9 @@ static void InitPartyMenu(u8 menuType, u8 layout, u8 partyAction, bool8 keepCurs
+ 
+ static void CB2_UpdatePartyMenu(void)
+ {
++#ifdef PLATFORM_PC
++    PcMarkMenuFrame(1);
++#endif
+     RunTasks();
+     AnimateSprites();
+     BuildOamBuffer();
+diff --git a/src/pokedex.c b/src/pokedex.c
+index 626ee30..dccdcc3 100644
+--- a/src/pokedex.c
++++ b/src/pokedex.c
+@@ -1647,6 +1647,9 @@ void CB2_OpenPokedex(void)
+ 
+ static void CB2_Pokedex(void)
+ {
++#ifdef PLATFORM_PC
++    PcMarkMenuFrame(4);
++#endif
+     RunTasks();
+     AnimateSprites();
+     BuildOamBuffer();
+diff --git a/src/pokemon_summary_screen.c b/src/pokemon_summary_screen.c
+index 9640778..148e456 100644
+--- a/src/pokemon_summary_screen.c
++++ b/src/pokemon_summary_screen.c
+@@ -1153,6 +1153,9 @@ void ShowPokemonSummaryScreenHandleDeoxys(u8 mode, struct BoxPokemon *mons, u8 m
+ 
+ static void MainCB2(void)
+ {
++#ifdef PLATFORM_PC
++    PcMarkMenuFrame(3);
++#endif
+     RunTasks();
+     AnimateSprites();
+     BuildOamBuffer();
 diff --git a/src/text.c b/src/text.c
 index 398aaba..a3a2af2 100644
 --- a/src/text.c

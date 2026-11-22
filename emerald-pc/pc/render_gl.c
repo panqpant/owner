@@ -302,7 +302,9 @@ static const char *kComposite =
     "uniform float uTilt;\n"
     "uniform int uMood;\n"
     "uniform sampler2D uGi;\n"      // ray-traced light (native res)
-    "uniform float uGiOn;\n"        // HD-2D tilt strength (0 = flat)   // this screen's tall grass colours        // indoors: direction sunlight travels from windows (x, y), strength, night         // x: water fraction on screen, y: volcanic ash, z: heat haze
+    "uniform float uGiOn;\n"
+    "uniform int uMenu;\n"          // menu screen kind (0 none)
+    "uniform vec3 uMenuBg1, uMenuBg2;\n"   // the menu's background pattern colours        // HD-2D tilt strength (0 = flat)   // this screen's tall grass colours        // indoors: direction sunlight travels from windows (x, y), strength, night         // x: water fraction on screen, y: volcanic ash, z: heat haze
     "uniform int uBattle;\n"        // battle scene lighting on
     "uniform vec4 uMon[4];\n"       // battler sprite rects x, y, w, h (w = 0: none)
     "uniform vec3 uMonFeet[4];\n"   // feet x, y; half width
@@ -690,6 +692,18 @@ static const char *kComposite =
     "  }\n"
     "  if (n > 0.0) { dark /= n; light /= n; } else GrassColors(c, dark, light);\n"
     "}\n"
+    "float MenuBgAt(ivec2 n) {\n"   // native pixel n is the menu's background pattern
+    "  n = clamp(n, ivec2(0), ivec2(uDim) - 1);\n"
+    "  if (float(n.x) < uContent.x || float(n.x) >= uContent.y) return 1.0;\n"   // outside the original screen: open background
+    "  vec3 k = texture(uFlat, (vec2(n) + 0.5) / uDim * vec2(1.0, 1.0)).rgb;\n"
+    "  vec3 seg = uMenuBg2 - uMenuBg1;\n"
+    "  float tt = clamp(dot(k - uMenuBg1, seg) / max(dot(seg, seg), 1e-5), 0.0, 1.0);\n"
+    "  return distance(k, uMenuBg1 + seg * tt) < 0.06 ? 1.0 : 0.0;\n"
+    "}\n"
+    "float MenuMask(vec2 p) {\n"   // smooth (bilinear) background mask at native position p
+    "  vec2 q = p - 0.5; ivec2 i = ivec2(floor(q)); vec2 f = smoothstep(0.0, 1.0, fract(q));\n"
+    "  return mix(mix(MenuBgAt(i), MenuBgAt(i + ivec2(1, 0)), f.x), mix(MenuBgAt(i + ivec2(0, 1)), MenuBgAt(i + ivec2(1, 1)), f.x), f.y);\n"
+    "}\n"
     "bool Green(vec4 c) { vec3 k = c.rgb / max(c.a, 1e-4); return c.a > 0.5 && k.g > k.r * 1.05 && k.g > k.b * 1.1; }\n"
     "vec3 C555(uint c) { return vec3(float(c & 31u), float((c >> 5) & 31u), float((c >> 10) & 31u)) / 31.0; }\n"
     "vec3 PalC(uint i) { return C555(texelFetch(uPal, ivec2(int(i), 0), 0).r); }\n"
@@ -726,7 +740,7 @@ static const char *kComposite =
     "void main() {\n"
     "  ivec2 np = ivec2(min(floor(vUv * uDim), uDim - 1.0));\n"
     "  np.y = 159 - np.y;\n"
-    "  if (float(np.x) < uContent.x || float(np.x) >= uContent.y) { oColor = vec4(0.0, 0.0, 0.0, 1.0); return; }\n"
+    "  if (uMenu == 0 && (float(np.x) < uContent.x || float(np.x) >= uContent.y)) { oColor = vec4(0.0, 0.0, 0.0, 1.0); return; }\n"
     "  vec2 uv = vec2(vUv.x, 1.0 - vUv.y);\n"
     "  gUpSize = vec2(textureSize(uLayer[0], 0));\n"
     "  gUpFw = fwidth(uv * gUpSize);\n"
@@ -991,6 +1005,29 @@ static const char *kComposite =
     "      vec3 bc = TexS(uFlat, vec2((sp.x + uMargin) / uDim.x, sp.y / uDim.y)).rgb;\n"
     "      vec3 tintc = bc / max(dot(bc, vec3(0.333)), 0.08);\n"
     "      res *= mix(vec3(1.0), clamp(tintc, 0.6, 1.6), min(gl, 1.0) * 0.14 * uKey.w / 0.6);\n"
+    "    }\n"
+    "  }\n"
+    // ---- Menu screens: the background pattern is replaced by a soft,
+    // slowly moving gradient with drifting light; panels cast shadows. ----
+    "  if (uMenu != 0) {\n"
+    "    vec2 mp = vec2(vUv.x * uDim.x, (1.0 - vUv.y) * uDim.y);\n"
+    "    bool side = float(np.x) < uContent.x || float(np.x) >= uContent.y;\n"
+    "    float bm = side ? 1.0 : MenuMask(mp);\n"
+    "    if (bm > 0.0) {\n"
+    "      vec3 a = mix(uMenuBg1, uMenuBg2, 0.5);\n"
+    "      vec3 c1 = a * 0.55 + vec3(0.05, 0.06, 0.12), c2 = a * 0.9 + vec3(0.08);\n"
+    "      float g = mp.y / uDim.y + 0.15 * sin(mp.x * 0.02 + uTime * 0.3);\n"
+    "      vec3 b = mix(c2, c1, clamp(g, 0.0, 1.0));\n"
+    "      for (int k = 0; k < 6; k++) {\n"   // soft drifting light orbs
+    "        float h = float(k) * 1.7;\n"
+    "        vec2 o = vec2(fract(0.13 * h + uTime * 0.012 * (1.0 + 0.3 * float(k))) * uDim.x, uDim.y * (0.2 + 0.6 * fract(h * 0.37)) + 10.0 * sin(uTime * 0.3 + h));\n"
+    "        b += vec3(1.0) * 0.07 * exp(-dot(mp - o, mp - o) / (300.0 + 200.0 * fract(h)));\n"
+    "      }\n"
+    "      float sh = 0.0;\n"   // shadow cast by panels above and to the left
+    "      for (int k = 1; k <= 3; k++) sh = max(sh, (1.0 - MenuMask(mp - vec2(float(k) * 1.3))) * (1.0 - float(k) / 4.0));\n"
+    "      if (!side) b *= 1.0 - sh * 0.4;\n"
+    "      if (side) { oColor = vec4(b, 1.0); return; }\n"
+    "      res = mix(res, b, bm);\n"
     "    }\n"
     "  }\n"
     // Scenery lighting on the ground: ambient occlusion around solid
@@ -2035,6 +2072,40 @@ static void SunVector(float *sun, int weather)
 
 static void TimeOfDayTint(float *rgb);
 
+// Menu screens: find the two most common colours of the top map layer in a
+// strip along the left edge of the original screen: the background pattern.
+static void SetMenuUniforms(void)
+{
+    extern int gPcMenuFrame;
+    int m = (gPcScreenW - GBA_W) / 2, x, y, l, i, best[2] = { -1, -1 }, cnt[2] = { 0, 0 };
+    static uint32_t cols[64]; static int n[64]; int nc = 0;
+    int on = gPcMenuFrame && sLighting && !getenv("EMERALD_NOMENU");
+    glUniform1i(glGetUniformLocation(sProgComp, "uMenu"), on ? gPcMenuFrame : 0);
+    if (getenv("EMERALD_MENUDEBUG")) fprintf(stderr, "menu=%d light=%d\n", gPcMenuFrame, sLighting);
+    if (!on)
+        return;
+    for (y = 4; y < GBA_H - 4; y += 2)
+        for (x = m; x < m + 6; x++)
+            for (l = 0; l < 4; l++)
+            {
+                uint32_t c = gPpuLayers.layer[l][y][x];
+                if (!(c >> 24)) continue;
+                for (i = 0; i < nc && cols[i] != c; i++) ;
+                if (i == nc && nc < 64) { cols[nc] = c; n[nc++] = 0; }
+                if (i < nc) n[i]++;
+                break;
+            }
+    for (i = 0; i < nc; i++)
+        if (n[i] > cnt[0]) { cnt[1] = cnt[0]; best[1] = best[0]; cnt[0] = n[i]; best[0] = i; }
+        else if (n[i] > cnt[1]) { cnt[1] = n[i]; best[1] = i; }
+    for (i = 0; i < 2; i++)
+    {
+        uint32_t c = best[i] >= 0 ? cols[best[i]] : 0;
+        if (best[1] < 0) c = best[0] >= 0 ? cols[best[0]] : 0;
+        glUniform3f(glGetUniformLocation(sProgComp, i ? "uMenuBg2" : "uMenuBg1"), (c & 255) / 255.0f, ((c >> 8) & 255) / 255.0f, ((c >> 16) & 255) / 255.0f);
+    }
+}
+
 // Battle scene lighting inputs: battler rects and feet (found from the
 // sprite layer's pixels), light direction and colour, and move effects
 // measured as a light source.
@@ -2552,6 +2623,7 @@ static void RenderHd(const uint32_t *frame, int outW, int outH)
             glUniform1f(glGetUniformLocation(sProgComp, "uTilt"), field && sLighting ? sTilt : 0.0f);
             glUniform2f(glGetUniformLocation(sProgComp, "uPlayer"), (float)gPcFieldFx.playerX, (float)gPcFieldFx.playerY);
             SetBattleUniforms();
+            SetMenuUniforms();
             glUniform1f(glGetUniformLocation(sProgComp, "uFlash"), field ? (getenv("EMERALD_FLASH") ? 1.0f : gPcFieldFx.flash / 16.0f) : 0.0f);
             if (on)
                 SunVector(sun, gPcFieldFx.weather);
@@ -2705,8 +2777,14 @@ static void DrawPresent(int hdMode, int winW, int winH)
             glActiveTexture(GL_TEXTURE0);
         }
         glUniform2f(glGetUniformLocation(sProgPresent, "uTexel"), 1.0f / (sCompW > 0 ? sCompW : 1), 1.0f / (sCompH > 0 ? sCompH : 1));
-        glUniform2f(glGetUniformLocation(sProgPresent, "uContentUv"),
-                    (float)gPpuContentX0 / gPcScreenW, (float)gPpuContentX1 / gPcScreenW);
+        {
+            extern int gPcMenuFrame;
+            if (gPcMenuFrame && sLighting && !getenv("EMERALD_NOMENU"))
+                glUniform2f(glGetUniformLocation(sProgPresent, "uContentUv"), -1.0f, 2.0f);   // menus fill the sides themselves
+            else
+                glUniform2f(glGetUniformLocation(sProgPresent, "uContentUv"),
+                            (float)gPpuContentX0 / gPcScreenW, (float)gPpuContentX1 / gPcScreenW);
+        }
         {
             float m = (float)(gPcScreenW - GBA_W) / 2 / gPcScreenW;
             int battle = gPcBattleFrame && gPcScreenW > GBA_W && !(gPcBattleFx.scene >= 0 && sLighting);
