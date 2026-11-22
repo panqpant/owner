@@ -1679,7 +1679,10 @@ static void MixAmbient(float *outL, float *outR, int n)
     target[2] = on ? a->open * (0.35f + 0.65f * (1 - a->town)) : 0;
     target[3] = on ? a->trees * day * (1 - a->rain) : 0;
     target[4] = on ? (a->trees * 0.7f + a->open * 0.3f) * night * (1 - a->rain) : 0;
-    target[5] = on ? a->rain : 0; target[6] = on ? a->lava : 0; target[7] = on ? a->cave : 0;
+    {
+        extern float gPcLiveRain;
+        target[5] = on ? (a->rain > gPcLiveRain ? a->rain : gPcLiveRain) : 0;
+    } target[6] = on ? a->lava : 0; target[7] = on ? a->cave : 0;
     target[8] = 0;
     for (k = 0; k < 9; k++)
         sAmbLevel[k] += (target[k] - sAmbLevel[k]) * 0.02f;   // ease over ~1 s of frames

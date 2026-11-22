@@ -287,6 +287,8 @@ static const char *kComposite =
     "uniform vec3 uShadows[32];\n"  // feet x, y, width
     "uniform vec3 uShadowLight[32];\n"  // per character: shadow direction from the nearest light (x, y per px of height), strength
     "uniform int uWeather;\n"       // 1 rain, 2 downpour, 3 sandstorm
+    "uniform vec4 uLiveWx;\n"       // live weather: x cloud, y rain amount (0-1), z fog, w rainbow
+    "uniform float uWet;\n"         // how wet the ground is (dries slowly after rain)
     "uniform float uTime;\n"
     "uniform vec4 uGridPos;\n"      // grid cell (0,0): screen x, y; map x, y
     "uniform int uGrid[144];\n"     // 36x16 metatile flags, 4 per int (PC_CELL_*)
@@ -1159,11 +1161,11 @@ static const char *kComposite =
     "  }\n"
     // Rain: wet ground darkens and puddles reflect buildings, trees,
     // characters and lights (streaks below lamps and doorways).
-    "  if (uFieldFx != 0 && (uWeather == 1 || uWeather == 2) && top >= 1 && top <= 4 && (here & 2) == 0) {\n"
-    "    res *= 0.88;\n"   // everything outdoors is wet: no edge between ground and scenery
+    "  if (uFieldFx != 0 && uWet > 0.01 && top >= 1 && top <= 4 && (here & 2) == 0) {\n"
+    "    res *= 1.0 - 0.12 * uWet;\n"   // everything outdoors is wet: no edge between ground and scenery
     "  }\n"
-    "  if (uFieldFx != 0 && (uWeather == 1 || uWeather == 2) && recv > 0.0 && (here & 2) == 0 && top >= 1 && top <= 3) {\n"
-    "    float pud = Puddles(wp) * (uWeather == 2 ? 1.0 : 0.75) * smoothstep(0.2, 0.9, recv);\n"
+    "  if (uFieldFx != 0 && uWet > 0.01 && recv > 0.0 && (here & 2) == 0 && top >= 1 && top <= 3) {\n"
+    "    float pud = Puddles(wp) * uWet * smoothstep(0.2, 0.9, recv);\n"
     "    res *= 1.0 - 0.08 * pud;\n"
     "    if (pud > 0.01) {\n"
     "      ivec2 c0 = ivec2(floor(CellPos(gp)));\n"
@@ -1433,7 +1435,7 @@ static const char *kComposite =
     "  }\n"
     // Raindrops splashing on the ground and on water.
     "  if (uFieldFx != 0 && (uWeather == 1 || uWeather == 2) && top >= 1 && top <= 3 && (here & 1) == 0) {\n"
-    "    float cs = 11.0; vec2 c = floor(wp / cs); float h = Hash(c + 3.7);\n"
+    "    float cs = 11.0 / max(uLiveWx.y, 0.35); vec2 c = floor(wp / cs); float h = Hash(c + 3.7);\n"
     "    float ph = fract(uTime * (0.8 + 0.5 * float(uWeather - 1)) + h);\n"
     "    vec2 ctr = (c + 0.25 + 0.5 * vec2(Hash(c + 1.1), Hash(c + 2.3))) * cs;\n"
     "    float d = distance(wp * vec2(1.0, 1.6), ctr * vec2(1.0, 1.6));\n"
@@ -1456,13 +1458,39 @@ static const char *kComposite =
     "    vec2 dp = (dc + 0.5) * 18.0 + 7.0 * vec2(sin(uTime * 0.2 + dh * 50.0), cos(uTime * 0.15 + dh * 31.0));\n"
     "    if (dh < 0.3) res += vec3(0.9, 0.85, 0.7) * exp(-dot(wp - dp, wp - dp) / 0.5) * 0.35 * (0.5 + 0.5 * sin(uTime + dh * 20.0));\n"
     "  }\n"
+    // ---- Live weather: overcast skies, fog banks and a rainbow after rain ----
+    "  if (uFieldFx != 0 && top != 0 && uMapType != 4 && uMapType != 8 && uMapType != 9) {\n"
+    "    float l = dot(res, vec3(0.299, 0.587, 0.114));\n"
+    "    if (uLiveWx.x > 0.0) {\n"   // overcast: flatter, greyer light, heavier cloud shadows
+    "      res = mix(res, mix(vec3(l), res, 0.75) * vec3(0.9, 0.93, 0.98), uLiveWx.x * 0.6);\n"
+    "      vec2 q = wp * 0.006 + uTime * vec2(0.03, 0.012);\n"
+    "      res *= 1.0 - smoothstep(0.45, 0.75, Noise(q) * 0.6 + Noise(q * 2.1 + 4.0) * 0.4) * 0.18 * uLiveWx.x;\n"
+    "    }\n"
+    "    if (uLiveWx.z > 0.0) {\n"   // fog: soft drifting banks
+    "      vec2 q = wp * 0.012 + vec2(uTime * 0.04, uTime * 0.01);\n"
+    "      float f = Noise(q) * 0.55 + Noise(q * 2.3 + 7.0) * 0.3 + Noise(q * 5.0 - uTime * 0.05) * 0.15;\n"
+    "      vec3 fogc = mix(vec3(0.75, 0.78, 0.82), vec3(0.88, 0.9, 0.93), uSun.w);\n"
+    "      if (uTint.a > 0.5) fogc *= mix(uTint.rgb, vec3(1.0), 0.4);\n"
+    "      res = mix(res, fogc, uLiveWx.z * (0.35 + 0.4 * smoothstep(0.3, 0.75, f)));\n"
+    "    }\n"
+    "    if (uLiveWx.w > 0.0) {\n"   // rainbow arc across the sky side of the screen
+    "      vec2 cpos = vec2(120.0, 430.0);\n"
+    "      float rr = length((gp - cpos) * vec2(0.8, 1.0));\n"
+    "      float band = (rr - 400.0) / 20.0;\n"
+    "      if (band > 0.0 && band < 1.0) {\n"
+    "        vec3 rb = clamp(abs(fract(band * 0.85 + vec3(0.0, 0.33, 0.67)) * 6.0 - 3.0) - 1.0, 0.0, 1.0);\n"
+    "        float a = sin(band * 3.14159) * uLiveWx.w * 0.28 * smoothstep(95.0, 15.0, gp.y);\n"
+    "        res = mix(res, res + rb * 0.6, a);\n"
+    "      }\n"
+    "    }\n"
+    "  }\n"
     // Full-resolution weather over the whole widescreen frame (not over UI).
     "  if (uFieldFx != 0 && uWeather != 0 && top != 0) {\n"
     "    if (uWeather <= 2) {\n"
     "      float heavy = uWeather == 2 ? 1.0 : 0.0;\n"
     "      float r = Rain(gp, uTime, 5.0, 2.6, 0.30 + heavy * 0.25) * 0.55\n"
     "              + Rain(gp + 37.0, uTime, 8.0, 2.0, 0.22 + heavy * 0.2) * 0.75;\n"
-    "      res = mix(res, vec3(0.80, 0.86, 0.95), clamp(r, 0.0, 1.0) * 0.55);\n"
+    "      res = mix(res, vec3(0.80, 0.86, 0.95), clamp(r, 0.0, 1.0) * 0.55 * uLiveWx.y);\n"
     "    } else {\n"
     "      vec2 q = gp * vec2(0.035, 0.09) + vec2(uTime * 1.4, uTime * 0.15);\n"
     "      float n = Noise(q) * 0.6 + Noise(q * 2.3 + 5.0) * 0.4;\n"
@@ -2432,6 +2460,56 @@ static void RenderGi(void)
     DrawQuad();
 }
 
+// Live weather: every few minutes (real time) the outdoor weather drifts to
+// a new state; changes fade over several seconds. Visual only.
+float gPcLiveRain;
+static void UpdateLiveWeather(int on, float *lw, float *wetOut, int *wxOut)
+{
+    enum { CLEAR, CLOUDY, FOG, RAIN, STORM };
+    static float cloud, rain, fog, rainbow, wet, storm, lastRain;
+    static int strikeTimer = 200, flashT;
+    long period = (long)(time(NULL) / 180);
+    uint32_t h = (uint32_t)period * 2654435761u;
+    int st, pick;
+    float tc, tr, tf, ts;
+    h ^= h >> 15; h *= 2246822519u; h ^= h >> 13;
+    pick = h % 100;
+    st = pick < 40 ? CLEAR : pick < 64 ? CLOUDY : pick < 74 ? FOG : pick < 92 ? RAIN : STORM;
+    if (getenv("EMERALD_LIVEWX")) st = atoi(getenv("EMERALD_LIVEWX"));
+    tc = st == CLOUDY ? 0.8f : st == RAIN ? 0.9f : st == STORM ? 1.0f : st == FOG ? 0.5f : 0.0f;
+    tr = st == RAIN ? 0.7f : st == STORM ? 1.0f : 0.0f;
+    tf = st == FOG ? 0.9f : st == RAIN ? 0.15f : 0.0f;
+    ts = st == STORM ? 1.0f : 0.0f;
+    if (!on) tc = tr = tf = ts = 0;
+    {
+        float k = getenv("EMERALD_LIVEWX") ? 1.0f : 0.004f;   // fade over ~4 s at 60 fps
+        cloud += (tc - cloud) * k; rain += (tr - rain) * k; fog += (tf - fog) * k; storm += (ts - storm) * k;
+    }
+    // The ground soaks up quickly and dries slowly.
+    if (rain > wet) wet += (rain - wet) * 0.01f; else wet += (rain - wet) * 0.0008f;
+    // A rainbow after rain stops in daylight.
+    if (lastRain > 0.3f && rain < lastRain && rain < 0.3f && sNight < 0.3f) rainbow = 1.0f;
+    rainbow *= 0.9993f;
+    if (getenv("EMERALD_RAINBOW")) rainbow = 1.0f;
+    lastRain = rain;
+    lw[0] = cloud; lw[1] = rain; lw[2] = fog; lw[3] = on ? rainbow * (1.0f - cloud) : 0;
+    *wetOut = wet;
+    gPcLiveRain = on ? rain : 0;
+    if (on && rain > 0.15f && *wxOut == 0)
+        *wxOut = storm > 0.5f ? 2 : 1;
+    // Lightning in storms.
+    if (on && storm > 0.6f)
+    {
+        if (--strikeTimer <= 0) { flashT = 14; strikeTimer = 240 + (int)(h % 600); }
+    }
+    if (flashT > 0)
+    {
+        float f = (flashT > 10 ? 1.0f : flashT / 10.0f) * ((flashT % 4) < 2 ? 1.0f : 0.5f);
+        gPcFieldFx.flash = (int)(f * 16);
+        flashT--;
+    }
+}
+
 // Render the HD composite into sCompFbo.
 static void RenderHd(const uint32_t *frame, int outW, int outH)
 {
@@ -2566,7 +2644,20 @@ static void RenderHd(const uint32_t *frame, int outW, int outH)
         glUniform1i(glGetUniformLocation(sProgComp, "uNumLights"), field ? gPcFieldFx.numLights : 0);
         glUniform1i(glGetUniformLocation(sProgComp, "uNumShadows"), field ? gPcFieldFx.numShadows : 0);
         gPcHdEffects = field && sLighting;
-        glUniform1i(glGetUniformLocation(sProgComp, "uWeather"), gPcHdEffects ? gPcFieldFx.weather : 0);
+        {
+            int wx = gPcHdEffects ? gPcFieldFx.weather : 0;
+            float lw[4], wet;
+            UpdateLiveWeather(field && sLighting && gPcFieldFx.outdoors && gPcFieldFx.weather == PC_WEATHER_NONE
+                              && !gPcFieldFx.ash && gPcFieldFx.mapType != 4, lw, &wet, &wx);
+            if (gPcFieldFx.weather == PC_WEATHER_RAIN || gPcFieldFx.weather == PC_WEATHER_DOWNPOUR)
+            {
+                lw[1] = 1.0f;   // the game's own rain: full strength
+                wet = 1.0f;
+            }
+            glUniform1i(glGetUniformLocation(sProgComp, "uWeather"), wx);
+            glUniform4f(glGetUniformLocation(sProgComp, "uLiveWx"), lw[0], lw[1], lw[2], lw[3]);
+            glUniform1f(glGetUniformLocation(sProgComp, "uWet"), field && sLighting ? wet : 0.0f);
+        }
         glUniform1f(glGetUniformLocation(sProgComp, "uTime"), (float)(PortFrameCount() % 36000) / 59.73f);
         {
             int packed[PC_GRID_W * PC_GRID_H / 4], solid = 0, cells = PC_GRID_W * PC_GRID_H;
