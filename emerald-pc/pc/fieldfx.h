@@ -22,7 +22,8 @@ struct PcFieldFx {
     int mapType;
     int flash;
     int ash;                             // volcanic ash falling (Route 113)
-    int heat;                            // heat haze (Mt. Chimney, Fiery Path, Magma Hideout)
+    int heat;
+    int mood;                            // area atmosphere: 0 none, 1 rainforest, 2 desert, 3 Fortree canopy, 4 Sootopolis, 5 Mt. Pyre mist, 6 Lavaridge steam, 7 open ocean                            // heat haze (Mt. Chimney, Fiery Path, Magma Hideout)
     int playerX, playerY;                // player's feet, GBA screen coords (-999 if none)                           // lightning brightness 0-16 (thunderstorms)
     int gridX, gridY;                    // screen position of the grid's first metatile
     int gridWX, gridWY;                  // its map coordinates (world position = cell * 16)

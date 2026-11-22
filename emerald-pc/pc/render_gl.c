@@ -298,6 +298,7 @@ static const char *kComposite =
     "uniform vec4 uInSun;\n"
     "uniform vec3 uGrassDark, uGrassLight;\n"
     "uniform float uTilt;\n"
+    "uniform int uMood;\n"
     "uniform sampler2D uGi;\n"      // ray-traced light (native res)
     "uniform float uGiOn;\n"        // HD-2D tilt strength (0 = flat)   // this screen's tall grass colours        // indoors: direction sunlight travels from windows (x, y), strength, night         // x: water fraction on screen, y: volcanic ash, z: heat haze
     "uniform int uBattle;\n"        // battle scene lighting on
@@ -1432,6 +1433,33 @@ static const char *kComposite =
     "      }\n"
     "    }\n"
     "  }\n"
+    // ---- Area atmosphere ----
+    "  if (uFieldFx != 0 && uMood != 0 && top != 0) {\n"
+    "    float l = dot(res, vec3(0.299, 0.587, 0.114));\n"
+    "    float dayM = max(uSun.w, 0.3);\n"
+    "    if (uMood == 1) {\n"   // rainforest: humid green air, soft contrast, light mist low on screen
+    "      res = mix(res, vec3(l), 0.08) * vec3(0.94, 1.04, 0.94);\n"
+    "      res = mix(res, vec3(0.70, 0.85, 0.72) * dayM, 0.10 + 0.06 * Noise(wp * 0.01 + uTime * 0.02));\n"
+    "    } else if (uMood == 2) {\n"   // desert: bleached, hot, bright
+    "      float sand = smoothstep(0.1, 0.3, res.r - res.b);\n"
+    "      res = mix(res, mix(vec3(l), res, 0.85) * vec3(1.08, 1.02, 0.90) + 0.04, sand * dayM);\n"
+    "    } else if (uMood == 3) {\n"   // Fortree: dappled light through the canopy
+    "      vec2 q = wp * 0.06 + vec2(uTime * 0.05, uTime * 0.03);\n"
+    "      float dap = smoothstep(0.55, 0.75, Noise(q) * 0.65 + Noise(q * 2.3 + 4.0) * 0.35);\n"
+    "      res *= mix(0.9, 1.16, dap * uSun.w + (1.0 - uSun.w) * 0.5);\n"
+    "      res *= vec3(0.98, 1.03, 0.97);\n"
+    "    } else if (uMood == 4) {\n"   // Sootopolis: cool blue crater, deeper contrast
+    "      res = ((res - 0.5) * 1.06 + 0.5) * vec3(0.92, 0.98, 1.08);\n"
+    "    } else if (uMood == 5) {\n"   // Mt. Pyre: pale drifting mist
+    "      float m = Noise(wp * 0.015 + vec2(uTime * 0.03, 0.0)) * 0.6 + Noise(wp * 0.04 - uTime * 0.02) * 0.4;\n"
+    "      res = mix(mix(res, vec3(l), 0.2), vec3(0.82, 0.85, 0.9) * dayM, 0.18 + 0.2 * smoothstep(0.35, 0.8, m));\n"
+    "    } else if (uMood == 6) {\n"   // Lavaridge: warm steam
+    "      float m = Noise(wp * 0.03 + vec2(0.0, uTime * 0.12));\n"
+    "      res = mix(res * vec3(1.04, 1.0, 0.95), vec3(0.95, 0.92, 0.88) * dayM, 0.12 * smoothstep(0.4, 0.9, m));\n"
+    "    } else if (uMood == 7) {\n"   // open ocean: bright, airy, cyan
+    "      res = mix(res, res * vec3(0.96, 1.02, 1.06) + 0.03, dayM);\n"
+    "    }\n"
+    "  }\n"
     "  if (uGiOn > 0.0 && uFieldFx != 0 && top != 0) {\n"   // ray-traced light, smoothed
     "    vec2 gq = (gp + vec2(uMargin, 0.0)) / vec2(textureSize(uGi, 0));\n"
     "    vec3 gi = vec3(0.0);\n"
@@ -2366,6 +2394,7 @@ static void RenderHd(const uint32_t *frame, int outW, int outH)
                                 field && sLighting ? str * 0.9f : 0.0f, field && sLighting ? nightIn : 0.0f);
                 }
             }
+            glUniform1i(glGetUniformLocation(sProgComp, "uMood"), field && sLighting ? gPcFieldFx.mood : 0);
             glUniform1f(glGetUniformLocation(sProgComp, "uTilt"), field && sLighting ? sTilt : 0.0f);
             glUniform2f(glGetUniformLocation(sProgComp, "uPlayer"), (float)gPcFieldFx.playerX, (float)gPcFieldFx.playerY);
             SetBattleUniforms();

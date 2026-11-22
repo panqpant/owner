@@ -60,6 +60,14 @@ void PcUpdateFieldFx(void)
     fx->ash = gWeatherPtr->currWeather == WEATHER_VOLCANIC_ASH;
     {
         u16 id = gSaveBlock1Ptr->location.mapNum | (gSaveBlock1Ptr->location.mapGroup << 8);
+        fx->mood = 0;
+        if (id == MAP_ROUTE119 || id == MAP_ROUTE120) fx->mood = 1;
+        else if (id == MAP_ROUTE111) fx->mood = 2;
+        else if (id == MAP_FORTREE_CITY) fx->mood = 3;
+        else if (id == MAP_SOOTOPOLIS_CITY) fx->mood = 4;
+        else if (id == MAP_MT_PYRE_EXTERIOR || id == MAP_MT_PYRE_SUMMIT) fx->mood = 5;
+        else if (id == MAP_LAVARIDGE_TOWN) fx->mood = 6;
+        else if (id == MAP_PACIFIDLOG_TOWN || id == MAP_EVER_GRANDE_CITY) fx->mood = 7;
         fx->heat = id == MAP_MT_CHIMNEY || id == MAP_FIERY_PATH
                 || (id >= MAP_MAGMA_HIDEOUT_1F && id <= MAP_MAGMA_HIDEOUT_1F + 7);
     }
