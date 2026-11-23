@@ -65,7 +65,8 @@ def bake(o, path):
     bpy.ops.object.mode_set(mode="OBJECT")
     results = {}
     for kind in ("DIFFUSE", "AO"):
-        img = bpy.data.images.new(f"{o.name}_{kind}", TEX, TEX)
+        size = TEX if kind == "DIFFUSE" else TEX // 2  # soft shading doesn't need full resolution
+        img = bpy.data.images.new(f"{o.name}_{kind}", size, size)
         nodes = []
         for m in o.data.materials:
             n = m.node_tree.nodes.new("ShaderNodeTexImage")
@@ -73,7 +74,7 @@ def bake(o, path):
             m.node_tree.nodes.active = n
             nodes.append((m, n))
         s = bpy.context.scene
-        s.cycles.samples = 1 if kind == "DIFFUSE" else 16
+        s.cycles.samples = 1 if kind == "DIFFUSE" else 4
         if kind == "DIFFUSE":
             s.render.bake.use_pass_direct = s.render.bake.use_pass_indirect = False
             s.render.bake.use_pass_color = True
@@ -85,7 +86,11 @@ def bake(o, path):
     import numpy as np
     from PIL import Image
     col = np.array(results["DIFFUSE"].pixels[:], dtype=np.float32).reshape(TEX, TEX, 4)
-    ao = np.array(results["AO"].pixels[:], dtype=np.float32).reshape(TEX, TEX, 4)
+    half = np.array(results["AO"].pixels[:], dtype=np.float32).reshape(TEX // 2, TEX // 2, 4)
+    from PIL import ImageFilter
+    soft = Image.fromarray((half[..., 0] * 255).astype(np.uint8)).filter(ImageFilter.GaussianBlur(1.6))  # 4-sample AO is noisy; AO is soft anyway
+    ao = np.asarray(soft.resize((TEX, TEX), Image.BILINEAR), dtype=np.float32)[..., None] / 255
+    ao = np.repeat(ao, 4, axis=2)
     rgb = col[..., :3] * (0.35 + 0.65 * ao[..., :1])  # baked contact shadow / grime depth
     rgb = np.where(rgb <= 0.0031308, rgb * 12.92, 1.055 * np.power(np.clip(rgb, 0, 1), 1 / 2.4) - 0.055)  # linear -> sRGB
     Image.fromarray((np.clip(rgb[::-1], 0, 1) * 255).astype(np.uint8)).save(path)
@@ -109,17 +114,25 @@ def main():
         picks = picks[:limit]
     gy = dt.ground(dt.CX, dt.CZ)
     manifest = {"note": "Roblox coordinates (studs); positions are part bounding-box centres", "buildings": []}
+    import time
     for idx, b in picks:
+        T = [time.time()]
         o = dt.building(idx, b)
+        T.append(time.time())
         realism.realify([o], gy)
         o.modifiers.clear()  # no bevel: keeps the triangle budget for Roblox
+        T.append(time.time())
         realism.photo_upgrade()
+        T.append(time.time())
         parts = split_by_role(o)
+        T.append(time.time())
         entry = {"id": f"b{idx}", "use": b.get("use"), "style": b["style"], "parts": {}, "lights": []}
         for role, p in parts.items():
             t = tris(p)
             if role == "opaque":
+                tb = time.time()
                 bake(p, f"{OUT}/b{idx}.png")
+                T.append(time.time() - tb)
             if role == "lamp":  # each separate lamp face group -> a room light position
                 for poly in list(p.data.polygons)[::6]:  # lamps are 6-face boxes: one point per fitting
                     c = p.matrix_world @ poly.center
@@ -140,6 +153,7 @@ def main():
         manifest["buildings"].append(entry)
         for p in parts.values():
             bpy.data.objects.remove(p)
+        print("T build %.1f realify %.1f photo %.1f split %.1f bake %.1f" % (T[1] - T[0], T[2] - T[1], T[3] - T[2], T[4] - T[3], T[5] if len(T) > 5 else 0), flush=True)
         print(f"b{idx}: " + ", ".join(f"{r} {v['tris']} tris" for r, v in entry["parts"].items()) + f", {len(entry['lights'])} lights", flush=True)
     json.dump(manifest, open(f"{OUT}/manifest.json", "w"), indent=1)
     with open("src/shared/BlockManifest.luau", "w") as f:  # Roblox can't read files: ship the manifest as a module

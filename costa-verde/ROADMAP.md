@@ -71,7 +71,7 @@ statistics. No real place is copied.
 ## Detailed test block in Roblox (prepared, needs Studio)
 - `python tools/blender/export_block_roblox.py` exports every building of the test block: one FBX each (opaque, glass,
   lamp parts) plus a baked colour+AO texture, and `src/shared/BlockManifest.luau` (positions, room lights).
-- Studio: 3D-import `build/roblox_block/*.fbx` into ReplicatedStorage.BlockAssets; bulk-upload the PNGs and paste the
+- Studio: 3D-import `assets/roblox/block/*.fbx` into ReplicatedStorage.BlockAssets; bulk-upload `assets/roblox/block/*.jpg` and paste the
   ids into `src/shared/BlockTextures.luau`; command bar `require(game.ReplicatedStorage.Shared.BlockImporter).place()`.
   Room lights switch on at night from ServerScriptService.Server.BlockLights.
 

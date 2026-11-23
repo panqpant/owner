@@ -208,10 +208,19 @@ def mat_foliage(name, col, var=0.25):
     return m
 
 
+_REALIFY = {}
+
+
 def realify(objs, ground_z):
-    """Swap the detail-model materials for real ones and soften every edge with a bevel."""
+    """Swap the detail-model materials for real ones and soften every edge with a bevel. Materials are built once."""
+    if not _REALIFY:
+        _REALIFY.update(_realify_swaps(ground_z))
+    _realify_apply(objs, _REALIFY)
+
+
+def _realify_swaps(ground_z):
     wall, roof, glass, conc, asph = mat_wall(ground_z), mat_roof(), mat_glass(), mat_concrete(), mat_asphalt()
-    swap = {"wall": wall, "roof_tile": roof, "glass": glass, "concrete": conc, "asphalt": asph,
+    return {"wall": wall, "roof_tile": roof, "glass": glass, "concrete": conc, "asphalt": asph,
             "trim": mat_simple("real_trim", (240, 238, 230), 0.55, vertex=True), "frame": mat_simple("real_frame", (0, 0, 0), 0.45, vertex=True),
             "door": mat_simple("real_door", (0, 0, 0), 0.5, vertex=True), "awning": mat_simple("real_awning", (0, 0, 0), 0.85, vertex=True),
             "roof_flat": mat_concrete((0.5, 0.49, 0.46), "real_roof_flat"), "metal": mat_simple("real_metal", (176, 178, 180), 0.35, 0.8),
@@ -219,6 +228,9 @@ def realify(objs, ground_z):
             "pole": mat_simple("real_pole", (80, 82, 84), 0.45, 0.7), "solar": mat_solar(), "shopglass": mat_clear_glass(),
             "mirror": mat_simple("real_mirror", (230, 232, 234), 0.02, 1.0), "floor": mat_simple("real_floor", (0, 0, 0), 0.3, vertex=True),
             "fabric": mat_simple("real_fabric", (0, 0, 0), 0.8, vertex=True), "lamp": mat_simple("real_lamp", (255, 240, 210), 0.3, emit=(1, 0.85, 0.6))}
+
+
+def _realify_apply(objs, swap):
     for o in objs:
         me = o.data
         for i, mt in enumerate(me.materials):
@@ -1216,8 +1228,19 @@ def mat_window_interior():
     return m
 
 
+_PHOTO = {}
+
+
 def photo_upgrade():
-    """Swap the procedural building / street materials for the photo ones, keeping grime layers on walls."""
+    """Swap the procedural building / street materials for the photo ones, keeping grime layers on walls.
+    Photo materials are built once; later calls only swap."""
+    if _PHOTO:
+        for o in bpy.data.objects:
+            if o.type == "MESH":
+                for i, mt in enumerate(o.data.materials):
+                    if mt and mt.name in _PHOTO:
+                        o.data.materials[i] = _PHOTO[mt.name]
+        return
     walls, _, _, _ = photo("photo_wall", "Plaster001", 14, tint_vertex=True, bump=0.5)
     roof, nt, b, col = photo("photo_roof", "RoofingTiles013A", 10, bump=1.2)
     tint = _n(nt, "ShaderNodeAttribute", attribute_name="col").outputs["Color"]  # per-house tile / shingle colour
@@ -1231,6 +1254,7 @@ def photo_upgrade():
     conc = photo("photo_concrete", "Concrete034", 16, bump=0.3)[0]
     swaps = {"real_wall": walls, "real_roof": roof, "real_concrete": conc, "real_asphalt": asph, "real_glass": mat_window_glass(),
              "real_roof_flat": gravel_roof}
+    _PHOTO.update(swaps)
     for o in bpy.data.objects:
         if o.type == "MESH":
             for i, mt in enumerate(o.data.materials):
