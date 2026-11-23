@@ -14,9 +14,9 @@ s.render.resolution_x, s.render.resolution_y, s.cycles.samples = 1280, 540, 32
 bpy.ops.mesh.primitive_plane_add(size=200)
 bpy.context.object.data.materials.append(realism.mat_asphalt())
 models = realism.car_models()
-for k, kind in enumerate(("sedan", "suv", "pickup", "van")):
+for k, kind in enumerate(("sedan", "suv", "ev", "van", "pickup")):
     coll = next(c for c in models if c.name.startswith(f"car_{kind}_0"))
-    realism.place(coll, (k - 1.5) * 6, (k - 1.5) * 13, 0, math.radians(-30))
+    realism.place(coll, (k - 2) * 5, (k - 2) * 12, 0, math.radians(-25))
 realism.sky_and_sun(35, 140)
-realism.real_camera((34, 30, 11), (0, -2, 2.5), 35)
+realism.real_camera((40, 30, 9), (0, -3, 2.5), 32)
 render("car_lineup")
