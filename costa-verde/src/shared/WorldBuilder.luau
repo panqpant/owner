@@ -72,6 +72,17 @@ local ROOFS = { { "ClayRoofTiles", { 186, 96, 64 } }, { "ClayRoofTiles", { 172, 
 
 local FLATISH = { lot = true, field = true, runway = true, deck = true, panel = true, water = true }
 local ELEV = 22 -- freeway viaduct height (studs above ground)
+-- Areas built from detailed models instead (tools/blender/export_block_roblox.py, BlockImporter): no greybox
+-- buildings or surface roads there. Generator coordinates (x0, z0, x1, z1); must match detail_town.py CX/CZ/R.
+local DETAILED = { { 27740 - 380, 23180 - 380, 27740 + 380, 23180 + 380 } }
+local function detailed(x: number, z: number): boolean
+	for _, d in DETAILED do
+		if x > d[1] and x < d[3] and z > d[2] and z < d[4] then
+			return true
+		end
+	end
+	return false
+end
 local METRO_ELEV = 30
 
 local function sub(a: { number }, b: { number }): { number }
@@ -311,7 +322,9 @@ function WorldBuilder.pieces(world: any, area: { x0: number, z0: number, w: numb
 	-- roads
 	local elev = roadHeights(world.roads)
 	for q, r in world.roads do
-		if r.kind ~= "drive" and inArea((r.ax + r.bx) / 2, (r.az + r.bz) / 2) then -- drives are dirt terrain
+		local mx_, mz_ = (r.ax + r.bx) / 2, (r.az + r.bz) / 2
+		local surface = r.kind ~= "freeway" and r.kind ~= "ramp"
+		if r.kind ~= "drive" and inArea(mx_, mz_) and not (surface and detailed(mx_, mz_)) then -- drives are dirt terrain
 			local ga, wa = ground(r.ax, r.az)
 			local gb, wb = ground(r.bx, r.bz)
 			local ya, yb = ga + elev[q][1], gb + elev[q][2]
@@ -397,7 +410,7 @@ function WorldBuilder.pieces(world: any, area: { x0: number, z0: number, w: numb
 	end
 	-- buildings: each part from 4 studs below ground (no gaps on slopes) up to its height
 	for bi, b in world.buildings do
-		if inArea(b.x, b.z) then
+		if inArea(b.x, b.z) and not detailed(b.x, b.z) then
 			local c, sn = math.cos(math.rad(b.rot)), math.sin(math.rad(b.rot))
 			local L = LOOK[b.style] or DEFAULT_LOOK
 			local hsh = Gen.Hash.int(bi, 17, 3)

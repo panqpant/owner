@@ -745,7 +745,7 @@ def hero_shots(detailed, gy, preset):
     print("wrote", f"screenshots/hero_{preset}.png")
 
 
-def main_real():
+def main_real(build_only=False):
     """Hyper-real render of the block (realism.py): real materials, bevels, proper streets, street life."""
     import math as _m
     from shapely.geometry import Polygon as SPoly
@@ -792,6 +792,8 @@ def main_real():
     realism.clutter(roads, asphalt, walk_outer, zone, gy, rng, wet=preset in ("rain", "night", "dusk"))
     realism.real_trees(oaks, palms)
     terrain = bpy.data.objects["ground"]
+    if build_only:  # scene for export_block_env.py: no grass strands, lights or cameras
+        return detailed, gy
     realism.grass(terrain, (CX - 220, CZ - 220, CX + 220, CZ + 220), lawn)
     Lr = _m.hypot(r["bx"] - r["ax"], r["bz"] - r["az"])
     realism.time_of_day(preset, ((r["bx"] - r["ax"]) / Lr, (r["bz"] - r["az"]) / Lr))

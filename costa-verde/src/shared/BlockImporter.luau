@@ -3,7 +3,9 @@
 -- Setup in Studio:
 --   1. 3D-import build/roblox_block/*.fbx into a Folder ReplicatedStorage.BlockAssets (keep the names, e.g. b674).
 --   2. Bulk-upload build/roblox_block/*.png and paste each id into BlockTextures.luau (b674 = "rbxassetid://...").
---   3. Command bar: require(game.ReplicatedStorage.Shared.BlockImporter).place()   then save the place.
+--   3. Street level: 3D-import build/roblox_block/env/*.fbx into ReplicatedStorage.BlockEnvAssets; upload env/leaf.png
+--      and paste its id as BlockTextures.leaf.
+--   4. Command bar: require(game.ReplicatedStorage.Shared.BlockImporter).place()   then save the place.
 -- Night lights run from ServerScriptService.Server.BlockLights.
 local HttpService = game:GetService("HttpService")
 local Manifest = HttpService:JSONDecode(require(script.Parent.BlockManifest))
@@ -49,6 +51,9 @@ function BlockImporter.place()
 				local role = string.match(part.Name, "_(%a+)$") or "opaque"
 				local info = b.parts[role]
 				if info then
+					if info.size and part:IsA("MeshPart") then -- undo any unit-scale mix-up from the importer
+						part.Size = Vector3.new(info.size[1], info.size[2], info.size[3])
+					end
 					part.Position = Vector3.new(info.center[1], info.center[2], info.center[3])
 				end
 				style(part, role, b.id)
@@ -59,6 +64,79 @@ function BlockImporter.place()
 		model.Parent = root
 	end
 	print(string.format("block placed: %d buildings, %d missing %s", #Manifest.buildings - #missing, #missing, table.concat(missing, " ")))
+	BlockImporter.placeEnv()
+end
+
+-- Street level: surfaces (Roblox materials) and every prop / plant / tree / car from the placement list.
+function BlockImporter.placeEnv()
+	local env = HttpService:JSONDecode(require(script.Parent.BlockEnvManifest))
+	local assets = game:GetService("ReplicatedStorage"):WaitForChild("BlockEnvAssets")
+	local root = workspace:FindFirstChild("BlockEnv") or Instance.new("Folder")
+	root.Name = "BlockEnv"
+	root.Parent = workspace
+	local missing = {}
+	for _, sf in env.surfaces do
+		local src = assets:FindFirstChild(sf.name)
+		if not src then
+			table.insert(missing, sf.name)
+			continue
+		end
+		local m = src:Clone()
+		for _, part in m:GetDescendants() do
+			if part:IsA("BasePart") then
+				if sf.size and part:IsA("MeshPart") then
+					part.Size = Vector3.new(sf.size[1], sf.size[2], sf.size[3])
+				end
+				part.Anchored, part.Position = true, Vector3.new(sf.center[1], sf.center[2], sf.center[3])
+				part.Material = (Enum.Material :: any)[sf.material]
+				part.Color = Color3.fromRGB(sf.color[1], sf.color[2], sf.color[3])
+				if sf.material == "Glass" then
+					part.Transparency, part.Reflectance = 0.25, 0.3 -- puddles
+				end
+			end
+		end
+		m.Parent = root
+	end
+	local leaf = Textures.leaf
+	for _, pl in env.placements do
+		local src = assets:FindFirstChild(pl.model)
+		local info = env.models[pl.model]
+		if not src or not info then
+			table.insert(missing, pl.model)
+			continue
+		end
+		local m = src:Clone()
+		if not m:IsA("Model") then
+			local wrap = Instance.new("Model")
+			m.Parent = wrap
+			m = wrap
+		end
+		for _, part in m:GetDescendants() do
+			if part:IsA("BasePart") then
+				part.Anchored = true
+				part.CanCollide = part.Size.Magnitude > 6
+				if info.leaf and leaf and leaf ~= "" and string.find(string.lower(part.Name), "leaf") then
+					local sa = Instance.new("SurfaceAppearance")
+					sa.ColorMap, sa.AlphaMode = leaf, Enum.AlphaMode.Transparency
+					sa.Parent = part
+				end
+			end
+		end
+		local _, ext = m:GetBoundingBox()
+		local fix = if info.size and ext.Y > 0 then info.size[2] / ext.Y else 1 -- undo importer unit scale
+		if pl.scale * fix ~= 1 then
+			m:ScaleTo(m:GetScale() * pl.scale * fix)
+		end
+		-- put the model's bounding-box centre where the placement says (pivot-independent)
+		local rot = CFrame.Angles(0, pl.yaw, 0)
+		local o = info.offset
+		local target = Vector3.new(pl.pos[1], pl.pos[2], pl.pos[3]) + rot:VectorToWorldSpace(Vector3.new(o[1], o[2], o[3]) * pl.scale)
+		local box = m:GetBoundingBox()
+		m:PivotTo(CFrame.new(target) * rot * box.Rotation:Inverse() * (box:Inverse() * m:GetPivot()))
+		m.Parent = root
+	end
+	print(string.format("street level placed: %d surfaces, %d placements; missing: %s", #env.surfaces, #env.placements,
+		if #missing > 0 then table.concat(missing, " ") else "none"))
 end
 
 -- At night a share of each building's rooms light up (stable per night); off by day.
