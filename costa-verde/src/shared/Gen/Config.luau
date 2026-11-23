@@ -118,9 +118,9 @@ Config.ROADS = {
 -- Rail: waypoints routed by A* over the terrain, stations every `spacing` studs in towns. Metro: anchors
 -- snapped to arterial intersections, track follows the arterial grid, a station at every crossing.
 Config.RAIL = {
-	{ name = "Coastline Railway", kind = "rail", spacing = 2600, points = { { 0.68, 0.07 }, { 0.685, 0.3 }, { 0.695, 0.45 }, { 0.69, 0.6 }, { 0.64, 0.72 }, { 0.585, 0.8 } } },
+	{ name = "Coastline Railway", kind = "rail", spacing = 2600, points = { { 0.42, 0.13 }, { 0.55, 0.13 }, { 0.68, 0.15 }, { 0.685, 0.3 }, { 0.695, 0.45 }, { 0.69, 0.6 }, { 0.64, 0.72 }, { 0.585, 0.8 } } },
 	{ name = "Gulf Line", kind = "rail", spacing = 3500, points = { { 0.705, 0.47 }, { 0.6, 0.455 }, { 0.47, 0.35 }, { 0.3, 0.38 }, { 0.15, 0.43 } } },
-	{ name = "Citrus Freight", kind = "rail", spacing = 3500, points = { { 0.47, 0.35 }, { 0.44, 0.15 }, { 0.4, 0.06 } } },
+	{ name = "Citrus Freight", kind = "rail", spacing = 3500, points = { { 0.47, 0.35 }, { 0.44, 0.15 }, { 0.42, 0.13 } } }, -- meets the coastline railway
 	{ name = "Metro Green", kind = "metro", spacing = 1100, points = { { 0.76, 0.3 }, { 0.752, 0.4 }, { 0.742, 0.47 }, { 0.735, 0.52 }, { 0.72, 0.59 }, { 0.69, 0.67 } } },
 	{ name = "Metro Orange", kind = "metro", spacing = 1100, points = { { 0.735, 0.52 }, { 0.69, 0.53 }, { 0.655, 0.55 }, { 0.64, 0.58 } } },
 }

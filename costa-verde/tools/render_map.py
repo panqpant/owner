@@ -59,10 +59,15 @@ STYLE = {"tower": (205, 215, 230), "midrise": (190, 190, 180), "deco": (250, 190
          "barn": (170, 40, 35), "silo": (200, 200, 205), "store": (90, 140, 200), "gas": (230, 200, 40), "church": (255, 255, 255),
          "diner": (230, 90, 140), "trailer": (200, 200, 190)}
 for b in world["buildings"]:
-    x, z, w, dd = b["x"] * k, b["z"] * k, b["w"] * k / 2, b["d"] * k / 2
+    x, z = b["x"], b["z"]
     c, sn = math.cos(math.radians(b["rot"])), math.sin(math.radians(b["rot"]))
-    corners = [(x + c * px - sn * pz, z + sn * px + c * pz) for px, pz in ((-w, -dd), (w, -dd), (w, dd), (-w, dd))]
-    d.polygon(corners, fill=STYLE.get(b["style"], (200, 200, 200)))
+    base = STYLE.get(b["style"], (200, 200, 200))
+    for p in sorted(b.get("parts", []), key=lambda p: p["base"] + p["h"]):  # taller parts drawn on top, darker
+        pts = p["pts"]
+        poly = [((x + c * pts[i] - sn * pts[i + 1]) * k, (z + sn * pts[i] + c * pts[i + 1]) * k) for i in range(0, len(pts), 2)]
+        shade = 1 - min(0.35, (p["base"] + p["h"]) / 1500)
+        fill = tuple(int(v * shade) for v in base) if p["roof"] not in ("canopy",) else (210, 210, 215)
+        d.polygon(poly, fill=fill, outline=tuple(int(v * 0.6) for v in base))
 
 for t in world["tracks"]:
     pts = [t["ax"] * k, t["az"] * k, t["bx"] * k, t["bz"] * k]

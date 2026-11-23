@@ -17,6 +17,7 @@ The whole world is generated from code, so the same seed always builds the same 
 | `tools/interchange_stats.py` | Measures the real mix of freeway interchange types from Census ramp data |
 | `tools/landmarks.py` | The 200 unique landmarks (checked: exactly 200, all unique) → `LANDMARKS.md`, `tools/data/landmarks.json` |
 | `src/shared/Gen/Landmarks.luau`, `Uses.luau` | Place the 200 landmarks (footprints, siting rules, access roads); give every building a real use and pick the playable markers |
+| `src/shared/Gen/Shapes.luau` | Real building shapes: multi-part footprints by house type (neighbourhood palettes) and commercial/civic form, facing the street, inside the lot |
 | `tools/building_stats.py` | Real counts of every building type (Census business data) scaled to the map → `BUILDINGS.md` |
 | `tools/fetch_refs.py` | Downloads 50 USGS reference images (public domain) used to study real geography |
 

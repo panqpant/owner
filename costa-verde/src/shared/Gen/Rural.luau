@@ -9,6 +9,7 @@ local Streets = require("./Streets")
 local StreetStyles = require("./StreetStyles")
 local Roads = require("./Roads")
 local Landmarks = require("./Landmarks")
+local SegIndex = require("./SegIndex")
 
 local Rural = {}
 
@@ -169,6 +170,17 @@ function Rural.generate(roads: { any }, buildings: { any }, shared: Streets.Shar
 	-- connector routed over the terrain like a state road (bridging where it must).
 	connectIslands(roads, net)
 
+	-- every road so far (city + county), so farm buildings stay off all of them
+	local roadIndex = SegIndex.new()
+	for _, rd in roads do
+		roadIndex.add(rd.ax, rd.az, rd.bx, rd.bz, (rd.width or 20) / 2)
+	end
+	local function place(b: any)
+		if roadIndex.boxClear(b.x, b.z, b.w, b.d, b.rot) then
+			table.insert(buildings, b)
+		end
+	end
+
 	-- Farmsteads: house + barn + silo set back from a road, joined by a driveway.
 	local spacing = 0
 	for _, sg in segs do
@@ -185,10 +197,10 @@ function Rural.generate(roads: { any }, buildings: { any }, shared: Streets.Shar
 				local y = Terrain.sample(hx, hz).h
 				local rot = math.deg(math.atan2(dz, dx))
 				table.insert(roads, { ax = rx, az = rz, bx = hx, bz = hz, width = 10, kind = "drive", bridge = false })
-				table.insert(buildings, { x = hx + ox * 18, z = hz + oz * 18, y = y, w = 34, d = 26, h = 16, rot = rot, style = "farmhouse", district = "rural", variant = rng:int(1, 8) })
-				table.insert(buildings, { x = hx + dx * 60 + ox * 30, z = hz + dz * 60 + oz * 30, y = y, w = 40, d = 56, h = 26, rot = rot, style = "barn", district = "rural", variant = rng:int(1, 8) })
+				place({ x = hx + ox * 18, z = hz + oz * 18, y = y, w = 34, d = 26, h = 16, rot = rot, style = "farmhouse", district = "rural", variant = rng:int(1, 8) })
+				place({ x = hx + dx * 60 + ox * 30, z = hz + dz * 60 + oz * 30, y = y, w = 40, d = 56, h = 26, rot = rot, style = "barn", district = "rural", variant = rng:int(1, 8) })
 				if rng:next() < 0.6 then
-					table.insert(buildings, { x = hx - dx * 45 + ox * 40, z = hz - dz * 45 + oz * 40, y = y, w = 14, d = 14, h = 44, rot = 0, style = "silo", district = "rural", variant = 1 })
+					place({ x = hx - dx * 45 + ox * 40, z = hz - dz * 45 + oz * 40, y = y, w = 14, d = 14, h = 44, rot = 0, style = "silo", district = "rural", variant = 1 })
 				end
 			end
 		end
@@ -213,13 +225,13 @@ function Rural.generate(roads: { any }, buildings: { any }, shared: Streets.Shar
 				local size = rng:int(5, 12)
 				table.insert(settlements, { x = x, z = z, name = name, size = size })
 				local anchor = rng:pick({ "store", "gas", "church", "diner" })
-				table.insert(buildings, { x = x + 45, z = z + 45, y = y, w = 40, d = 30, h = 14, rot = 0, style = anchor, district = "hamlet", variant = 1 })
+				place({ x = x + 45, z = z + 45, y = y, w = 40, d = 30, h = 14, rot = 0, style = anchor, district = "hamlet", variant = 1 })
 				for _ = 1, size do
 					local a = rng:range(0, math.pi * 2)
 					local dist = rng:range(70, 380)
 					local hx, hz = x + math.cos(a) * dist, z + math.sin(a) * dist
 					if ruralOk(hx, hz) then
-						table.insert(buildings, { x = hx, z = hz, y = Terrain.sample(hx, hz).h, w = 22, d = 18, h = 12, rot = math.deg(a), style = if rng:next() < 0.3 then "trailer" else "house", district = "hamlet", variant = rng:int(1, 8) })
+						place({ x = hx, z = hz, y = Terrain.sample(hx, hz).h, w = 22, d = 18, h = 12, rot = math.deg(a), style = if rng:next() < 0.3 then "trailer" else "house", district = "hamlet", variant = rng:int(1, 8) })
 					end
 				end
 			end

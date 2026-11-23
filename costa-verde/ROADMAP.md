@@ -36,6 +36,15 @@ statistics. No real place is copied.
 - Still to do: landmark-specific lot shapes (runways, car parks, stadium bowls), marker density in small
   towns, landmark labels decluttered at map scale.
 
+## Phase B3: Roads finished, real building shapes (done, audited)
+- Every freeway end joins another highway or becomes a town boulevard; one continuous north-coast road;
+  rail lines joined; no loose major-road ends; freeways grade-separated (checked per road).
+- Every building has a real multi-part shape: 9 house types drawn from a per-neighbourhood palette
+  (ranch, L-ranch, colonial, courtyard, bungalow, split-level, duplex, townhouses, shotgun), tower,
+  midrise, Art Deco, shopfronts, warehouse and campus forms, and use-specific forms (gas station,
+  church, motel, self-storage, car wash, fast food, supercenter). Lots and farm buildings are checked
+  corner by corner against every road.
+
 ## Phase C: Roblox world builder (needs you in Studio)
 - Server script that runs the generator: terrain voxels in chunks (WriteVoxels), water at each lake's level,
   roads as parts or meshes, buildings as placeholders, streaming setup.

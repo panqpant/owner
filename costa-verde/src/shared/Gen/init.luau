@@ -10,6 +10,7 @@ Gen.City = require("@self/City")
 Gen.Rural = require("@self/Rural")
 Gen.Transit = require("@self/Transit")
 Gen.Uses = require("@self/Uses")
+Gen.Shapes = require("@self/Shapes")
 Gen.Hash = require("@self/Hash")
 Gen.Noise = require("@self/Noise")
 

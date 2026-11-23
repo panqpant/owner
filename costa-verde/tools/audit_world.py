@@ -154,6 +154,34 @@ B = W["buildings"]
 bad = sum(on_road(b) for b in B)
 say("\n## Buildings")
 check("buildings not on roads", bad / len(B) < 0.01, f"{bad} of {len(B)} buildings ({100 * bad / len(B):.2f}%) overlap a road")
+# every corner of every building part (world space) clear of every road
+def part_corners(b):
+    c, sn = math.cos(math.radians(b["rot"])), math.sin(math.radians(b["rot"]))
+    for p in b.get("parts", []):
+        pts = p["pts"]
+        for i in range(0, len(pts), 2):
+            yield b["x"] + c * pts[i] - sn * pts[i + 1], b["z"] + sn * pts[i] + c * pts[i + 1], abs(pts[i]) <= b["w"] / 2 + 0.01 and abs(pts[i + 1]) <= b["d"] / 2 + 0.01
+
+
+no_parts = sum(1 for b in B if not b.get("parts"))
+outside_lot = 0
+on_road_parts = 0
+for b in B:
+    hit = False
+    for x, z, inside_lot in part_corners(b):
+        outside_lot += not inside_lot
+        if not hit:
+            for r in seg_grid[(int(x // 128), int(z // 128))]:
+                dx, dz = r["bx"] - r["ax"], r["bz"] - r["az"]
+                L2 = dx * dx + dz * dz or 1e-9
+                t = max(0, min(1, ((x - r["ax"]) * dx + (z - r["az"]) * dz) / L2))
+                if math.dist((x, z), (r["ax"] + dx * t, r["az"] + dz * t)) < r["width"] / 2 - 1:
+                    hit = True
+                    break
+    on_road_parts += hit
+check("every building has a real shape", no_parts == 0 and outside_lot == 0, f"{no_parts} without parts, {outside_lot} part corners outside their lot")
+check("building shapes clear of roads", on_road_parts / len(B) < 0.01, f"{on_road_parts} buildings ({100 * on_road_parts / len(B):.2f}%) with a part corner on a road")
+say(f"building types: {len(Counter(b.get('type') for b in B))} kinds; top: {dict(Counter(b.get('type') for b in B).most_common(12))}")
 bg = defaultdict(list)
 for b in B:
     bg[(int(b["x"] // 128), int(b["z"] // 128))].append(b)

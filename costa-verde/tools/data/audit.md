@@ -13,15 +13,18 @@ interchange ramps: 2208 segments
 
 ## Land use
 - [PASS] built-up land reached by roads: 98.1% of built-up land is within 150 studs of a road
-- [PASS] built-up land has buildings: 96.5% of built-up land has a building within 130 studs
+- [PASS] built-up land has buildings: 96.3% of built-up land has a building within 130 studs
 
 ## Water
 - [PASS] no roads driving through water: 0.00 km of road over water without a bridge (exact terrain); by kind (studs) {}
 
 ## Buildings
-- [PASS] buildings not on roads: 47 of 7383 buildings (0.64%) overlap a road
-- [PASS] buildings not overlapping: 2 overlapping pairs
-buildings by district: {'northshore': 1708, 'palmgrove': 1310, 'gulftown': 1160, 'westside': 750, 'calle': 409, 'rural': 376, 'beach': 337, 'university': 316, 'downtown': 295, 'midtown': 251, 'swamptown': 181, 'truckstop': 150, 'keytown': 68, 'docks': 38, 'hamlet': 34}
+- [PASS] buildings not on roads: 2 of 7054 buildings (0.03%) overlap a road
+- [PASS] every building has a real shape: 0 without parts, 0 part corners outside their lot
+- [PASS] building shapes clear of roads: 2 buildings (0.03%) with a part corner on a road
+building types: 26 kinds; top: {'shopfronts': 1581, 'ranch': 806, 'l_ranch': 673, 'colonial': 615, 'courtyard': 586, 'duplex': 409, 'townhouses': 309, 'art deco': 264, 'Fast food': 253, 'tower': 221, 'campus hall': 214, 'split_level': 212}
+- [PASS] buildings not overlapping: 3 overlapping pairs
+buildings by district: {'northshore': 1647, 'palmgrove': 1299, 'gulftown': 1128, 'westside': 718, 'calle': 388, 'rural': 344, 'beach': 302, 'university': 300, 'downtown': 254, 'midtown': 235, 'swamptown': 168, 'truckstop': 145, 'keytown': 67, 'docks': 30, 'hamlet': 29}
 
 ## Street patterns vs real data (2.4 km windows at district centres)
   downtown   (tower    ) density_ 16.18/12.48  block_me 160.30/260.85  straight 0.98/0.98  dead_end 0.05/0.16  t_frac 0.55/0.44  cross_fr 0.40/0.40  orientat 0.96/0.83
@@ -37,7 +40,7 @@ buildings by district: {'northshore': 1708, 'palmgrove': 1310, 'gulftown': 1160,
 ## Building uses
 - [PASS] building uses match the real mix: top uses within 2x of real Florida shares
 - [PASS] every building has a use: 0 without a use
-map markers: {'liquor': 5, 'food': 10, 'gun_store': 8, 'clothing': 10, 'hospital': 8, 'gas': 15, 'barber': 6, 'bar': 6, 'pawn': 3, 'tattoo': 5, 'car_dealer': 4, 'fire': 3, 'convenience': 12, 'bank': 4, 'boat_dealer': 3, 'mod_shop': 5, 'jewelry': 2, 'cinema': 2, 'police': 6, 'gym': 3}
+map markers: {'clothing': 10, 'gun_store': 8, 'bar': 6, 'hospital': 6, 'jewelry': 2, 'food': 10, 'tattoo': 5, 'gas': 15, 'barber': 6, 'convenience': 12, 'fire': 3, 'car_dealer': 4, 'mod_shop': 5, 'police': 6, 'boat_dealer': 3, 'bank': 4, 'pawn': 3, 'liquor': 5, 'gym': 3}
 
 ## Landmarks
 - [PASS] all 200 landmarks placed: 200 of 200 placed
@@ -49,6 +52,6 @@ landmark sites: {'bridge': 2, 'open': 38, 'shore': 27, 'urban': 126, 'offshore':
 
 ## Transit
 - [PASS] stations reachable from a road: 0 of 33 stations have no road within ~150 studs
-lines: {'Coastline Railway': 841, 'Gulf Line': 654, 'Citrus Freight': 364, 'Metro Green': 450, 'Metro Orange': 150}
+lines: {'Coastline Railway': 1028, 'Gulf Line': 654, 'Citrus Freight': 285, 'Metro Green': 450, 'Metro Orange': 150}
 
 all checks passed
