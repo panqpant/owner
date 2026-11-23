@@ -38,6 +38,16 @@ HOUSE_COL = [(246, 240, 224), (236, 226, 200), (214, 222, 200), (206, 220, 230),
 SHUTTER = [(40, 110, 100), (60, 80, 130), (150, 90, 60), (90, 120, 70), (250, 250, 246)]
 AWNING = [(180, 50, 50), (30, 110, 120), (40, 70, 140), (200, 150, 40), (60, 120, 70)]
 TILE = [(186, 96, 64), (172, 112, 82), (160, 84, 58)]
+
+
+def faded(c, k=0.38, dark=0.9):
+    g = sum(c) / 3
+    return tuple(int((v + (g - v) * k) * dark) for v in c)
+
+
+PASTEL = [faded(c) for c in PASTEL]
+HOUSE_COL = [faded(c, 0.3, 0.88) for c in HOUSE_COL]
+TILE = [faded(c, 0.25, 0.85) for c in TILE]
 SHINGLE = [(92, 90, 88), (112, 98, 86), (130, 126, 118)]
 
 
@@ -101,6 +111,7 @@ class Model:
 
 
 MATS = {}
+SIGNS = []  # (transform, z, width, rng): shop names added as 3D text by realism.signs
 
 
 def material(surf):
@@ -327,6 +338,25 @@ def building(idx, b):
         m.box("pool", (px, 0.35, pz), (1, 0), pw, 0.1, pd)
     if style == "house":  # driveway to the street
         m.box("concrete", (b["w"] * 0.3, 0.12, -b["d"] / 2 - 14), (1, 0), 10, 0.25, 28)
+    if style == "house":  # AC condenser on a pad at the side, gutters and downspouts at the corners
+        sx = b["w"] / 2 + 2.2
+        m.box("concrete", (sx, 0.15, 2), (1, 0), 3.6, 0.3, 3.6)
+        m.box("metal", (sx, 1.9, 2), (1, 0), 3, 3.2, 3, (150, 150, 146))
+        m.box("pole", (sx, 3.6, 2), (1, 0), 2.4, 0.15, 2.4)
+        top = max((p["h"] for p in parts if p["base"] == 0), default=12)
+        for cx in (-b["w"] / 2 + 0.6, b["w"] / 2 - 0.6):
+            for cz in (-b["d"] / 2 + 0.6, b["d"] / 2 - 0.6):
+                if rng.random() < 0.6:
+                    m.box("trim", (cx * 1.02, top / 2, cz * 1.02), (1, 0), 0.45, top, 0.45, (226, 224, 216))
+    if style in ("stucco", "shack") and parts:  # shop sign above the awning
+        p0 = parts[0]
+        poly = [(p0["pts"][i], p0["pts"][i + 1]) for i in range(0, len(p0["pts"]), 2)]
+        zs = [z for _, z in poly]
+        width = (max(x for x, _ in poly) - min(x for x, _ in poly))
+        if width > 12:
+            sign_col = rng.choice([(30, 40, 60), (120, 30, 30), (20, 80, 70), (230, 220, 200), (60, 40, 30)])
+            m.box("door", (0, 13.6, min(zs) - 0.6), (1, 0), min(width * 0.6, 26), 2.6, 0.6, sign_col)
+            SIGNS.append((tf, min(zs) - 1.0, min(width * 0.55, 24), rng))
     return m.finish()
 
 
@@ -374,7 +404,7 @@ def main_real():
     s.cycles.samples = 96
     s.cycles.use_denoising = True
     if "--quick" in sys.argv:
-        s.render.resolution_x, s.render.resolution_y, s.cycles.samples = 960, 540, 12
+        s.render.resolution_x, s.render.resolution_y, s.cycles.samples = 1280, 720, 24
     zone = (CX - R, CZ - R, CX + R, CZ + R)
     in_zone = lambda x, z: zone[0] < x < zone[2] and zone[1] < z < zone[3]  # noqa: E731
     detailed, keep = [], set()
@@ -395,7 +425,11 @@ def main_real():
     oaks = [realism.hero_oak(k) for k in range(2)]
     for name, x, z, y, rot, sc in hero_spots:
         realism.place(rng.choice(oaks if name == "LiveOak" else palms), x, z, y, _m.radians(rot), sc)
-    realism.street_life(roads, asphalt, junctions, detailed, zone, gy, rng)
+    r = min(roads, key=lambda r: _m.hypot((r["ax"] + r["bx"]) / 2 - CX, (r["az"] + r["bz"]) / 2 - CZ) - _m.hypot(r["bx"] - r["ax"], r["bz"] - r["az"]) * 2)
+    realism.street_life([q for q in roads if q is not r], asphalt, junctions, detailed, zone, gy, rng)
+    realism.signs(SIGNS)
+    realism.weather(objs)
+    realism.haze(CX, CZ, gy)
     foot = []
     for _, b in detailed:
         c, sn = _m.cos(_m.radians(b["rot"])), _m.sin(_m.radians(b["rot"]))
@@ -406,16 +440,17 @@ def main_real():
     terrain = bpy.data.objects["ground"]
     realism.grass(terrain, (CX - 260, CZ - 260, CX + 260, CZ + 260), exclude)
     realism.sky_and_sun(32, 215, exposure=0.0)
-    # 1) street level on a sidewalk, looking along the most central street
-    r = min(roads, key=lambda r: _m.hypot((r["ax"] + r["bx"]) / 2 - CX, (r["az"] + r["bz"]) / 2 - CZ) - _m.hypot(r["bx"] - r["ax"], r["bz"] - r["az"]) * 2)
+    # 1) street level on the sidewalk, mid-block, looking along the most central street
     L = _m.hypot(r["bx"] - r["ax"], r["bz"] - r["az"])
     ux, uz = (r["bx"] - r["ax"]) / L, (r["bz"] - r["az"]) / L
-    ex, ez = r["ax"] + ux * L * 0.35 - uz * (r["width"] / 2 + 4), r["az"] + uz * L * 0.35 + ux * (r["width"] / 2 + 4)
+    ex, ez = r["ax"] + ux * L * 0.3 - uz * (r["width"] / 2 + 5), r["az"] + uz * L * 0.3 + ux * (r["width"] / 2 + 5)
     realism.real_camera((ex, -ez, gy + 7), (ex + ux * 120 + uz * 8, -(ez + uz * 120 - ux * 8), gy + 9), 30, focus=60, fstop=11)
     render("real_street")
+    realism.lens("screenshots/real_street.png")
     # 2) low aerial over the block
     realism.real_camera((CX + 240, -(CZ + 220), gy + 150), (CX - 10, -(CZ - 10), gy + 5), 35)
     render("real_aerial")
+    realism.lens("screenshots/real_aerial.png")
 
 
 def main():

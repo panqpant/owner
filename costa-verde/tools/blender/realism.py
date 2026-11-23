@@ -79,11 +79,14 @@ def mat_wall(ground_z):
     sc.inputs["Scale"].default_value = (3, 3, 0.15)
     nt.links.new(co, sc.inputs["Vector"])
     nt.links.new(sc.outputs["Vector"], streak.inputs["Vector"])
-    st = _rng(nt, streak.outputs["Fac"], 0.55, 0.75, 0, 0.12)
+    st = _rng(nt, streak.outputs["Fac"], 0.5, 0.75, 0, 0.3)  # rain streaks
     dirt = _n(nt, "ShaderNodeMath", operation="MAXIMUM")
     nt.links.new(base, dirt.inputs[0])
     nt.links.new(st, dirt.inputs[1])
     c3 = _mix(nt, c2, (0.13, 0.11, 0.08), dirt.outputs["Value"])
+    blot = _n(nt, "ShaderNodeTexNoise", Scale=0.08, Detail=3.0)  # sun-bleached / patched areas
+    nt.links.new(co, blot.inputs["Vector"])
+    c3 = _mix(nt, c3, (0.8, 0.78, 0.72), _rng(nt, blot.outputs["Fac"], 0.55, 0.75, 0, 0.18))
     nt.links.new(c3, b.inputs["Base Color"])
     b.inputs["Roughness"].default_value = 0.9
     fine = _n(nt, "ShaderNodeTexNoise", Scale=25.0, Detail=8.0)
@@ -112,7 +115,7 @@ def mat_roof():
     c1 = _mix(nt, col, cells.outputs["Color"], _rng(nt, rows.outputs["Fac"], 0, 1, 0.06, 0.1), "OVERLAY")
     weather = _n(nt, "ShaderNodeTexNoise", Scale=0.15, Detail=6.0)
     nt.links.new(co, weather.inputs["Vector"])
-    c2 = _mix(nt, c1, (0.09, 0.08, 0.07), _rng(nt, weather.outputs["Fac"], 0.45, 0.7, 0, 0.35))
+    c2 = _mix(nt, c1, (0.03, 0.03, 0.028), _rng(nt, weather.outputs["Fac"], 0.42, 0.7, 0, 0.6))  # black roof mildew
     nt.links.new(c2, b.inputs["Base Color"])
     b.inputs["Roughness"].default_value = 0.8
     _bump(nt, b, rows.outputs["Fac"], 0.8, 0.3)
@@ -137,6 +140,12 @@ def mat_asphalt():
     nt.links.new(_rng(nt, sparse.outputs["Fac"], 0.55, 0.65, 0, 0.8), cm.inputs[1])
     cmask = cm.outputs["Value"]
     c3 = _mix(nt, c2, (0.015, 0.015, 0.015), cmask)
+    oil = _n(nt, "ShaderNodeTexVoronoi", Scale=0.35)  # oil drips and patches
+    nt.links.new(co, oil.inputs["Vector"])
+    c3 = _mix(nt, c3, (0.012, 0.012, 0.012), _rng(nt, oil.outputs["Distance"], 0, 0.12, 0.7, 0))
+    patch = _n(nt, "ShaderNodeTexNoise", Scale=0.02, Detail=2.0)  # repaved patches
+    nt.links.new(co, patch.inputs["Vector"])
+    c3 = _mix(nt, c3, (0.025, 0.025, 0.027), _rng(nt, patch.outputs["Fac"], 0.6, 0.62, 0, 0.8))
     nt.links.new(c3, b.inputs["Base Color"])
     rough = _rng(nt, wear.outputs["Fac"], 0.3, 0.7, 0.8, 0.95)
     nt.links.new(rough, b.inputs["Roughness"])
@@ -313,7 +322,7 @@ def streets(roads, zone, gy):
             faces.append((k, k + 1, k + 2, k + 3))
         me = bpy.data.meshes.new(name)
         me.from_pydata(verts, [], faces)
-        me.materials.append(mat_simple(name, col, 0.55))
+        me.materials.append(mat_paint(name, col))
         o = bpy.data.objects.new(name, me)
         bpy.context.collection.objects.link(o)
     return asphalt, junctions
@@ -546,6 +555,9 @@ def street_life(roads, asphalt, junctions, buildings, zone, gy, rng):
     """Parked cars, utility poles with wires, hydrants, stop signs, trash cans, mailboxes."""
     cars, props = car_models(), prop_models()
     jpts = [Point(j) for j in junctions]
+    from shapely.prepared import prep
+    road_area = prep(asphalt.buffer(2.5))
+    off_road = lambda x, z: not road_area.contains(Point(x, z))  # noqa: E731
     wires = bpy.data.curves.new("wires", "CURVE")
     wires.dimensions, wires.bevel_depth = "3D", 0.07
     poles = []
@@ -567,12 +579,13 @@ def street_life(roads, asphalt, junctions, buildings, zone, gy, rng):
         t = 20.0
         while t < L:  # utility poles on one side, behind the sidewalk
             x, z = ax + ux * t + nx * (w / 2 + 9.5), az + uz * t + nz * (w / 2 + 9.5)
-            if zone[0] < x < zone[2] and zone[1] < z < zone[3]:
+            if zone[0] < x < zone[2] and zone[1] < z < zone[3] and off_road(x, z):
                 place(props["utility_pole"], x, z, gy + 1, ang + math.pi / 2)
                 poles.append((x, z, ang))
             t += 55
-        if rng.random() < 0.5 and zone[0] < ax < zone[2] and zone[1] < az < zone[3]:  # hydrant
-            place(props["hydrant"], ax + ux * 25 + nx * (w / 2 + 1.5), az + uz * 25 + nz * (w / 2 + 1.5), gy + 1)
+        hx, hz = ax + ux * 25 + nx * (w / 2 + 1.5), az + uz * 25 + nz * (w / 2 + 1.5)
+        if rng.random() < 0.5 and zone[0] < hx < zone[2] and zone[1] < hz < zone[3] and off_road(hx, hz):  # hydrant
+            place(props["hydrant"], hx, hz, gy + 1)
     for (x0, z0, a0), (x1, z1, a1) in zip(poles, poles[1:]):  # sagging wires between neighbouring poles
         if math.hypot(x1 - x0, z1 - z0) > 70:
             continue
@@ -593,8 +606,11 @@ def street_life(roads, asphalt, junctions, buildings, zone, gy, rng):
     wires.materials.append(mat_simple("wire", (20, 20, 20), 0.5))
     bpy.context.collection.objects.link(wo)
     for (jx, jz) in junctions:  # stop signs on the corners of minor junctions
-        if rng.random() < 0.7:
-            place(props["stop"], jx + 18, jz + 18, gy + 1, rng.uniform(0, 6.28))
+        for dx, dz in ((1, 1), (-1, 1), (1, -1), (-1, -1)):  # on a corner that is sidewalk, not road
+            sx, sz = jx + dx * 17, jz + dz * 17
+            if off_road(sx, sz):
+                place(props["stop"], sx, sz, gy + 1, rng.uniform(0, 6.28))
+                break
     for i, b in buildings:  # shrubs, hedges, mailboxes, trash cans
         c, s = math.cos(math.radians(b["rot"])), math.sin(math.radians(b["rot"]))
         to_world = lambda lx, lz: (b["x"] + c * lx - s * lz, b["z"] + s * lx + c * lz)  # noqa: E731
@@ -698,3 +714,95 @@ def real_camera(pos, target, lens=35, focus=None, fstop=8):
         c.data.dof.aperture_fstop = fstop
     bpy.context.scene.camera = c
     return c
+
+
+def mat_paint(name, col):
+    """Road paint, worn through to the asphalt in patches."""
+    m, nt, b = _nodes(name)
+    co = _coords(nt)
+    wear = _n(nt, "ShaderNodeTexNoise", Scale=0.9, Detail=8.0)
+    nt.links.new(co, wear.inputs["Vector"])
+    c = _mix(nt, tuple(x * 0.85 for x in _lin(col)), (0.05, 0.05, 0.05), _rng(nt, wear.outputs["Fac"], 0.45, 0.7, 0, 0.75))
+    nt.links.new(c, b.inputs["Base Color"])
+    b.inputs["Roughness"].default_value = 0.6
+    return m
+
+
+SHOP_NAMES = ["PHARMACY", "CAFE", "LAUNDROMAT", "BARBER", "TACOS", "LIQUORS", "NAILS", "INSURANCE", "BAKERY", "DELI", "PAWN",
+              "TATTOO", "BAIT & TACKLE", "CIGARS", "MARKET", "DENTAL", "PIZZA", "THRIFT", "HARDWARE", "VAPE"]
+
+
+def signs(items):
+    """Shop names in raised letters on the sign boards."""
+    mat = mat_simple("sign_letters", (244, 240, 228), 0.4)
+    for tf, z, width, rng in items:
+        cu = bpy.data.curves.new("sign", "FONT")
+        cu.body = rng.choice(SHOP_NAMES)
+        cu.align_x, cu.align_y = "CENTER", "CENTER"
+        cu.extrude = 0.12
+        cu.size = 1.7
+        o = bpy.data.objects.new("sign", cu)
+        cu.materials.append(mat)
+        x, y, zz = tf(0, 13.6, z)
+        x2, y2, _ = tf(1, 13.6, z)
+        o.location = (x, y, zz)
+        o.rotation_euler = (math.pi / 2, 0, math.atan2(y2 - y, x2 - x) + math.pi)  # face the street, not the wall
+        bpy.context.collection.objects.link(o)
+        dims = max(o.dimensions.x, 0.1)
+        if dims > width:
+            o.scale = (width / dims,) * 3
+
+
+def weather(objs):
+    """Lawns: brown and straw dry patches and bare dirt; applied to the terrain ground material."""
+    g = bpy.data.materials.get("ground")
+    if not g:
+        return
+    nt = g.node_tree
+    b = nt.nodes["Principled BSDF"]
+    src = b.inputs["Base Color"].links[0].from_socket
+    co = _coords(nt)
+    n1 = _n(nt, "ShaderNodeTexNoise", Scale=0.05, Detail=6.0)
+    nt.links.new(co, n1.inputs["Vector"])
+    c = _mix(nt, src, (0.2, 0.17, 0.08), _rng(nt, n1.outputs["Fac"], 0.5, 0.68, 0, 0.55))
+    n2 = _n(nt, "ShaderNodeTexNoise", Scale=0.4, Detail=8.0)
+    nt.links.new(co, n2.inputs["Vector"])
+    c = _mix(nt, c, (0.11, 0.08, 0.05), _rng(nt, n2.outputs["Fac"], 0.62, 0.72, 0, 0.6))
+    nt.links.new(c, b.inputs["Base Color"])
+    _bump(nt, b, n2.outputs["Fac"], 0.3, 0.2)
+
+
+def haze(cx, cz, gy):
+    """Humid air: a thin volume so distance fades to a warm haze (aerial perspective)."""
+    bpy.ops.mesh.primitive_cube_add(size=1, location=(cx, -cz, gy + 300))
+    o = bpy.context.object
+    o.scale = (3000, 3000, 600)
+    o.name = "haze"
+    m = bpy.data.materials.new("haze")
+    m.use_nodes = True
+    nt = m.node_tree
+    nt.nodes.remove(nt.nodes["Principled BSDF"])
+    v = nt.nodes.new("ShaderNodeVolumePrincipled")
+    v.inputs["Color"].default_value = (0.85, 0.88, 0.95, 1)
+    v.inputs["Density"].default_value = 0.00035
+    nt.links.new(v.outputs["Volume"], nt.nodes["Material Output"].inputs["Volume"])
+    o.data.materials.append(m)
+
+
+def lens(path):
+    """Camera imperfections real photos have: vignette, lateral colour fringing, highlight bloom, grain."""
+    import numpy as np
+    from PIL import Image, ImageFilter
+    im = Image.open(path).convert("RGB")
+    a = np.asarray(im).astype(np.float32) / 255
+    h, w, _ = a.shape
+    yy, xx = np.mgrid[0:h, 0:w]
+    r = np.sqrt(((xx - w / 2) / (w / 2)) ** 2 + ((yy - h / 2) / (h / 2)) ** 2)
+    a *= (1 - 0.22 * np.clip(r - 0.35, 0, None) ** 1.6)[..., None]
+    shift = max(1, w // 900)  # chromatic aberration: red out, blue in, toward the edges
+    a[..., 0] = np.roll(a[..., 0], shift, axis=1) * 0.5 + a[..., 0] * 0.5
+    a[..., 2] = np.roll(a[..., 2], -shift, axis=1) * 0.5 + a[..., 2] * 0.5
+    bright = Image.fromarray((np.clip(a - 0.78, 0, 1) * 255 * 3).clip(0, 255).astype(np.uint8)).filter(ImageFilter.GaussianBlur(w / 120))
+    a = a + np.asarray(bright).astype(np.float32) / 255 * 0.18
+    a += np.random.default_rng(1).normal(0, 0.012, a.shape).astype(np.float32)
+    Image.fromarray((np.clip(a, 0, 1) * 255).astype(np.uint8)).save(path)
