@@ -216,7 +216,7 @@ def realify(objs, ground_z):
             "door": mat_simple("real_door", (0, 0, 0), 0.5, vertex=True), "awning": mat_simple("real_awning", (0, 0, 0), 0.85, vertex=True),
             "roof_flat": mat_concrete((0.5, 0.49, 0.46), "real_roof_flat"), "metal": mat_simple("real_metal", (176, 178, 180), 0.35, 0.8),
             "pool": mat_simple("real_pool", (40, 150, 190), 0.03), "paint": mat_simple("real_paint", (0, 0, 0), 0.6, vertex=True),
-            "pole": mat_simple("real_pole", (80, 82, 84), 0.45, 0.7), "lamp": mat_simple("real_lamp", (255, 240, 210), 0.3, emit=(1, 0.85, 0.6))}
+            "pole": mat_simple("real_pole", (80, 82, 84), 0.45, 0.7), "solar": mat_solar(), "lamp": mat_simple("real_lamp", (255, 240, 210), 0.3, emit=(1, 0.85, 0.6))}
     for o in objs:
         me = o.data
         for i, mt in enumerate(me.materials):
@@ -512,6 +512,7 @@ def areca_clump(seed):
 def plant_beds(beds, gy, rng, keep_clear=None):
     """Fill mulch beds and lot-edge strips with shrubs, flowering bushes and areca clumps every few studs."""
     kinds = [shrubs_by_name(n) for n in ("shrub_green", "shrub_pink", "shrub_white", "hedge")]
+    kinds += list(PLANTS.values()) if PLANTS else []
     arecas = [areca_clump(900 + k) for k in range(3)]
     geoms = beds.geoms if hasattr(beds, "geoms") else [beds]
     n = 0
@@ -705,6 +706,7 @@ def street_life(roads, asphalt, junctions, buildings, zone, gy, rng):
 
 
 _SHRUBS = {}
+PLANTS = {}
 
 
 def shrubs_by_name(name):
@@ -738,12 +740,12 @@ def grass(terrain_obj, zone, lawn, density=900000):
     st.factor_random = 0.6
     st.brownian_factor = 0.08
     try:
-        st.root_radius, st.tip_radius = 0.06, 0.0
+        st.root_radius, st.tip_radius = 0.1, 0.02
         st.radius_scale = 1.0
     except AttributeError:
         pass
     st.render_type = "PATH"
-    blade = mat_foliage("grass_blades", (84, 118, 46), 0.35)
+    blade = mat_foliage("grass_blades", (72, 112, 58), 0.35)  # St. Augustine: broad, blue-green
     me.materials.append(blade)
     st.material = len(me.materials)
     return ps
@@ -1082,7 +1084,7 @@ def landcover(detailed, street_area, zone, gy, rng, palms, oaks):
     me.from_pydata(verts, [], faces)
     me.materials.append(fence_mat)
     bpy.context.collection.objects.link(bpy.data.objects.new("fences", me))
-    return unary_union(lawn), unary_union(mulch)
+    return unary_union(lawn), unary_union(mulch), fences
 
 
 def leaf_card(name, length, width, tint):
@@ -1173,4 +1175,169 @@ def real_trees(oaks, palms):
         if c:
             for o in c.objects:
                 foliate(o, shrub_leaf, 260, 1.1)
+    for c in PLANTS.values():  # new species: leaves over the flower-speckled body, which shows through the gaps
+        for o in c.objects:
+            foliate(o, shrub_leaf, 320, 1.2)
+            o.show_instancer_for_render = True
     _ = os
+
+
+def mat_solar():
+    """PV panel: dark blue cells in a silver grid, glossy."""
+    m, nt, b = _nodes("real_solar")
+    grid = _n(nt, "ShaderNodeTexBrick", Scale=0.9, **{"Mortar Size": 0.04})
+    nt.links.new(_coords(nt), grid.inputs["Vector"])
+    grid.inputs["Color1"].default_value = grid.inputs["Color2"].default_value = (0.01, 0.015, 0.04, 1)
+    grid.inputs["Mortar"].default_value = (0.5, 0.5, 0.52, 1)
+    nt.links.new(grid.outputs["Color"], b.inputs["Base Color"])
+    b.inputs["Roughness"].default_value = 0.06
+    b.inputs["Coat Weight"].default_value = 1.0
+    return m
+
+
+# ---------------------------------------------------------------- 5. ground clutter
+
+def _decals(name, polys, y, mat):
+    _slab(name, unary_union(polys) if polys else Polygon(), y - 0.02, y, mat)
+
+
+def clutter(roads, asphalt, walk_outer, zone, gy, rng):
+    """Manholes, storm drains at the curbs, tyre wear, tar-sealed cracks, puddles, litter, weeds in the cracks,
+    fallen palm fronds."""
+    clip = sbox(*zone)
+    manholes, drains, tyres, tar, puddles = [], [], [], [], []
+    for r in roads:
+        ax, az, bx, bz, w = r["ax"], r["az"], r["bx"], r["bz"], r["width"]
+        L = math.hypot(bx - ax, bz - az)
+        if L < 20:
+            continue
+        ux, uz, nx, nz = (bx - ax) / L, (bz - az) / L, -(bz - az) / L, (bx - ax) / L
+        if rng.random() < 0.6:
+            t = rng.uniform(0.2, 0.8) * L
+            manholes.append(Point(ax + ux * t + nx * rng.uniform(-w / 4, w / 4), az + uz * t + nz * rng.uniform(-w / 4, w / 4)).buffer(1.4, 12))
+        for side in (-1, 1):  # storm drain grates at the gutter
+            if rng.random() < 0.5:
+                t = rng.uniform(0.1, 0.9) * L
+                cx, cz = ax + ux * t + nx * (w / 2 - 0.8) * side, az + uz * t + nz * (w / 2 - 0.8) * side
+                drains.append(LineString([(cx - ux * 1.6, cz - uz * 1.6), (cx + ux * 1.6, cz + uz * 1.6)]).buffer(0.7, cap_style="flat"))
+            for lane in (0.25, 0.75):  # polished tyre tracks in each lane
+                o = side * w / 2 * lane
+                tyres.append(LineString([(ax + nx * o, az + nz * o), (bx + nx * o, bz + nz * o)]).buffer(0.7, cap_style="flat"))
+        for _ in range(rng.randint(0, 3)):  # tar-sealed cracks: wiggly lines
+            t0 = rng.uniform(0, L)
+            pts = []
+            x, z = ax + ux * t0 + nx * rng.uniform(-w / 2, w / 2), az + uz * t0 + nz * rng.uniform(-w / 2, w / 2)
+            a = rng.uniform(0, 6.28)
+            for _ in range(rng.randint(4, 10)):
+                pts.append((x, z))
+                a += rng.uniform(-0.8, 0.8)
+                x, z = x + math.cos(a) * 2.5, z + math.sin(a) * 2.5
+            tar.append(LineString(pts).buffer(0.18))
+        if rng.random() < 0.35:  # a puddle in a low spot near the gutter
+            t = rng.uniform(0.2, 0.8) * L
+            cx, cz = ax + ux * t + nx * (w / 2 - 3), az + uz * t + nz * (w / 2 - 3)
+            puddles.append(unary_union([Point(cx + rng.uniform(-3, 3), cz + rng.uniform(-1.5, 1.5)).buffer(rng.uniform(1, 2.6), 10) for _ in range(5)]))
+    road = asphalt.intersection(clip)
+    _decals("manholes", [g.intersection(road) for g in manholes], gy + 0.53, mat_simple("manhole", (52, 50, 46), 0.4, 0.8))
+    _decals("drains", drains, gy + 0.53, mat_simple("drain", (20, 20, 20), 0.5, 0.6))
+    tyre_m = mat_simple("tyre_wear", (36, 36, 38), 0.82)  # subtle: slightly darker, not shinier
+    _ = tyre_m  # shortcut: tyre wear as decals read as painted stripes; needs a blended asphalt-shader mask instead
+    _decals("tar_snakes", [g.intersection(road) for g in tar], gy + 0.51, mat_simple("tar", (8, 8, 8), 0.25))
+    pud = mat_simple("puddle", (14, 16, 18), 0.0)
+    pud.node_tree.nodes["Principled BSDF"].inputs["Coat Weight"].default_value = 1.0
+    _decals("puddles", [g.intersection(road) for g in puddles], gy + 0.515, pud)
+    # litter and weeds
+    litter = []
+    for name, size, col in (("cup", (0.5, 0.5, 0.7), (236, 236, 230)), ("can", (0.35, 0.35, 0.6), (190, 40, 40)), ("paper", (1.0, 0.8, 0.05), (220, 216, 200)),
+                            ("bag", (1.2, 0.9, 0.4), (40, 40, 44))):
+        coll = _collection("litter_" + name)
+        bm = bmesh.new()
+        _cube(bm, (0, 0, size[2] / 2), size, 0)
+        _obj("litter_" + name, bm, [mat_simple("litter_" + name, col, 0.6)], coll)
+        litter.append(coll)
+    weed = _collection("weed")
+    bm = bmesh.new()
+    for k in range(9):
+        a = k * 0.7
+        res = bmesh.ops.create_cone(bm, cap_ends=False, segments=3, radius1=0.12, radius2=0.0, depth=rng.uniform(0.8, 1.8))
+        bmesh.ops.rotate(bm, verts=res["verts"], cent=(0, 0, 0), matrix=__import__("mathutils").Matrix.Rotation(0.4, 3, Vector((math.cos(a), math.sin(a), 0))))
+        bmesh.ops.translate(bm, vec=(math.cos(a) * 0.3, math.sin(a) * 0.3, 0.5), verts=res["verts"])
+    _obj("weed", bm, [mat_foliage("weed_mat", (110, 130, 60), 0.3)], weed)
+    walk = walk_outer.difference(asphalt).intersection(clip)
+    x0, z0, x1, z1 = walk.bounds
+    from shapely.prepared import prep
+    pw = prep(walk)
+    for _ in range(int(walk.area / 260)):
+        x, z = rng.uniform(x0, x1), rng.uniform(z0, z1)
+        if pw.contains(Point(x, z)):
+            place(rng.choice(litter), x, z, gy + 1.0, rng.uniform(0, 6.28))
+    edge = asphalt.intersection(clip).boundary
+    t = 0.0
+    while t < edge.length:  # weeds where the curb meets the road and the sidewalk joints
+        if rng.random() < 0.35:
+            p = edge.interpolate(t)
+            place(weed, p.x, p.y, gy + 0.5, rng.uniform(0, 6.28), rng.uniform(0.6, 1.3))
+        t += 5
+    fallen = mat_frond("fallen_frond", (110, 86, 50), (160, 130, 80))
+    for o in list(bpy.data.objects):  # fallen fronds under palms
+        ic = o.instance_collection
+        if ic and ic.name.startswith("hero_palm") and o.type == "EMPTY":
+            for _ in range(rng.randint(0, 2)):
+                a = rng.uniform(0, 6.28)
+                d = rng.uniform(3, 9)
+                x, y = o.location.x + math.cos(a) * d, o.location.y + math.sin(a) * d
+                L = rng.uniform(6, 11)
+                me = bpy.data.meshes.new("frond")
+                ca, sa = math.cos(a), math.sin(a)
+                me.from_pydata([(x, y, gy + 0.6), (x + ca * L, y + sa * L, gy + 0.6), (x + ca * L - sa * 1.6, y + sa * L + ca * 1.6, gy + 0.62),
+                                (x - sa * 1.2, y + ca * 1.2, gy + 0.62)], [], [(0, 1, 2, 3)])
+                me.uv_layers.new(name="UVMap")
+                me.materials.append(fallen)
+                bpy.context.collection.objects.link(bpy.data.objects.new("frond", me))
+
+
+# ---------------------------------------------------------------- 6. more Florida plants
+
+def florida_plants():
+    """Hibiscus (red flowers), croton (variegated red/yellow), sea grape (big round leaves), bougainvillea (magenta)."""
+    out = {}
+    specs = {"hibiscus": ((50, 90, 40), (200, 30, 40), 2.6, 0.35), "croton": ((150, 120, 30), (180, 50, 30), 2.0, 0.6),
+             "seagrape": ((92, 130, 60), (150, 60, 50), 3.4, 0.15), "bougainvillea": ((60, 90, 40), (200, 40, 140), 3.0, 0.65)}
+    for name, (leaf, flower, size, share) in specs.items():
+        coll = _collection(name)
+        bm = bmesh.new()
+        res = bmesh.ops.create_icosphere(bm, subdivisions=3, radius=1)
+        bmesh.ops.scale(bm, vec=(size, size, size * 0.85), verts=res["verts"])
+        bmesh.ops.translate(bm, vec=(0, 0, size * 0.75), verts=res["verts"])
+        m, nt, b = _nodes(name + "_mat")
+        co = _coords(nt)
+        n1 = _n(nt, "ShaderNodeTexVoronoi", Scale=2.2)
+        nt.links.new(co, n1.inputs["Vector"])
+        c = _mix(nt, _lin(leaf), _lin(flower), _rng(nt, n1.outputs["Distance"], share * 0.6, share * 0.6 + 0.05, 1, 0))
+        nt.links.new(c, b.inputs["Base Color"])
+        b.inputs["Roughness"].default_value = 0.5
+        b.inputs["Subsurface Weight"].default_value = 0.15
+        o = _obj(name, bm, [m], coll)
+        tex = bpy.data.textures.new(name + "_disp", "CLOUDS")
+        tex.noise_scale = 0.45
+        d = o.modifiers.new("leafy", "DISPLACE")
+        d.texture, d.strength = tex, 0.8
+        out[name] = coll
+    return out
+
+
+def plants_on_fences(fence_lines, gy, rng, plants):
+    """Bougainvillea and sea grape spilling over fences; crotons and hibiscus joining the bed mix."""
+    n = 0
+    for fl in fence_lines:
+        for ln in (fl.geoms if hasattr(fl, "geoms") else [fl]):
+            if ln.is_empty or ln.geom_type not in ("LineString", "LinearRing"):
+                continue
+            t = rng.uniform(0, 8)
+            while t < ln.length:
+                if rng.random() < 0.45:
+                    p = ln.interpolate(t)
+                    place(plants["bougainvillea" if rng.random() < 0.6 else "seagrape"], p.x, p.y, gy, rng.uniform(0, 6.28), rng.uniform(0.8, 1.4))
+                    n += 1
+                t += rng.uniform(8, 16)
+    return n

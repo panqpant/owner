@@ -31,7 +31,7 @@ SURF = {
     "frame": (0.5, 0, None), "roof_tile": (0.75, 0, None), "roof_flat": (0.95, 0, (176, 172, 164)),
     "metal": (0.4, 0.7, (178, 180, 182)), "awning": (0.8, 0, None), "door": (0.6, 0, None), "concrete": (0.9, 0, (198, 194, 186)),
     "asphalt": (0.92, 0, (52, 52, 55)), "paint": (0.7, 0, None), "pool": (0.05, 0, (60, 170, 210)), "wood": (0.8, 0, (150, 118, 84)),
-    "pole": (0.5, 0.6, (90, 92, 94)), "lamp": (0.3, 0, (255, 244, 214)),
+    "pole": (0.5, 0.6, (90, 92, 94)), "lamp": (0.3, 0, (255, 244, 214)), "solar": (0.08, 0.3, (22, 30, 52)),
 }
 PASTEL = [(242, 200, 168), (196, 226, 206), (246, 228, 160), (240, 170, 150), (180, 212, 230), (244, 236, 214), (236, 236, 230)]
 HOUSE_COL = [(246, 240, 224), (236, 226, 200), (214, 222, 200), (206, 220, 230), (240, 214, 190), (250, 250, 246)]
@@ -184,10 +184,38 @@ def flat_roof(m, poly, y, rng, wall_col, big=False):
         m.box("wall", (mx - n[0] * 0.4, y + 1.4, mz - n[1] * 0.4), u, L, 2.8, 0.8, wall_col)
         m.box("trim", (mx + n[0] * 0.3, y - 0.4, mz + n[1] * 0.3), u, L + 1.2, 1.0, 1.4)
     xs, zs = [p[0] for p in poly], [p[1] for p in poly]
+    def spot(margin=4):
+        for _ in range(8):
+            x, z = rng.uniform(min(xs) + margin, max(xs) - margin), rng.uniform(min(zs) + margin, max(zs) - margin)
+            if inside(poly, x, z):
+                return x, z
+        return None
     for _ in range(rng.randint(1, 4 if big else 2)):  # AC units
-        x, z = rng.uniform(min(xs) + 4, max(xs) - 4), rng.uniform(min(zs) + 4, max(zs) - 4)
-        if inside(poly, x, z):
-            m.box("metal", (x, y + 1.6, z), (1, 0), 4, 3, 3)
+        p = spot()
+        if p:
+            m.box("metal", (p[0], y + 1.6, p[1]), (1, 0), 4, 3, 3)
+            m.box("pole", (p[0], y + 3.15, p[1]), (1, 0), 3, 0.1, 2.4)  # fan grille
+    for _ in range(rng.randint(2, 5)):  # vent stacks
+        p = spot(2)
+        if p:
+            m.box("metal", (p[0], y + 1.2, p[1]), (1, 0), 0.6, 2.4, 0.6, (120, 120, 118))
+    if rng.random() < 0.5:  # satellite dish on a stub mast
+        p = spot(3)
+        if p:
+            m.box("pole", (p[0], y + 1.5, p[1]), (1, 0), 0.25, 3, 0.25)
+            m.box("trim", (p[0], y + 3.2, p[1] + 0.4), (0.7, 0.7), 2.4, 2.4, 0.3)
+    if rng.random() < 0.4:  # roof hatch
+        p = spot(3)
+        if p:
+            m.box("metal", (p[0], y + 0.6, p[1]), (1, 0), 3, 1.2, 3, (140, 140, 136))
+    if big and rng.random() < 0.7:  # HVAC duct run
+        p = spot(6)
+        if p:
+            m.box("metal", (p[0], y + 1.2, p[1]), (1, 0), max(6, (max(xs) - min(xs)) * 0.4), 1.6, 1.6)
+    if rng.random() < 0.3:  # water heater / tank
+        p = spot(3)
+        if p:
+            m.box("metal", (p[0], y + 1.8, p[1]), (1, 0), 2.2, 3.6, 2.2, (200, 200, 196))
 
 
 def inside(poly, x, z):
@@ -199,7 +227,7 @@ def inside(poly, x, z):
     return c
 
 
-def pitched_roof(m, poly, y, kind, tile_col, wall_col):
+def pitched_roof(m, poly, y, kind, tile_col, wall_col, rng=None):
     """Hip or gable roof with 2.5-stud eaves over a rectangular part."""
     xs, zs = [p[0] for p in poly], [p[1] for p in poly]
     x0, x1, z0, z1 = min(xs) - 2.5, max(xs) + 2.5, min(zs) - 2.5, max(zs) + 2.5
@@ -221,6 +249,19 @@ def pitched_roof(m, poly, y, kind, tile_col, wall_col):
         m.face("roof_tile", [e[1], r0, r1, e[2]], tile_col)
         m.face("roof_tile", [e[3], r1, r0, e[0]], tile_col)
         ends = [(e[0], r0, e[1]), (e[2], r1, e[3])]
+    if rng and rng.random() < 0.3:  # rooftop solar on the first slope: inset panel array lifted off the tiles
+        a, b, c, d = (e[0], r0, r1, e[1]) if along_x else (e[1], r0, r1, e[2])
+        def lerp(p, q, t):
+            return tuple(p[i] + (q[i] - p[i]) * t for i in range(3))
+        p0, p1 = lerp(a, d, 0.2), lerp(a, d, 0.8)
+        q0, q1 = lerp(b, c, 0.2), lerp(b, c, 0.8)
+        lo0, lo1, hi0, hi1 = lerp(p0, q0, 0.2), lerp(p1, q1, 0.2), lerp(p0, q0, 0.7), lerp(p1, q1, 0.7)
+        lift = lambda p: (p[0], p[1] + 0.35, p[2])  # noqa: E731
+        m.face("solar", [lift(lo0), lift(lo1), lift(hi1), lift(hi0)][::-1] if along_x else [lift(lo0), lift(lo1), lift(hi1), lift(hi0)])
+    if rng:  # plumbing vent pipes through the roof
+        for _ in range(rng.randint(1, 3)):
+            x, z = rng.uniform(x0 + 4, x1 - 4), rng.uniform(z0 + 4, z1 - 4)
+            m.box("metal", (x, y + rh * 0.55, z), (1, 0), 0.4, rh * 0.5 + 2, 0.4, (90, 90, 90))
     for tri in ends:  # hip ends are roof; gable ends are wall
         m.face("roof_tile" if kind == "hip" else "wall", list(tri), tile_col if kind == "hip" else wall_col)
     for a, b in zip(e, e[1:] + e[:1]):  # fascia boards along the eaves
@@ -323,7 +364,7 @@ def building(idx, b):
         rect = len(poly) == 4
         if p["roof"] in ("hip", "gable", "gambrel") and rect:
             m.face("roof_flat", [(x, top, z) for x, z in poly][::-1])
-            pitched_roof(m, poly, top, "hip" if p["roof"] != "gable" else "gable", tile_col, wall_col)
+            pitched_roof(m, poly, top, "hip" if p["roof"] != "gable" else "gable", tile_col, wall_col, rng)
         elif p["roof"] == "spire":
             xs, zs = [q[0] for q in poly], [q[1] for q in poly]
             apex = (sum(xs) / len(xs), top + 10, sum(zs) / len(zs))
@@ -431,8 +472,11 @@ def main_real():
     realism.signs(SIGNS)
     realism.weather(objs)
     realism.haze(CX, CZ, gy)
-    lawn, beds = realism.landcover(detailed, walk_outer, zone, gy, rng, palms, oaks)
+    lawn, beds, fences = realism.landcover(detailed, walk_outer, zone, gy, rng, palms, oaks)
+    realism.PLANTS.update(realism.florida_plants())
     print("bed plants:", realism.plant_beds(beds, gy, rng, walk_outer.buffer(10)))
+    print("fence plants:", realism.plants_on_fences(fences, gy, rng, realism.PLANTS))
+    realism.clutter(roads, asphalt, walk_outer, zone, gy, rng)
     realism.real_trees(oaks, palms)
     terrain = bpy.data.objects["ground"]
     realism.grass(terrain, (CX - 260, CZ - 260, CX + 260, CZ + 260), lawn)
