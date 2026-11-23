@@ -1229,7 +1229,7 @@ def photo_upgrade():
     gravel_roof = photo("photo_roof_flat", "Gravel043", 8, tint=(170, 166, 158))[0]
     asph = photo("photo_asphalt", "Asphalt031", 22, bump=0.4)[0]
     conc = photo("photo_concrete", "Concrete034", 16, bump=0.3)[0]
-    swaps = {"real_wall": walls, "real_roof": roof, "real_concrete": conc, "real_asphalt": asph, "real_glass": mat_window_interior(),
+    swaps = {"real_wall": walls, "real_roof": roof, "real_concrete": conc, "real_asphalt": asph, "real_glass": mat_window_glass(),
              "real_roof_flat": gravel_roof}
     for o in bpy.data.objects:
         if o.type == "MESH":
@@ -1314,7 +1314,13 @@ def landcover(detailed, street_area, zone, gy, rng, palms, oaks, ground=None):
     _slab("stalls", unary_union(stalls).intersection(unary_union(paved)), gy + 0.32, gy + 0.36, mat_paint("stall_paint", (236, 236, 230)))
     _slab("mulch", unary_union(mulch), gy - 0.5, gy + 0.18, photo("photo_mulch", "Ground037", 6, tint=(120, 84, 60))[0])
     _slab("dirt", unary_union(dirt), gy - 0.5, gy + 0.08, photo("photo_dirt", "Ground037", 10, tint=(190, 170, 140))[0])
-    _slab("paths", unary_union(paths) if paths else Polygon(), gy - 0.5, gy + 0.2, bpy.data.materials.get("photo_concrete") or mat_concrete())
+    # park footpath flush with the lawn (a few hundredths above the soil, below the grass blades)
+    pmat = bpy.data.materials.get("photo_concrete") or mat_concrete()
+    for k, pth in enumerate(paths):  # each path at the real ground height along it
+        pts = list(pth.exterior.coords) if hasattr(pth, "exterior") else [c for g in pth.geoms for c in g.exterior.coords]
+        hs = [ground(x, z) for x, z in pts] if ground else [gy]
+        top = sum(hs) / len(hs) + 0.15  # average ground: flush within the lawn's small bumps
+        _slab(f"path{k}", pth, top - 1.2, top, pmat)
     fence_mat = photo("photo_fence", "WoodSiding011", 6, tint=(190, 160, 120))[0]
     verts, faces = [], []
     for fl in fences:
@@ -1690,4 +1696,15 @@ def mat_clear_glass():
     b.inputs["Transmission Weight"].default_value = 1.0
     b.inputs["Roughness"].default_value = 0.02
     b.inputs["IOR"].default_value = 1.45
+    return m
+
+
+def mat_window_glass():
+    """House and apartment windows: clear, slightly tinted glass with reflections, so the furnished rooms show."""
+    m, nt, b = _nodes("real_window_glass")
+    b.inputs["Base Color"].default_value = (0.75, 0.82, 0.85, 1)
+    b.inputs["Transmission Weight"].default_value = 0.92
+    b.inputs["Roughness"].default_value = 0.02
+    b.inputs["IOR"].default_value = 1.5
+    b.inputs["Coat Weight"].default_value = 0.5
     return m

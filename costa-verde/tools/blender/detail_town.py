@@ -385,6 +385,100 @@ def interior(m, poly, kind, rng, ceil):
         m.box("wood", (x1 - 5, 2.0, z0 + 3.5), U, 6, 4, 2.2, (230, 230, 226))  # checkout
 
 
+HOLLOW = ("house", "stucco", "shack", "deco", "midrise", "campus")  # styles built as real walls with openings and furnished floors
+
+
+def skin(m, e, y0_, y1_, openings, wall_col, ext=0.9):
+    """Wall of one edge between y0_ and y1_ built from panels around openings [(centre, width, bottom, top)], 0.9 thick
+    outward from the wall line; ends run past the corners so neighbouring walls close up."""
+    a, _, u, n, L = e
+    cuts = sorted({y0_, y1_} | {max(y0_, min(y1_, v)) for c_, w_, bt, tp in openings for v in (bt, tp)})
+    for ya, yb_ in zip(cuts, cuts[1:]):
+        if yb_ - ya < 0.05:
+            continue
+        gaps = sorted((c_ - w_ / 2, c_ + w_ / 2) for c_, w_, bt, tp in openings if bt <= ya + 0.01 and tp >= yb_ - 0.01)
+        x = -ext
+        for g0, g1 in gaps + [(L + ext, L + ext)]:
+            if g0 > x + 0.05:
+                mid = (x + g0) / 2
+                m.box("wall", (a[0] + u[0] * mid + n[0] * 0.45, (ya + yb_) / 2, a[1] + u[1] * mid + n[1] * 0.45), u, g0 - x, yb_ - ya, 0.9, wall_col)
+            x = max(x, g1)
+
+
+FURN = [(150, 120, 90), (90, 100, 120), (200, 190, 170), (60, 70, 80), (170, 80, 60), (110, 130, 100)]
+
+
+def furnish(m, poly, yb, height, kind, rng):
+    """One floor of a home or office: floor, ceiling light, furniture along the walls and in the middle."""
+    xs, zs = [p[0] for p in poly], [p[1] for p in poly]
+    x0, x1, z0, z1 = min(xs) + 1.5, max(xs) - 1.5, min(zs) + 1.5, max(zs) - 1.5
+    if x1 - x0 < 6 or z1 - z0 < 6:
+        return
+    ok = lambda x, z: inside(poly, x, z) and x0 < x < x1 and z0 < z < z1  # noqa: E731
+    U = (1, 0)
+    m.face("floor", [(x, yb + 0.35, z) for x, z in poly][::-1], rng.choice([(150, 110, 80), (200, 196, 186), (120, 96, 72), (210, 206, 196)]))
+    m.face("trim", [(x, yb + height - 0.2, z) for x, z in poly], (238, 236, 230))  # ceiling
+    for gx in range(int(x0) + 4, int(x1) - 2, 12):
+        for gz in range(int(z0) + 4, int(z1) - 2, 12):
+            if ok(gx, gz):
+                m.box("lamp", (gx, yb + height - 0.45, gz), U, 1.4, 0.2, 1.4)  # ceiling light
+    y = yb + 0.35
+    cx, cz = (x0 + x1) / 2, (z0 + z1) / 2
+    if kind == "office":
+        for x in range(int(x0) + 3, int(x1) - 2, 8):
+            for z in range(int(z0) + 3, int(z1) - 2, 7):
+                if ok(x, z):
+                    m.box("wood", (x, y + 2.9, z), U, 4.6, 0.3, 2.4, (200, 196, 186))
+                    m.box("door", (x, y + 4.2, z + 0.6), U, 1.8, 1.3, 0.15, (20, 20, 22))
+                    m.box("fabric", (x, y + 2.0, z - 1.8), U, 1.7, 2.4, 1.7, (30, 30, 34))
+        return
+    # living area: sofa facing a TV unit, coffee table, rug
+    if ok(cx - 4, z0 + 2):
+        col = rng.choice(FURN)
+        m.box("fabric", (cx - 4, y + 1.2, z0 + 2.2), U, 7, 2.4, 2.6, col)  # sofa seat
+        m.box("fabric", (cx - 4, y + 2.6, z0 + 1.3), U, 7, 2.8, 0.8, col)  # back
+        m.box("fabric", (cx - 4, y + 0.05, z0 + 5.5), U, 8, 0.1, 5, rng.choice(FURN))  # rug
+        m.box("wood", (cx - 4, y + 1.0, z0 + 5.5), U, 3.5, 0.3, 2, (110, 80, 60))  # coffee table
+        if ok(cx - 4, z0 + 9):
+            m.box("wood", (cx - 4, y + 1.2, z0 + 9.2), U, 6, 2.4, 1.4, (60, 50, 44))  # TV unit
+            m.box("door", (cx - 4, y + 4.0, z0 + 9.3), U, 5, 3, 0.2, (15, 15, 17))  # TV
+    # dining table with chairs
+    if ok(cx + 5, cz):
+        m.box("wood", (cx + 5, y + 2.6, cz), U, 5, 0.3, 3, (140, 100, 70))
+        for dx in (-1.6, 1.6):
+            for dz in (-2.3, 2.3):
+                m.box("wood", (cx + 5 + dx, y + 1.5, cz + dz), U, 1.4, 0.3, 1.4, (120, 90, 64))
+                m.box("wood", (cx + 5 + dx, y + 2.6, cz + dz * 1.25), U, 1.4, 2.2, 0.25, (120, 90, 64))
+    # kitchen run along the back wall with upper cabinets and a fridge
+    for x in range(int(x0) + 1, int(min(x1, x0 + 14)), 3):
+        if ok(x + 1.5, z1 - 1.2):
+            m.box("wood", (x + 1.5, y + 1.6, z1 - 1.2), U, 3, 3.2, 2.2, (236, 234, 228))
+            m.box("metal", (x + 1.5, y + 3.25, z1 - 1.2), U, 3, 0.15, 2.3, (60, 60, 64))  # counter top
+            m.box("wood", (x + 1.5, y + 6.4, z1 - 0.8), U, 3, 2.4, 1.4, (236, 234, 228))
+    if ok(x0 + 16, z1 - 1.4):
+        m.box("metal", (x0 + 16, y + 3.6, z1 - 1.4), U, 3, 7.2, 2.6, (210, 212, 214))  # fridge
+    # bed with nightstands and a wardrobe in the far corner
+    bx, bz = x1 - 5, cz + 2
+    if ok(bx, bz) and ok(bx, bz + 5):
+        m.box("wood", (bx, y + 0.9, bz), U, 5.6, 1.8, 7, (120, 96, 72))
+        m.box("fabric", (bx, y + 2.0, bz), U, 5.4, 0.6, 6.8, (236, 236, 230))  # mattress
+        m.box("fabric", (bx, y + 2.4, bz + 3.0), U, 4.8, 0.5, 1.2, (250, 250, 246))  # pillows
+        m.box("fabric", (bx, y + 2.35, bz - 1.0), U, 5.6, 0.25, 4.4, rng.choice(FURN))  # duvet
+        m.box("wood", (bx, y + 3.4, bz + 3.6), U, 5.8, 3.4, 0.4, (100, 80, 60))  # headboard
+        for side in (-1, 1):
+            m.box("wood", (bx + side * 3.6, y + 1.1, bz + 3), U, 1.4, 2.2, 1.4, (100, 80, 60))
+    if ok(x1 - 1.4, z0 + 4):
+        m.box("wood", (x1 - 1.4, y + 3.8, z0 + 4), U, 2.2, 7.6, 4.5, (200, 190, 170))  # wardrobe
+    for _ in range(rng.randint(1, 3)):  # plants and a floor lamp
+        px, pz = rng.uniform(x0 + 1, x1 - 1), rng.uniform(z0 + 1, z1 - 1)
+        if ok(px, pz):
+            m.box("door", (px, y + 0.8, pz), U, 1.2, 1.6, 1.2, (150, 90, 60))
+            m.box("fabric", (px, y + 2.6, pz), U, 2.0, 2.4, 2.0, (60, 110, 50))
+    if ok(x0 + 2, z0 + 2):
+        m.box("pole", (x0 + 2, y + 3, z0 + 2), U, 0.2, 6, 0.2)
+        m.box("lamp", (x0 + 2, y + 6.2, z0 + 2), U, 1.2, 0.8, 1.2)
+
+
 def building(idx, b):
     rng = random.Random(idx)
     c, s = math.cos(math.radians(b["rot"])), math.sin(math.radians(b["rot"]))
@@ -416,19 +510,30 @@ def building(idx, b):
             continue
         shop_part = style in ("stucco", "shack") and pi == 0 and y0 == 0 and h >= 11 and any(e[3][1] < -0.7 for e in edges(poly))
         CEIL = 10.0
-        if shop_part:  # ground floor is a real room open to the street through glass; walls only on the other sides
-            m.prism("wall", poly, CEIL, y0 + h, wall_col, top=False)
-            for e in edges(poly):
-                if e[3][1] >= -0.7:
-                    (ax_, az_), (bx_, bz_) = e[0], e[1]
-                    m.face("wall", [(ax_, -3, az_), (bx_, -3, bz_), (bx_, CEIL, bz_), (ax_, CEIL, az_)], wall_col)
+        hollow = style in HOLLOW
+        if shop_part:  # ground floor is a real room open to the street through glass
             interior(m, poly, interior_kind(b.get("use")), rng, CEIL)
-        else:
+        if not hollow:
             m.prism("wall", poly, y0 - 3, y0 + h, wall_col, top=False)
+        else:  # walls come from skins (with real openings); short edges and the footing get plain wall here
+            for i_ in range(len(poly)):
+                (ax_, az_), (bx_, bz_) = poly[i_], poly[(i_ + 1) % len(poly)]
+                if math.dist((ax_, az_), (bx_, bz_)) < 3:
+                    m.face("wall", [(ax_, y0 - 3, az_), (bx_, y0 - 3, bz_), (bx_, y0 + h, bz_), (ax_, y0 + h, az_)], wall_col)
+            for e in edges(poly):
+                skin(m, e, y0 - 3, y0, [], wall_col)
         if y0 == 0 and style != "tower":  # base course: a slightly proud, darker plinth
             big = [(x * (1 + 0.6 / max(1, abs(x))) if abs(x) > 0.1 else x, z * (1 + 0.6 / max(1, abs(z))) if abs(z) > 0.1 else z) for x, z in poly]
             m.prism("wall", big, -1, 1.8, tuple(int(v * 0.72) for v in wall_col), top=False)
         floors = max(1, int(h // fh))
+        if hollow:  # furnish every floor (shop ground floors are furnished as shops above)
+            for f in range(floors):
+                yb_f = y0 + f * fh
+                top_f = (y0 + h) if f == floors - 1 else yb_f + fh
+                if f > 0 or not shop_part:
+                    if f > 0:
+                        m.prism("concrete", poly, yb_f - 0.4, yb_f + 0.3, top=True)  # floor slab
+                    furnish(m, poly, yb_f, top_f - yb_f, "office" if style == "campus" else "home", rng)
         for e in edges(poly):
             a, _, u, n, L = e
             street = n[1] < -0.7  # local -z faces the street
@@ -455,6 +560,7 @@ def building(idx, b):
                     dx = L / 2 - 4
                     m.box("door", (cx + u[0] * dx + n[0] * 0.1, 4.2, cz + u[1] * dx + n[1] * 0.1), u, 3.6, 8.2, 0.25, (40, 40, 42))
                     m.box("wall", (cx + n[0] * 0.3, (CEIL + 9.1) / 2, cz + n[1] * 0.3), u, L, CEIL - 9.1, 0.8, wall_col)  # sign band
+                    skin(m, e, CEIL, (y0 + h) if floors == 1 else fh, [], wall_col)  # wall between the shop ceiling and the floor above
                     acol = rng.choice(AWNING)
                     for k in range(max(1, int(L // 3))):
                         t = (k + 0.5) / max(1, int(L // 3))
@@ -463,22 +569,21 @@ def building(idx, b):
                         m.face("awning", [(x - u[0] * 1.5 + n[0] * 0.2, 11, z - u[1] * 1.5 + n[1] * 0.2), (x + u[0] * 1.5 + n[0] * 0.2, 11, z + u[1] * 1.5 + n[1] * 0.2),
                                           (x + u[0] * 1.5 + n[0] * 5, 9, z + u[1] * 1.5 + n[1] * 5), (x - u[0] * 1.5 + n[0] * 5, 9, z - u[1] * 1.5 + n[1] * 5)], col)
                     continue
-                house_front = style == "house" and street and f == 0
-                if not house_front:  # outer skin 0.9 proud: spandrels below/above the windows and piers between them
-                    sk = lambda d0, d1, y_a, y_b: m.box("wall", (a[0] + u[0] * (d0 + d1) / 2 + n[0] * 0.45, (y_a + y_b) / 2,  # noqa: E731
-                                                              a[1] + u[1] * (d0 + d1) / 2 + n[1] * 0.45), u, d1 - d0, y_b - y_a, 0.9, wall_col)
-                    top_y = min(yb + fh, y0 + h)
-                    sk(0, L, yb, yb + sill)
-                    if top_y > yb + sill + wh:
-                        sk(0, L, yb + sill + wh, top_y)
-                    prev = 0.0
+                top_y = (y0 + h) if f == floors - 1 else min(yb + fh, y0 + h)
+                if True:  # outer skin 0.9 proud with real openings for windows, doors and garages
+                    ops = []
                     for j in range(nb):
                         wc = L * (j + 0.5) / nb  # window centre (not `c`: the transform closes over the rotation's cos)
-                        if wc - ww / 2 - 0.6 > prev:
-                            sk(prev, wc - ww / 2 - 0.6, yb + sill, yb + sill + wh)
-                        prev = wc + ww / 2 + 0.6
-                    if L > prev:
-                        sk(prev, L, yb + sill, yb + sill + wh)
+                        is_door = style == "house" and street and pi == 0 and j == nb // 2 and f == 0
+                        is_gar = style == "house" and street and pi == 1 and f == 0 and b.get("type") in ("ranch", "l_ranch")
+                        if is_gar:
+                            if j == 0:
+                                ops.append((L / 2, min(L - 3, 16) + 0.6, yb, yb + 9.2))
+                        elif is_door:
+                            ops.append((wc, 4.2, yb, yb + 8.4))
+                        else:
+                            ops.append((wc, ww + 1.2, yb + sill, yb + sill + wh))
+                    skin(m, e, yb, top_y, ops, wall_col)
                 for j in range(nb):
                     along = L * (j + 0.5) / nb
                     if style in ("stucco", "midrise") and f > 0 and rng.random() < 0.12:  # window AC unit
