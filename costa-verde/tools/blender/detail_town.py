@@ -31,7 +31,7 @@ SURF = {
     "frame": (0.5, 0, None), "roof_tile": (0.75, 0, None), "roof_flat": (0.95, 0, (176, 172, 164)),
     "metal": (0.4, 0.7, (178, 180, 182)), "awning": (0.8, 0, None), "door": (0.6, 0, None), "concrete": (0.9, 0, (198, 194, 186)),
     "asphalt": (0.92, 0, (52, 52, 55)), "paint": (0.7, 0, None), "pool": (0.05, 0, (60, 170, 210)), "wood": (0.8, 0, (150, 118, 84)),
-    "pole": (0.5, 0.6, (90, 92, 94)), "lamp": (0.3, 0, (255, 244, 214)), "solar": (0.08, 0.3, (22, 30, 52)),
+    "pole": (0.5, 0.6, (90, 92, 94)), "lamp": (0.3, 0, (255, 244, 214)), "solar": (0.08, 0.3, (22, 30, 52)), "neon": (0.3, 0, (255, 40, 50)),
 }
 PASTEL = [(242, 200, 168), (196, 226, 206), (246, 228, 160), (240, 170, 150), (180, 212, 230), (244, 236, 214), (236, 236, 230)]
 HOUSE_COL = [(246, 240, 224), (236, 226, 200), (214, 222, 200), (206, 220, 230), (240, 214, 190), (250, 250, 246)]
@@ -125,6 +125,9 @@ def material(surf):
     a.attribute_name = "col"
     nt.links.new(a.outputs["Color"], b.inputs["Base Color"])
     b.inputs["Roughness"].default_value, b.inputs["Metallic"].default_value = SURF[surf][0], SURF[surf][1]
+    if surf == "neon":
+        b.inputs["Emission Color"].default_value = (1, 0.08, 0.1, 1)
+        b.inputs["Emission Strength"].default_value = 8
     if surf == "lamp":
         b.inputs["Emission Color"].default_value = (1, 0.9, 0.7, 1)
         b.inputs["Emission Strength"].default_value = 2
@@ -173,7 +176,7 @@ def window(m, e, along, y, w, h, frame_col, rng, shutters=None):
     m.box("trim", (sx, y - 0.6, sz), u, w + 2, 0.6, 1.6)  # sill
     if shutters:
         for s in (-1, 1):
-            m.box("door", (fx + u[0] * (w / 2 + 1.9) * s, y + h / 2, fz + u[1] * (w / 2 + 1.9) * s), u, 2.4, h + 0.6, 0.4, shutters)
+            m.box("door", (fx + u[0] * (w / 2 + 1.9) * s + n[0] * 0.8, y + h / 2, fz + u[1] * (w / 2 + 1.9) * s + n[1] * 0.8), u, 2.4, h + 0.6, 0.4, shutters)
 
 
 def flat_roof(m, poly, y, rng, wall_col, big=False):
@@ -320,11 +323,31 @@ def building(idx, b):
             for f in range(floors):
                 yb = y0 + f * fh
                 shop = style in ("stucco", "shack") and f == 0 and street and y0 == 0
-                if shop:  # shopfront: big glazing, door, striped awning
-                    gx, gz = a[0] + u[0] * L / 2 + n[0] * 0.2, a[1] + u[1] * L / 2 + n[1] * 0.2
-                    m.box("glass", (gx, 4.5, gz), u, L - 4, 7, 0.3)
-                    m.box("door", (gx + n[0] * 0.2, 4, gz + n[1] * 0.2), u, 3.5, 8, 0.4, (40, 40, 40))
-                    m.box("trim", (gx + n[0] * 0.3, 8.4, gz + n[1] * 0.3), u, L - 3, 0.8, 0.8)
+                if shop:  # shopfront: a display bay 3.4 deep with the shop inside, door, striped awning
+                    cx, cz = a[0] + u[0] * L / 2, a[1] + u[1] * L / 2
+                    D = 3.4
+                    at = lambda d: (cx + n[0] * d, cz + n[1] * d)  # noqa: E731
+                    gx, gz = at(D)
+                    m.box("glass", (gx, 4.6, gz), u, L - 4, 7.2, 0.2)
+                    m.box("door", (gx + n[0] * 0.1 + u[0] * (L / 2 - 5), 4, gz + n[1] * 0.1 + u[1] * (L / 2 - 5)), u, 3.5, 8, 0.3, (40, 40, 40))
+                    m.box("trim", (gx + n[0] * 0.2, 8.6, gz + n[1] * 0.2), u, L - 2, 0.8, 0.8)
+                    sx, sz = at(D / 2)
+                    m.box("wall", (sx, 9.1, sz), u, L - 1, 0.6, D + 0.4, wall_col)  # soffit
+                    m.box("concrete", (sx, 0.3, sz), u, L - 1, 0.6, D + 0.4)  # display floor / threshold
+                    for side in (-1, 1):  # end piers
+                        px, pz = sx + u[0] * (L / 2 - 1) * side, sz + u[1] * (L / 2 - 1) * side
+                        m.box("wall", (px, 4.6, pz), u, 2, 9.2, D + 0.4, wall_col)
+                    lx, lz = at(D * 0.45)
+                    m.box("lamp", (lx, 8.7, lz), u, L - 5, 0.15, 0.6)  # ceiling light strip
+                    for k in range(max(2, int((L - 6) // 4))):  # shelves and goods behind the glass
+                        t = -L / 2 + 4 + k * 4
+                        bx_, bz_ = at(1.0)
+                        m.box("door", (bx_ + u[0] * t, 2.8, bz_ + u[1] * t), u, 3.2, 4.8, 1.4, rng.choice([(150, 120, 90), (90, 100, 120), (200, 190, 170), (120, 60, 50)]))
+                    cx2, cz2 = at(2.2)
+                    m.box("wood", (cx2 + u[0] * (L / 2 - 8), 1.8, cz2 + u[1] * (L / 2 - 8)), u, 4, 3.6, 1.2)  # counter
+                    if rng.random() < 0.35:  # neon OPEN sign in the window
+                        nx_, nz_ = at(D - 0.3)
+                        m.box("neon", (nx_ - u[0] * (L / 4), 6.2, nz_ - u[1] * (L / 4)), u, 3, 1.1, 0.15)
                     acol = rng.choice(AWNING)
                     for k in range(max(1, int(L // 3))):
                         t = (k + 0.5) / max(1, int(L // 3))
@@ -333,12 +356,34 @@ def building(idx, b):
                         m.face("awning", [(x - u[0] * 1.5 + n[0] * 0.2, 11, z - u[1] * 1.5 + n[1] * 0.2), (x + u[0] * 1.5 + n[0] * 0.2, 11, z + u[1] * 1.5 + n[1] * 0.2),
                                           (x + u[0] * 1.5 + n[0] * 5, 9, z + u[1] * 1.5 + n[1] * 5), (x - u[0] * 1.5 + n[0] * 5, 9, z - u[1] * 1.5 + n[1] * 5)], col)
                     continue
+                house_front = style == "house" and street and f == 0
+                if not house_front:  # outer skin 0.9 proud: spandrels below/above the windows and piers between them
+                    sk = lambda d0, d1, y_a, y_b: m.box("wall", (a[0] + u[0] * (d0 + d1) / 2 + n[0] * 0.45, (y_a + y_b) / 2,  # noqa: E731
+                                                              a[1] + u[1] * (d0 + d1) / 2 + n[1] * 0.45), u, d1 - d0, y_b - y_a, 0.9, wall_col)
+                    top_y = min(yb + fh, y0 + h)
+                    sk(0, L, yb, yb + sill)
+                    if top_y > yb + sill + wh:
+                        sk(0, L, yb + sill + wh, top_y)
+                    prev = 0.0
+                    for j in range(nb):
+                        wc = L * (j + 0.5) / nb  # window centre (not `c`: the transform closes over the rotation's cos)
+                        if wc - ww / 2 - 0.6 > prev:
+                            sk(prev, wc - ww / 2 - 0.6, yb + sill, yb + sill + wh)
+                        prev = wc + ww / 2 + 0.6
+                    if L > prev:
+                        sk(prev, L, yb + sill, yb + sill + wh)
                 for j in range(nb):
                     along = L * (j + 0.5) / nb
+                    if style in ("stucco", "midrise") and f > 0 and rng.random() < 0.12:  # window AC unit
+                        x, z = a[0] + u[0] * along + n[0] * 1.4, a[1] + u[1] * along + n[1] * 1.4
+                        m.box("metal", (x, yb + sill + 1.3, z), u, ww * 0.75, 2.4, 2.2, (196, 196, 190))
                     if style == "house" and street and pi == 0 and j == nb // 2 and f == 0:  # front door with a little step
                         x, z = a[0] + u[0] * along + n[0] * 0.3, a[1] + u[1] * along + n[1] * 0.3
                         m.box("door", (x, 4, z), u, 3.6, 8, 0.4, rng.choice([(120, 70, 50), (40, 70, 110), (250, 250, 246)]))
                         m.box("trim", (x + n[0] * 1.2, 0.3, z + n[1] * 1.2), u, 6, 0.6, 3)
+                        m.box("trim", (x + n[0] * 1.3, 9.2, z + n[1] * 1.3), u, 6.5, 0.5, 2.6)  # door canopy
+                        for side in (-1, 1):  # canopy brackets
+                            m.box("trim", (x + u[0] * 3 * side + n[0] * 1.3, 8.4, z + u[1] * 3 * side + n[1] * 1.3), u, 0.3, 1.4, 2.4)
                         continue
                     if style == "house" and street and pi == 1 and f == 0 and b.get("type") in ("ranch", "l_ranch"):  # garage door
                         if j == 0:
@@ -354,11 +399,22 @@ def building(idx, b):
                         m.box("trim", (x, yb + sill + wh + 1.2, z), u, ww + 3, 0.4, 3)
                 if style in ("deco", "midrise") and f > 0 and street and rng.random() < 0.5:  # balconies
                     x, z = a[0] + u[0] * L / 2 + n[0] * 2.2, a[1] + u[1] * L / 2 + n[1] * 2.2
-                    m.box("trim", (x, yb, z), u, min(L - 4, 16), 0.6, 4.4)
-                    m.box("glass", (x + n[0] * 2, yb + 1.8, z + n[1] * 2), u, min(L - 4, 16), 3, 0.2)
+                    bw_ = min(L - 4, 16)
+                    m.box("trim", (x, yb, z), u, bw_, 0.6, 4.4)  # balcony slab with a metal railing
+                    rx, rz = x + n[0] * 2.05, z + n[1] * 2.05
+                    m.box("pole", (rx, yb + 3.4, rz), u, bw_, 0.25, 0.25)
+                    for k in range(int(bw_ / 0.9) + 1):
+                        t = -bw_ / 2 + k * 0.9
+                        m.box("pole", (rx + u[0] * t, yb + 1.7, rz + u[1] * t), u, 0.12, 3.4, 0.12)
+            if style in ("stucco", "shack") and not street and y0 == 0 and L > 10 and rng.random() < 0.35:  # posters
+                for k in range(rng.randint(1, 3)):
+                    t = rng.uniform(3, L - 3)
+                    x, z = a[0] + u[0] * t + n[0] * 0.95, a[1] + u[1] * t + n[1] * 0.95
+                    m.box("awning", (x, rng.uniform(5, 7), z), u, rng.uniform(2.4, 3.6), rng.uniform(3.2, 4.6), 0.05,
+                          rng.choice([(200, 60, 50), (40, 80, 150), (230, 200, 60), (240, 240, 230), (30, 30, 30), (60, 140, 90)]))
             if style == "deco":  # pilasters between bays
                 for j in range(nb + 1):
-                    x, z = a[0] + u[0] * L * j / nb + n[0] * 0.4, a[1] + u[1] * L * j / nb + n[1] * 0.4
+                    x, z = a[0] + u[0] * L * j / nb + n[0] * 1.2, a[1] + u[1] * L * j / nb + n[1] * 1.2
                     m.box("wall", (x, y0 + h / 2, z), u, 1.4, h, 0.8, wall_col)
         top = y0 + h
         rect = len(poly) == 4
@@ -481,7 +537,8 @@ def main_real():
     realism.real_trees(oaks, palms)
     terrain = bpy.data.objects["ground"]
     realism.grass(terrain, (CX - 260, CZ - 260, CX + 260, CZ + 260), lawn)
-    realism.time_of_day(preset)
+    Lr = _m.hypot(r["bx"] - r["ax"], r["bz"] - r["az"])
+    realism.time_of_day(preset, ((r["bx"] - r["ax"]) / Lr, (r["bz"] - r["az"]) / Lr))
     # 1) street level on the sidewalk, mid-block, looking along the most central street
     L = _m.hypot(r["bx"] - r["ax"], r["bz"] - r["az"])
     ux, uz = (r["bx"] - r["ax"]) / L, (r["bz"] - r["az"]) / L
