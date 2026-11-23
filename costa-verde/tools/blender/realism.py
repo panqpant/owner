@@ -216,7 +216,9 @@ def realify(objs, ground_z):
             "door": mat_simple("real_door", (0, 0, 0), 0.5, vertex=True), "awning": mat_simple("real_awning", (0, 0, 0), 0.85, vertex=True),
             "roof_flat": mat_concrete((0.5, 0.49, 0.46), "real_roof_flat"), "metal": mat_simple("real_metal", (176, 178, 180), 0.35, 0.8),
             "pool": mat_simple("real_pool", (40, 150, 190), 0.03), "paint": mat_simple("real_paint", (0, 0, 0), 0.6, vertex=True),
-            "pole": mat_simple("real_pole", (80, 82, 84), 0.45, 0.7), "solar": mat_solar(), "lamp": mat_simple("real_lamp", (255, 240, 210), 0.3, emit=(1, 0.85, 0.6))}
+            "pole": mat_simple("real_pole", (80, 82, 84), 0.45, 0.7), "solar": mat_solar(), "shopglass": mat_clear_glass(),
+            "mirror": mat_simple("real_mirror", (230, 232, 234), 0.02, 1.0), "floor": mat_simple("real_floor", (0, 0, 0), 0.3, vertex=True),
+            "fabric": mat_simple("real_fabric", (0, 0, 0), 0.8, vertex=True), "lamp": mat_simple("real_lamp", (255, 240, 210), 0.3, emit=(1, 0.85, 0.6))}
     for o in objs:
         me = o.data
         for i, mt in enumerate(me.materials):
@@ -492,12 +494,12 @@ def hero_palm(seed, dwarf=False):
     uvl = bm.loops.layers.uv.new("UVMap")
     H = rng.uniform(6, 10) if dwarf else rng.uniform(34, 44)
     lean = rng.uniform(0.5, 1.5) if dwarf else rng.uniform(4, 10)
-    segs = 10 if dwarf else 28
+    segs = 10 if dwarf else 40
     rr = 0.35 if dwarf else 1.15
     for i in range(segs):
         t0, t1 = i / segs, (i + 1) / segs
         p0, p1 = Vector((lean * t0 ** 1.6, 0, H * t0)), Vector((lean * t1 ** 1.6, 0, H * t1))
-        r = rr * (1 - 0.35 * t0) + (rr * 0.07 if i % 2 else 0)
+        r = rr * (1 - 0.35 * t0) * (1 + rng.uniform(-0.015, 0.03))  # subtle, irregular leaf-scar rings
         d = p1 - p0
         rot = d.to_track_quat("Z", "Y").to_matrix().to_4x4()
         res = bmesh.ops.create_cone(bm, cap_ends=False, segments=10, radius1=r, radius2=r * 0.97, depth=d.length, matrix=Matrix.Translation((p0 + p1) / 2) @ rot)
@@ -793,7 +795,7 @@ def shrubs_by_name(name):
     return _SHRUBS[name]
 
 
-def grass(terrain_obj, zone, lawn, density=900000):
+def grass(terrain_obj, zone, lawn, density=340000):
     """Grass blades on lawn ground inside the zone, kept off roads, sidewalks and buildings."""
     me = terrain_obj.data
     vg = terrain_obj.vertex_groups.new(name="lawn")
@@ -812,17 +814,27 @@ def grass(terrain_obj, zone, lawn, density=900000):
     ps = mod.particle_system
     ps.vertex_group_density = "lawn"
     st = ps.settings
-    st.type, st.count, st.hair_length = "HAIR", density, 1.8
+    st.type, st.count, st.hair_length = "HAIR", density, 1.4
     st.use_advanced_hair = True
-    st.factor_random = 0.6
-    st.brownian_factor = 0.08
+    st.factor_random = 0.12  # mostly upright blades, a little lean
+    st.brownian_factor = 0.02
     try:
-        st.root_radius, st.tip_radius = 0.1, 0.02
+        st.root_radius, st.tip_radius = 0.035, 0.0
         st.radius_scale = 1.0
     except AttributeError:
         pass
     st.render_type = "PATH"
-    blade = mat_foliage("grass_blades", (72, 112, 58), 0.35)  # St. Augustine: broad, blue-green
+    st.child_type = "INTERPOLATED"  # dense turf: 6 children per guide strand
+    st.rendered_child_count, st.child_percent = 6, 6
+    st.child_radius, st.child_length, st.child_length_threshold = 0.6, 0.85, 0.3
+    blade, nt, b = _nodes("grass_blades")
+    hi = _n(nt, "ShaderNodeHairInfo")
+    shade = _mix(nt, _lin((62, 104, 50)), _lin((150, 150, 80)), _rng(nt, hi.outputs["Random"], 0.7, 1.0, 0, 1))  # a few dry blades
+    shade = _mix(nt, shade, _lin((44, 80, 36)), _rng(nt, hi.outputs["Random"], 0.0, 0.35, 0.6, 0))  # and darker ones
+    tip = _mix(nt, tuple(x * 0.35 for x in _lin((60, 90, 40))), shade, _rng(nt, hi.outputs["Intercept"], 0, 0.6, 0, 1))  # dark at the root
+    nt.links.new(tip, b.inputs["Base Color"])
+    b.inputs["Roughness"].default_value = 0.6
+    b.inputs["Subsurface Weight"].default_value = 0.2
     me.materials.append(blade)
     st.material = len(me.materials)
     return ps
@@ -888,9 +900,9 @@ SHOP_NAMES = ["PHARMACY", "CAFE", "LAUNDROMAT", "BARBER", "TACOS", "LIQUORS", "N
 def signs(items):
     """Shop names in raised letters on the sign boards."""
     mat = mat_simple("sign_letters", (244, 240, 228), 0.4)
-    for tf, z, width, rng in items:
+    for tf, z, width, rng, text in items:
         cu = bpy.data.curves.new("sign", "FONT")
-        cu.body = rng.choice(SHOP_NAMES)
+        cu.body = text or rng.choice(SHOP_NAMES)
         cu.align_x, cu.align_y = "CENTER", "CENTER"
         cu.extrude = 0.12
         cu.size = 1.7
@@ -917,7 +929,9 @@ def weather(objs):
     co = _coords(nt)
     n1 = _n(nt, "ShaderNodeTexNoise", Scale=0.05, Detail=6.0)
     nt.links.new(co, n1.inputs["Vector"])
-    c = _mix(nt, src, (0.2, 0.17, 0.08), _rng(nt, n1.outputs["Fac"], 0.5, 0.68, 0, 0.55))
+    photo_grass = cc0(nt, "Grass004", 6)["Color"]
+    src2 = _mix(nt, src, photo_grass, _rng(nt, n1.outputs["Fac"], 0, 1, 0.75, 0.75), "MULTIPLY")
+    c = _mix(nt, src2, (0.2, 0.17, 0.08), _rng(nt, n1.outputs["Fac"], 0.5, 0.68, 0, 0.55))
     n2 = _n(nt, "ShaderNodeTexNoise", Scale=0.4, Detail=8.0)
     nt.links.new(co, n2.inputs["Vector"])
     c = _mix(nt, c, (0.11, 0.08, 0.05), _rng(nt, n2.outputs["Fac"], 0.62, 0.72, 0, 0.6))
@@ -1067,7 +1081,7 @@ def photo_upgrade():
 
 # ---------------------------------------------------------------- land cover, trees with real leaves
 
-def landcover(detailed, street_area, zone, gy, rng, palms, oaks):
+def landcover(detailed, street_area, zone, gy, rng, palms, oaks, ground=None):
     """Every bit of ground gets a real use: paved lots, alleys, mulch beds, fences, parks, dirt. Returns lawn area."""
     from shapely.geometry import MultiPoint
     from shapely.ops import voronoi_diagram
@@ -1134,7 +1148,7 @@ def landcover(detailed, street_area, zone, gy, rng, palms, oaks):
         for _ in range(int(p.area / 1100)):
             x, z = rng.uniform(x0, x1), rng.uniform(z0, z1)
             if p.buffer(-6).contains(Point(x, z)) and not any(q.contains(Point(x, z)) for q in paths):
-                place(rng.choice(oaks + palms), x, z, gy, rng.uniform(0, 6.28), rng.uniform(0.8, 1.15))
+                place(rng.choice(oaks + palms), x, z, (ground(x, z) if ground else gy) - 0.4, rng.uniform(0, 6.28), rng.uniform(0.8, 1.15))
     asph = bpy.data.materials.get("photo_asphalt") or mat_asphalt()
     _slab("lots", unary_union(paved), gy - 0.5, gy + 0.32, asph)
     _slab("stalls", unary_union(stalls).intersection(unary_union(paved)), gy + 0.32, gy + 0.36, mat_paint("stall_paint", (236, 236, 230)))
@@ -1507,3 +1521,13 @@ def time_of_day(preset, view=None):
         _lights_on(lit, lamps, (1.0, 0.78, 0.5) if preset == "dusk" else (1.0, 0.85, 0.65))
     elif lit:
         _lights_on(lit, 0, (1, 1, 1))
+
+
+def mat_clear_glass():
+    """Shop windows: clear glass so the modelled display bay shows through, with reflections."""
+    m, nt, b = _nodes("real_shopglass")
+    b.inputs["Base Color"].default_value = (0.9, 0.95, 0.95, 1)
+    b.inputs["Transmission Weight"].default_value = 1.0
+    b.inputs["Roughness"].default_value = 0.02
+    b.inputs["IOR"].default_value = 1.45
+    return m
