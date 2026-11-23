@@ -6,12 +6,12 @@ function SegIndex.new()
 	local cells: { [number]: { { number } } } = {}
 	local CELL = 128
 	local idx = {}
-	function idx.add(ax: number, az: number, bx: number, bz: number, hw: number)
+	function idx.add(ax: number, az: number, bx: number, bz: number, hw: number, tag: string?)
 		for gx = math.floor((math.min(ax, bx) - hw) / CELL), math.floor((math.max(ax, bx) + hw) / CELL) do
 			for gz = math.floor((math.min(az, bz) - hw) / CELL), math.floor((math.max(az, bz) + hw) / CELL) do
 				local k = (gx + 4096) * 8192 + gz + 4096
 				cells[k] = cells[k] or {}
-				table.insert(cells[k], { ax, az, bx, bz, hw })
+				table.insert(cells[k], { ax, az, bx, bz, hw, tag } :: { any })
 			end
 		end
 	end
@@ -29,6 +29,24 @@ function SegIndex.new()
 			end
 		end
 		return true
+	end
+	-- Nearest road edge within r: distance from (x, z) to the road's edge (negative = on the road), and its tag.
+	function idx.nearest(x: number, z: number, r: number): (number, string?)
+		local best, tag = math.huge, nil
+		local gx, gz = math.floor(x / CELL), math.floor(z / CELL)
+		for i = -1, 1 do
+			for j = -1, 1 do
+				for _, sg in cells[(gx + i + 4096) * 8192 + gz + j + 4096] or {} do
+					local dx, dz = sg[3] - sg[1], sg[4] - sg[2]
+					local t = math.clamp(((x - sg[1]) * dx + (z - sg[2]) * dz) / math.max(dx * dx + dz * dz, 1e-6), 0, 1)
+					local dist = math.sqrt((x - sg[1] - dx * t) ^ 2 + (z - sg[2] - dz * t) ^ 2) - sg[5]
+					if dist < best then
+						best, tag = dist, (sg :: { any })[6]
+					end
+				end
+			end
+		end
+		return if best <= r then best else math.huge, tag
 	end
 	-- A rotated building box (centre, width along rot, depth): its outline every 16 studs and its middle
 	-- all off the road (dense enough that no road can pass between test points).

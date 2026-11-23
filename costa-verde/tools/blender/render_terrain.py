@@ -55,6 +55,27 @@ def build(c):
                     wv.append(P(x0 + (k % nx + 0.5) * res, z0 + (k // nx + 0.5) * res, max(lv)))
                 face.append(idx[k])
             wf.append(face)
+    # grey road strips (Roblox: grey parts), on the ground or at deck height on bridges
+    def gh(x, z):
+        i = min(nx - 1, max(0, int((x - x0) / res)))
+        j = min(nz - 1, max(0, int((z - z0) / res)))
+        return c["h"][j * nx + i]
+    rv, rf = [], []
+    for ax, az, bx, bz, wdt, bridge in c.get("roads", []):
+        L = math.hypot(bx - ax, bz - az) or 1
+        px, pz = -(bz - az) / L * wdt / 2, (bx - ax) / L * wdt / 2
+        ha, hb = (max(gh(ax, az), 2) + 6, max(gh(bx, bz), 2) + 6) if bridge else (gh(ax, az) + 0.4, gh(bx, bz) + 0.4)
+        n = len(rv)
+        rv += [P(ax + px, az + pz, ha), P(bx + px, bz + pz, hb), P(bx - px, bz - pz, hb), P(ax - px, az - pz, ha)]
+        rf.append((n, n + 1, n + 2, n + 3))
+    rm = bpy.data.meshes.new("roads")
+    rm.from_pydata(rv, [], rf)
+    ro = bpy.data.objects.new("roads", rm)
+    bpy.context.collection.objects.link(ro)
+    m = bpy.data.materials.new("road")
+    m.use_nodes = True
+    m.node_tree.nodes["Principled BSDF"].inputs["Base Color"].default_value = (0.09, 0.09, 0.09, 1)
+    rm.materials.append(m)
     wm = bpy.data.meshes.new("water")
     wm.from_pydata(wv, [], wf)
     wo = bpy.data.objects.new("water", wm)
@@ -81,3 +102,15 @@ for name in sys.argv[1:] or ["keys", "wetland", "beach", "country"]:
     cx, cz, half = c["x0"] + c["nx"] * c["res"] / 2, c["z0"] + c["nz"] * c["res"] / 2, c["nx"] * c["res"] / 2
     camera(P(cx + half * 0.55, cz + half * 0.75, 320), P(cx - half * 0.05, cz - half * 0.1, 0), 24)
     render(f"terrain_{name}")
+    # close-up along a rural road, low like a player's view, to show ditches, verges and canals
+    rural = [r for r in c.get("roads", []) if r[4] <= 30 and not r[5] and math.hypot(r[2] - r[0], r[3] - r[1]) > 20
+             and abs(r[0] - cx) < half * 0.6 and abs(r[1] - cz) < half * 0.6]
+    if rural:
+        ax, az, bx, bz = rural[len(rural) // 2][:4]
+        L = math.hypot(bx - ax, bz - az)
+        ux, uz = (bx - ax) / L, (bz - az) / L
+        i = min(c["nx"] - 1, max(0, int((ax - c["x0"]) / c["res"])))
+        j = min(c["nz"] - 1, max(0, int((az - c["z0"]) / c["res"])))
+        g = c["h"][j * c["nx"] + i]
+        camera(P(ax - ux * 60 - uz * 30, az - uz * 60 + ux * 30, g + 22), P(ax + ux * 140, az + uz * 140, g), 30)
+        render(f"terrain_{name}_close")

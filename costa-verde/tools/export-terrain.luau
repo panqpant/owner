@@ -8,6 +8,7 @@ local Gen = require("../src/shared/Gen")
 
 TB.selfCheck()
 local world = serde.decode("json", fs.readFile("build/world.json"))
+local ridx = TB.roadIndex(world.roads)
 local D = {}
 for _, d in world.districts do
 	D[d.id] = d
@@ -16,13 +17,19 @@ local AREAS = { -- name, centre, size (studs)
 	{ "keys", D.keytown.x, D.keytown.z, 2560 },
 	{ "wetland", D.swamptown.x, D.swamptown.z, 2560 },
 	{ "beach", D.beach.x, D.beach.z, 2560 },
-	{ "country", Gen.Config.SIZE * 0.45, Gen.Config.SIZE * 0.3, 2560 },
+	{ "country", Gen.Config.SIZE * 0.40625, Gen.Config.SIZE * 0.40625, 2560 },
 }
 for _, a in AREAS do
 	local t0 = os.clock()
 	local x0, z0 = math.floor((a[2] - a[4] / 2) / 16) * 16, math.floor((a[3] - a[4] / 2) / 16) * 16
-	local c = TB.columns(x0, z0, a[4], a[4])
+	local c = TB.columns(x0, z0, a[4], a[4], ridx)
 	c.x0, c.z0, c.res = x0, z0, 4
+	c.roads = {} -- grey road strips for the preview (parts in Roblox); drives are dirt terrain
+	for _, r in world.roads do
+		if r.kind ~= "drive" and math.max(r.ax, r.bx) > x0 and math.min(r.ax, r.bx) < x0 + a[4] and math.max(r.az, r.bz) > z0 and math.min(r.az, r.bz) < z0 + a[4] then
+			table.insert(c.roads, { r.ax, r.az, r.bx, r.bz, r.width, r.bridge })
+		end
+	end
 	fs.writeFile("build/terrain_" .. a[1] .. ".json", serde.encode("json", c))
 	print(string.format("%s: %dx%d columns in %.1fs", a[1], c.nx, c.nz, os.clock() - t0))
 end

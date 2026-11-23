@@ -6,6 +6,7 @@
 -- Pure logic (`columns`) runs in Lune too, so tools/export-terrain.luau previews exactly what is built.
 -- Studio: require(game.ReplicatedStorage.Shared.TerrainBuilder).build() from the command bar (edit mode, then save).
 local Gen = require("./Gen")
+local SegIndex = require("./Gen/SegIndex")
 
 local Config, Terrain, Districts, Hash = Gen.Config, Gen.Terrain, Gen.Districts, Gen.Hash
 
@@ -19,7 +20,7 @@ TerrainBuilder.OFFSET = -Config.SIZE / 2 -- world is centred on the origin (Robl
 TerrainBuilder.PALETTE = {
 	Grass = { 112, 132, 66 }, LeafyGrass = { 68, 98, 48 }, Ground = { 128, 104, 74 }, Mud = { 84, 78, 58 },
 	Sand = { 228, 216, 182 }, Rock = { 126, 122, 112 }, Limestone = { 208, 200, 172 }, Pavement = { 134, 134, 130 },
-	Sandstone = { 196, 170, 126 }, Salt = { 232, 228, 214 },
+	Sandstone = { 196, 170, 126 }, Salt = { 232, 228, 214 }, Concrete = { 170, 168, 160 },
 }
 TerrainBuilder.WATER = { color = { 38, 150, 160 }, transparency = 0.55, reflectance = 0.6, waveSize = 0.08, waveSpeed = 8 }
 
@@ -34,6 +35,7 @@ local function vnoise(x: number, z: number, scale: number, seed: number): number
 	return (a + (b - a) * fx) + ((c + (d - c) * fx) - (a + (b - a) * fx)) * fz
 end
 
+local ROADSIDE = { county = true, state = true, collector = true, arterial = true, freeway = true, access = true, street = true }
 local PAVED = { tower = true, midrise = true, warehouse = true }
 
 -- Material for one column. s: generator sample (nearest 16-stud), h/water: interpolated, slope: rise per stud.
@@ -71,8 +73,8 @@ local function material(s: any, h: number, water: number?, slope: number, x: num
 		return "LeafyGrass"
 	elseif b == "wetland" then -- sawgrass with open mud and darker sloughs
 		return if big < 0.3 then "Mud" elseif fine > 0.75 then "LeafyGrass" else "Grass"
-	elseif b == "scrub" then -- white sand with palmetto clumps
-		return if fine < 0.38 then "Sand" elseif big > 0.65 then "LeafyGrass" else "Grass"
+	elseif b == "scrub" then -- palmetto and wiregrass with occasional bare white sand
+		return if big < 0.22 and fine < 0.45 then "Sand" elseif big > 0.6 then "LeafyGrass" else "Grass"
 	elseif b == "farm" and s.material == "Ground" then -- ploughed crop rows, ~12 studs apart
 		return if (x // 12) % 2 == 0 then "Ground" else "Sandstone"
 	elseif s.shape == "key" and fine < 0.2 then
@@ -82,11 +84,12 @@ local function material(s: any, h: number, water: number?, slope: number, x: num
 end
 
 -- Columns for a w x d stud area starting at (x0, z0) in generator coordinates. Returns flat arrays
--- h, water (nil = dry), material, plus nx, nz. Heights are bilinear between 16-stud samples plus fine
--- relief off-road (none in town, so streets stay flat).
-function TerrainBuilder.columns(x0: number, z0: number, w: number, d: number)
-	local sx0, sz0 = x0 // SAMPLE - 1, z0 // SAMPLE - 1
-	local sw, sd = math.ceil(w / SAMPLE) + 3, math.ceil(d / SAMPLE) + 3
+-- h, water (false = dry), material, plus nx, nz. Heights are bilinear between 16-stud samples plus fine
+-- relief off-road (none in town, so streets stay flat). `roads` (SegIndex with kind tags) adds the
+-- earthworks and wear that follow roads: ditches / canals, worn verges, dirt tracks.
+function TerrainBuilder.columns(x0: number, z0: number, w: number, d: number, roads: any?)
+	local sx0, sz0 = x0 // SAMPLE - 2, z0 // SAMPLE - 2
+	local sw, sd = math.ceil(w / SAMPLE) + 5, math.ceil(d / SAMPLE) + 5
 	local S, built, style = {}, {}, {}
 	for j = 0, sd - 1 do
 		for i = 0, sw - 1 do
@@ -101,31 +104,75 @@ function TerrainBuilder.columns(x0: number, z0: number, w: number, d: number)
 			end
 		end
 	end
-	local function at(fx: number, fz: number, field: string): number?
+	-- sample-level earthworks: levees (farm beside wetland, raised 4 studs) and seawalls (town beside water)
+	local lift, wall = table.create(sw * sd, 0), {}
+	for j = 1, sd - 2 do
+		for i = 1, sw - 2 do
+			local k = j * sw + i + 1
+			local s = S[k]
+			for _, o in { -1, 1, -sw, sw } do
+				local n = S[k + o]
+				if s.biome == "farm" and not s.water and n.biome == "wetland" then
+					lift[k] = 4
+				end
+				if built[k] and n.water then
+					wall[k] = n.water
+				end
+			end
+		end
+	end
+	local function lerp(arr: { number }, fx: number, fz: number): number
 		local i, j = math.floor(fx), math.floor(fz)
 		local tx, tz = fx - i, fz - j
-		local function v(a: number, b: number): number?
-			return S[(j + b) * sw + (i + a) + 1][field]
-		end
-		local a, b, c, e = v(0, 0), v(1, 0), v(0, 1), v(1, 1)
-		if field == "water" then -- water level: any corner's (levels are flat per water body)
-			return a or b or c or e
-		end
-		return ((a :: number) * (1 - tx) + (b :: number) * tx) * (1 - tz) + ((c :: number) * (1 - tx) + (e :: number) * tx) * tz
+		local b = j * sw + i + 1
+		return (arr[b] * (1 - tx) + arr[b + 1] * tx) * (1 - tz) + (arr[b + sw] * (1 - tx) + arr[b + sw + 1] * tx) * tz
+	end
+	local H16 = table.create(sw * sd)
+	for k, s in S do
+		H16[k] = s.h
+	end
+	local function waterAt(fx: number, fz: number): number?
+		local b = math.floor(fz) * sw + math.floor(fx) + 1
+		return S[b].water or S[b + 1].water or S[b + sw].water or S[b + sw + 1].water -- levels are flat per water body
 	end
 	local nx, nz = w // RES, d // RES
 	local H, Wt, M = table.create(nx * nz), table.create(nx * nz), table.create(nx * nz)
-	local hgrid = {}
+	local hgrid, extra = {}, {}
 	for j = -1, nz do -- one-column border for slopes
 		for i = -1, nx do
 			local x, z = x0 + (i + 0.5) * RES, z0 + (j + 0.5) * RES
 			local fx, fz = x / SAMPLE - sx0, z / SAMPLE - sz0
-			local h = at(fx, fz, "h") :: number
 			local k = math.round(fz) * sw + math.round(fx) + 1
+			local h = lerp(H16, fx, fz) + lerp(lift, fx, fz)
+			local water = waterAt(fx, fz)
+			local tag: string? = nil
 			if not built[k] and not S[k].water then
 				h += (vnoise(x, z, 14, 13) - 0.5) * 0.8 -- small bumps, hummocks, furrows
 			end
-			hgrid[(j + 1) * (nx + 2) + (i + 1)] = h
+			if wall[k] and h > wall[k] - 1 then
+				h, tag = wall[k] + 2.5, "seawall" -- vertical concrete edge, not a beach
+			elseif roads and not built[k] and not S[k].water then
+				local e, kind = roads.nearest(x, z, 16)
+				if kind == "drive" and e < 0 then
+					tag = "track" -- driveways and farm lanes are dirt, part of the terrain
+				elseif kind and ROADSIDE[kind] and e >= 0 then
+					if e < 4 and (kind == "county" or kind == "collector" or kind == "access") then
+						tag = "verge"
+					elseif e < 14 then -- roadside ditch; in the wetlands a water-filled canal
+						local prof = math.sin((e - 4) / 10 * math.pi)
+						if S[k].biome == "wetland" or S[k].biome == "mangrove" then
+							water = h - 0.8
+							h -= 5 * prof
+							tag = "canal"
+						else
+							h -= 2.2 * prof
+							tag = "ditch"
+						end
+					end
+				end
+			end
+			local q = (j + 1) * (nx + 2) + (i + 1)
+			hgrid[q], extra[q] = h, { water, tag }
 		end
 	end
 	for j = 0, nz - 1 do
@@ -138,13 +185,44 @@ function TerrainBuilder.columns(x0: number, z0: number, w: number, d: number)
 			end
 			local h = g(0, 0)
 			local slope = math.max(math.abs(g(1, 0) - g(-1, 0)), math.abs(g(0, 1) - g(0, -1))) / (2 * RES)
-			local water = at(fx, fz, "water")
+			local ex = extra[(j + 1) * (nx + 2) + (i + 1)]
+			local water, tag = ex[1], ex[2]
+			local fine = vnoise(x, z, 22, 12)
+			local m
+			if tag == "seawall" then
+				m = "Concrete"
+			elseif tag == "track" then
+				m = "Ground"
+			elseif tag == "verge" then
+				m = if fine < 0.55 then "Ground" else "Grass" -- worn, patchy shoulders
+			elseif tag == "canal" then
+				m = "Mud"
+			elseif tag == "ditch" then
+				m = if fine < 0.3 then "Mud" else "Grass"
+			elseif lerp(lift, fx, fz) > 2.5 and slope < 0.4 then
+				m = "Grass" -- mowed levee top
+			elseif water and h >= water - 0.5 and h < water + 0.6 and S[k].biome ~= "mangrove" and S[k].biome ~= "wetland" and not built[k] then
+				m = "Sandstone" -- wet sand at the waterline
+			else
+				m = material(S[k], h, water, slope, x, z, built[k], style[k])
+			end
 			table.insert(H, h)
 			table.insert(Wt, water or false)
-			table.insert(M, material(S[k], h, water, slope, x, z, built[k], style[k]))
+			table.insert(M, m)
 		end
 	end
 	return { nx = nx, nz = nz, h = H, water = Wt, material = M }
+end
+
+-- Road index for `columns`, from the generator's road list ({ ax, az, bx, bz, width, kind }).
+function TerrainBuilder.roadIndex(roads: { any }): any
+	local idx = SegIndex.new()
+	for _, r in roads do
+		if not r.bridge then
+			idx.add(r.ax, r.az, r.bx, r.bz, (r.width or 20) / 2, r.kind)
+		end
+	end
+	return idx
 end
 
 -- Self-check (Lune): materials are all in the palette, heights finite.
@@ -158,8 +236,15 @@ function TerrainBuilder.selfCheck()
 end
 
 -- Roblox: write the whole map (or a sub-area) into workspace.Terrain in 256-stud chunks.
-function TerrainBuilder.build(area: { x0: number, z0: number, w: number, d: number }?)
+-- `roads`: the generator's road list; if omitted the road network is generated here (one-off, slow).
+function TerrainBuilder.build(area: { x0: number, z0: number, w: number, d: number }?, roads: { any }?)
 	local a = area or { x0 = 0, z0 = 0, w = Config.SIZE, d = Config.SIZE }
+	if not roads then
+		local city = Gen.City.generate()
+		Gen.Rural.generate(city.roads, city.buildings, city.shared)
+		roads = city.roads
+	end
+	local ridx = TerrainBuilder.roadIndex(roads :: { any })
 	local terrain = (workspace :: any).Terrain
 	for name, c in TerrainBuilder.PALETTE do
 		terrain:SetMaterialColor((Enum.Material :: any)[name], Color3.fromRGB(c[1], c[2], c[3]))
@@ -174,7 +259,7 @@ function TerrainBuilder.build(area: { x0: number, z0: number, w: number, d: numb
 	local t0 = os.clock()
 	for cz = a.z0, a.z0 + a.d - 1, CH do
 		for cx = a.x0, a.x0 + a.w - 1, CH do
-			local c = TerrainBuilder.columns(cx, cz, CH, CH)
+			local c = TerrainBuilder.columns(cx, cz, CH, CH, ridx)
 			local top = BOTTOM
 			for k = 1, #c.h do
 				top = math.max(top, c.h[k], c.water[k] or -math.huge)
