@@ -25,7 +25,6 @@ Config.CELL = 64 -- heightmap sample spacing (studs)
 Config.SEA = 0 -- water surface height
 Config.ROAD_W = 28
 Config.HIGHWAY_W = 56
-Config.SECTION = 1600 -- rural section-line road spacing (US ~1 mile grid, compressed)
 Config.COUNTY_W = 20
 
 -- Hand-drawn outline, clockwise: { u, v, roughness }. 0 = smooth sandy Atlantic coast,
@@ -145,16 +144,16 @@ Config.TERRAIN = {
 	bands_m = { 150, 300, 600, 1200, 2400, 4800 },
 	mean = { coast = 7.0, farm = 33.4, scrub = 16.7, wetland = 3.0 },
 	amps = {
-		coast = { 0.272, 0.320, 0.405, 0.516, 0.444, 0.281 },
-		farm = { 0.244, 0.567, 1.132, 1.747, 1.998, 2.558 },
-		scrub = { 0.092, 0.125, 0.166, 0.295, 0.494, 0.759 },
-		wetland = { 0.079, 0.091, 0.075, 0.063, 0.066, 0.065 },
+		coast = { 1, 1, 1, 1, 1, 1 },
+		farm = { 1, 1, 1, 1, 1, 1 },
+		scrub = { 1, 1, 1, 1, 1, 1 },
+		wetland = { 1, 1, 1, 1, 1, 1 },
 	},
 	cal = {
 		coast = { 1.000, 1.000, 1.000, 1.000, 1.000, 1.000 },
-		farm = { 0.206, 2.286, 7.959, 2.020, 0.978, 0.978 },
-		scrub = { 0.251, 0.100, 0.100, 0.100, 0.100, 0.100 },
-		wetland = { 3.302, 0.416, 0.100, 0.100, 0.100, 0.100 },
+		farm = { 0.411, 1.296, 4.129, 4.602, 3.497, 3.497 },
+		scrub = { 0.166, 0.100, 0.100, 0.100, 0.100, 0.100 },
+		wetland = { 0.260, 0.106, 0.100, 0.100, 0.100, 0.100 },
 	},
 }
 

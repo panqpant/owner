@@ -345,8 +345,8 @@ def shot_keys():
 def shot_country():
     reset()
     terrain(); water(); roads(False); rails(); parks(); buildings(False)
-    sky(30, 160)
-    st = next(s for s in W["stations"] if s["line"] == "Gulf Line") if W["stations"] else D["truckstop"]
+    sky(35, 160, 0.6)
+    st = W["settlements"][0]  # frame a hamlet in the farm belt
     camera(P(st["x"] + 2200, st["z"] + 1800, 900), P(st["x"] - 600, st["z"] - 700, 0), 30)
     render("countryside")
 

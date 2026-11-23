@@ -14,7 +14,6 @@ export type Poi = { x: number, z: number, y: number, kind: string, name: string 
 export type Settlement = { x: number, z: number, name: string, size: number }
 
 local W = Config.SIZE
-local SEC = Config.SECTION
 
 local function ruralOk(x: number, z: number): boolean
 	local s = Terrain.sample(x, z)

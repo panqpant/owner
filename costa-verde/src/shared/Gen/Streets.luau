@@ -72,7 +72,7 @@ function Streets.grow(p: Params, inside: (number, number) -> boolean, cx: number
 	end
 	local function snapHeading(h: number): number
 		local axis = angle + math.round((h - angle) / (math.pi / 2)) * (math.pi / 2)
-		return h + (axis - h) * p.order
+		return h + (axis - h) * p.order ^ 4 -- per-step pull: mid values still allow real curves
 	end
 
 	type Head = { x: number, z: number, h: number, depth: number, parent: number }
@@ -89,7 +89,8 @@ function Streets.grow(p: Params, inside: (number, number) -> boolean, cx: number
 		local nextJunction = p.spacing * rng:range(0.75, 1.25)
 		local blocks = 0
 		local total = 0
-		local turn = 0 -- curvature changes slowly: smooth arcs, not jitter
+		-- side streets bend in a steady arc (suburban loops); curvature then changes slowly, never jitters
+		local turn = if kind == "collector" then 0 else rng:range(-1, 1) * p.curve * STEP / 100
 		local stub = -1 -- > 0 while finishing a cul-de-sac
 		-- Lattice: on grid-like styles junctions fall on shared lines, so parallel streets make neat blocks.
 		local useLattice = p.order >= 0.6
@@ -161,11 +162,26 @@ function Streets.grow(p: Params, inside: (number, number) -> boolean, cx: number
 		end
 	end
 
+	-- On grid styles, move a seed sideways onto the lattice line its street will run along, so every
+	-- road shares the lattice (and rural fields, which use the same lattice, sit between roads).
+	local function onLattice(x: number, z: number, a: number): (number, number)
+		if p.order < 0.6 then
+			return x, z
+		end
+		local alongAngle = math.abs(math.cos(a - angle)) >= math.abs(math.sin(a - angle))
+		local nx, nz = -math.sin(a), math.cos(a)
+		local sp = if alongAngle then p.spacing else p.spacing * (p.aspect or 1)
+		local q = (x - cx) * nx + (z - cz) * nz
+		local dq = math.round(q / sp) * sp - q
+		return x + nx * dq, z + nz * dq
+	end
+
 	for c = 1, p.collectors do
 		local a = angle + (if c % 2 == 0 then math.pi / 2 else 0) + rng:range(-0.15, 0.15) * (1 - p.order)
 		local off = rng:range(-0.6, 0.6) * half
 		local sx = cx - math.cos(a) * half + math.cos(a + math.pi / 2) * off
 		local sz = cz - math.sin(a) * half + math.sin(a + math.pi / 2) * off
+		sx, sz = onLattice(sx, sz, a)
 		-- walk the start point inward until it is inside the area
 		for _ = 1, 100 do
 			if inside(sx, sz) then
@@ -198,6 +214,7 @@ function Streets.grow(p: Params, inside: (number, number) -> boolean, cx: number
 				local z = gz + rng:range(-0.3, 0.3) * stepC
 				if inside(x, z) and not nearest(x, z, p.spacing * 1.1, -1) then
 					local a = angle + (if rng:next() < 0.5 then 0 else math.pi / 2)
+					x, z = onLattice(x, z, a)
 					local first = state.nid + #roads + 1
 					grow({ x = x, z = z, h = a, depth = 0, parent = -1 }, "collector", math.huge)
 					grow({ x = x, z = z, h = a + math.pi, depth = 0, parent = first }, "collector", math.huge)

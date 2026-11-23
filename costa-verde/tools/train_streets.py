@@ -6,6 +6,7 @@ import math
 import random
 import subprocess
 import sys
+import zlib
 
 from PIL import Image, ImageDraw, ImageFont
 
@@ -13,6 +14,10 @@ sys.path.insert(0, "tools")
 from road_stats import stats  # noqa: E402
 
 TARGET = json.load(open("tools/data/road_stats.json"))
+try:
+    PREV = json.load(open("tools/data/street_training.json"))
+except FileNotFoundError:
+    PREV = {}
 BOUNDS = {
     "spacing": (150, 1800), "order": (0, 1), "curve": (0, 0.6), "branch": (0.1, 1), "cross": (0, 1),
     "deadEnd": (0, 0.6), "connect": (0.2, 0.9), "maxLen": (1, 14), "collectors": (2, 14), "aspect": (1, 3),
@@ -48,10 +53,26 @@ def clamp(p):
 
 def tune(role, evals):
     t = TARGET["roles"][role]
-    rnd = random.Random(hash(role) & 0xFFFF)
+    if role == "rural":  # rural roads stay on the field lattice (real county grids are fairly regular)
+        BOUNDS["order"] = (0.6, 1)
+    else:
+        BOUNDS["order"] = (0, 1)
+    rnd = random.Random(zlib.crc32(role.encode()))  # deterministic (str hash is randomized per process)
     best = clamp({"spacing": t["block_median"], "order": t["orientation_order"], "curve": 0.05, "branch": 0.7,
                   "cross": t["cross_frac"] * 2, "deadEnd": t["dead_end_frac"] / 2, "connect": 0.5, "maxLen": 6, "collectors": 6, "aspect": 1.8})
     best_l = loss(run(role, best)[1], t)
+    # second start shaped like a real suburb pod: curving collectors, many short cul-de-sac fingers
+    pod = clamp({"spacing": t["block_median"], "order": 0.3, "curve": 0.3, "branch": 0.9, "cross": 0.1,
+                 "deadEnd": 0.6, "connect": 0.5, "maxLen": 1, "collectors": 4, "aspect": 1.5})
+    pod_l = loss(run(role, pod)[1], t)
+    if pod_l < best_l:
+        best, best_l = pod, pod_l
+    # third start: last run's best, so retraining never loses ground
+    if role in PREV:
+        prev = clamp({**best, **PREV[role]["params"]})
+        prev_l = (loss(run(role, prev, 7)[1], t) + loss(run(role, prev, 11)[1], t)) / 2
+        if prev_l < best_l:
+            best, best_l = prev, prev_l
     step = 0.35
     for i in range(evals):
         cand = {k: v + rnd.gauss(0, step) * (BOUNDS[k][1] - BOUNDS[k][0]) * (0.5 if k == "spacing" else 1) for k, v in best.items()}

@@ -6,6 +6,7 @@
 local Config = require("./Config")
 local Noise = require("./Noise")
 local Hash = require("./Hash")
+local StreetStyles = require("./StreetStyles")
 
 local Terrain = {}
 
@@ -27,6 +28,12 @@ local COAST = Config.COAST
 
 local function clamp01(x: number): number
 	return math.clamp(x, 0, 1)
+end
+
+-- S-curve 0..1: shores ease in and out instead of a straight ramp with a crease at each end.
+local function smooth01(x: number): number
+	local t = clamp01(x)
+	return t * t * (3 - 2 * t)
 end
 
 -- Signed distance (normalized, + inside) to the hand-drawn outline, plus interpolated roughness.
@@ -127,7 +134,7 @@ function Terrain.sample(x: number, z: number): Sample
 	local WL = Config.WETLANDS
 	local wd = math.sqrt(((u - WL[1]) / WL[3]) ^ 2 + ((v - WL[2]) / WL[4]) ^ 2)
 	local wet = if shape == "main" then clamp01((1 - wd * (1 + 0.4 * Noise.fbm(u * 6, v * 6, S + 50))) * 3) else 0
-	local coastW = clamp01(1 - math.max(landStuds, 0) / 3000)
+	local coastW = clamp01(1 - math.max(landStuds, 0) / 6000)
 	local farmMask = clamp01((north + 0.35 * Noise.fbm(u * 10, v * 10, S + 11) - 0.2) * 3)
 	-- Regional elevation changes slowly (10+ km in the real data), so heights use smooth weights;
 	-- farmMask only decides where fields go.
@@ -155,12 +162,12 @@ function Terrain.sample(x: number, z: number): Sample
 		amps[i] = wW * T.amps.wetland[i] * T.cal.wetland[i] + wC * T.amps.coast[i] * T.cal.coast[i]
 			+ wF * T.amps.farm[i] * T.cal.farm[i] + wS * T.amps.scrub[i] * T.cal.scrub[i]
 	end
-	local ramp = clamp01(math.max(landStuds, 0) / 700) -- ramps down to the beach
+	local ramp = smooth01(math.max(landStuds, 0) / 2500) -- eases down to the beach over ~1 km, as real coasts do
 	-- Height (m) at any nearby point with this point's land-type weights (used for lake levels too).
 	local function heightAt(px: number, pz: number): number
 		local hh = meanM
 		for i, lam in T.bands_m do
-			local ls = lam * Config.STUD_PER_M
+			local ls = lam * Config.STUD_PER_M / 2 -- value noise with lattice L peaks near wavelength 2L
 			hh += amps[i] * Noise.value(px / ls, pz / ls, S + 80 + i)
 		end
 		return 0.6 + (hh - 0.6) * ramp
@@ -178,7 +185,7 @@ function Terrain.sample(x: number, z: number): Sample
 			water = bigLevel
 			lakeBottom = bigLevel - math.min(ld * W * 0.02, 18)
 		elseif ld > -0.012 then -- shore slopes down to the water instead of a cliff
-			hM = math.min(hM, bigLevel / VERT + 0.3 + (hM - bigLevel / VERT) * clamp01(-ld / 0.012))
+			hM = bigLevel / VERT + 0.3 + (hM - bigLevel / VERT - 0.3) * smooth01(-ld / 0.012) -- meets the water from above or below
 		end
 		-- Real karst: sinkholes 100-600 m across, clustered in zones, often merging, irregular rims.
 		local cs = 0.02
@@ -202,7 +209,7 @@ function Terrain.sample(x: number, z: number): Sample
 						elseif t < 1 then
 							hM = math.min(hM, level - 3 * (1 - t * t)) -- dry sinkhole
 						else
-							hM = math.min(hM, level + 0.4 + (hM - level) * (t - 1) / 0.5) -- gentle shore
+							hM = level + 0.4 + (hM - level - 0.4) * smooth01((t - 1) / 0.5) -- shore meets the water, no perched rim
 						end
 					end
 				end
@@ -220,7 +227,7 @@ function Terrain.sample(x: number, z: number): Sample
 		if coast > 0 then
 			h, biome, shape, water = -1.5, "marsh", "marsh", 0 -- tidal pools inside the outline
 		else
-			local sea = if off < shelf then -(2 + 18 * (off / shelf) ^ 1.5) else -math.min(20 + (off - shelf) * W * 0.08, 200)
+			local sea = if off < shelf then -(0.3 + 19.7 * (off / shelf) ^ 1.5) else -math.min(20 + (off - shelf) * W * 0.08, 200)
 			local bay = -math.min(3 + off * W * 0.004, 10)
 			h = sea + (bay - sea) * bayness
 			biome = if bayness > 0.5 then "bay" else "sea"
@@ -246,20 +253,25 @@ function Terrain.sample(x: number, z: number): Sample
 			local hammock = Noise.fbm(along * 30, across * 75, S + 52, 2)
 			if slough > 0.38 and wet > 0.4 then
 				biome, material, shape = "marsh", "Mud", "marsh"
-				water = h + 0.4 * VERT
+				h -= 0.2 * VERT
+				water = h + 0.25 * VERT -- sheet flow: water sits just above the sawgrass floor
 				landStuds = -1
 			elseif hammock > 0.35 then
-				h, biome, material = h + 0.4 * VERT, "hammock", "LeafyGrass"
+				h, biome, material = h + 0.15 * VERT, "hammock", "LeafyGrass" -- bare-earth DEMs: tree islands barely rise
 			else
 				biome, material = "wetland", "Grass"
 			end
 		elseif farmMask > 0.5 and Noise.fbm(u * 9, v * 9, S + 12) > -0.15 then
 			-- Fields subdivide the road sections (so every field touches a county road), tracks between.
-			local SEC = Config.SECTION
-			local si, sj = math.floor(x / SEC), math.floor(z / SEC)
+			-- Fields subdivide the cells of the rural road lattice (Streets.luau, same origin and spacing),
+			-- so every field sits between county roads.
+			local R = StreetStyles.rural
+			local SX, SZ = R.spacing * (R.aspect or 1), R.spacing
+			local lx, lz = x - W / 2, z - W / 2
+			local si, sj = math.floor(lx / SX), math.floor(lz / SZ)
 			local cols, rows = 2 + math.floor(Hash.float(si, sj, S + 62) * 3), 1 + math.floor(Hash.float(si, sj, S + 63) * 2)
-			local fx, fz = (x - si * SEC) / (SEC / cols), (z - sj * SEC) / (SEC / rows)
-			local edge = math.min(fx % 1, 1 - fx % 1) * SEC / cols < 6 or math.min(fz % 1, 1 - fz % 1) * SEC / rows < 6
+			local fx, fz = (lx - si * SX) / (SX / cols), (lz - sj * SZ) / (SZ / rows)
+			local edge = math.min(fx % 1, 1 - fx % 1) * SX / cols < 6 or math.min(fz % 1, 1 - fz % 1) * SZ / rows < 6
 			biome = "farm"
 			if edge then
 				material = "Ground"
