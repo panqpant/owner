@@ -33,15 +33,16 @@ marsh = np.array([55, 70, 60])
 water = wl > -9000
 rgb = np.where(water[..., None] & (biome == "bay")[..., None], bay, np.where(water[..., None] & (biome == "lake")[..., None], lake, np.where(water[..., None] & np.isin(biome, ["marsh", "wetland", "hammock"])[..., None], marsh, np.where(water[..., None], sea, rgb))))
 img = Image.fromarray(rgb.clip(0, 255).astype(np.uint8)).resize((PX, PX), Image.BILINEAR)
+S_PX = PX
 d = ImageDraw.Draw(img)
 
 for p in world["parks"]:
     x, z, w = p["x"] * k, p["z"] * k, p["w"] * k / 2
     d.rectangle([x - w, z - w, x + w, z + w], fill={"lake": (25, 45, 50), "golf": (110, 160, 80), "park": (60, 110, 50)}[p["kind"]])
 # Road hierarchy: draw minor first, majors on top; freeways get a casing.
-ORDER = ["drive", "county", "street", "collector", "runway", "state", "arterial", "boulevard", "ramp", "freeway"]
+ORDER = ["drive", "access", "county", "street", "collector", "runway", "state", "arterial", "boulevard", "ramp", "freeway"]
 COL = {"street": (70, 70, 76), "collector": (55, 55, 62), "arterial": (235, 200, 120), "boulevard": (245, 170, 90),
-       "state": (225, 190, 110), "ramp": (230, 150, 90), "freeway": (230, 120, 60), "runway": (150, 150, 150), "county": (150, 135, 105), "drive": (165, 150, 120)}
+       "state": (225, 190, 110), "ramp": (230, 150, 90), "freeway": (230, 120, 60), "runway": (150, 150, 150), "county": (150, 135, 105), "drive": (165, 150, 120), "access": (205, 120, 190)}
 def road_width(r):
     return max(1, int(r["width"] * k * (2.2 if r["kind"] in ("freeway", "boulevard", "arterial", "state", "ramp") else 1.6)))
 
@@ -90,6 +91,37 @@ except OSError:
 for dist in world["districts"]:
     x, z = dist["x"] * k, dist["z"] * k
     d.text((x, z), dist["name"], fill=(255, 255, 255), font=font, anchor="mm", stroke_width=3, stroke_fill=(0, 0, 0))
+# Landmarks: footprints with names (readable when zoomed); playable markers as lettered circles.
+lm_font = ImageFont.truetype("DejaVuSans-Bold.ttf", 12)
+for l in world.get("landmarks", []):
+    x, z, w2, d2 = l["x"] * k, l["z"] * k, l["w"] * k / 2, l["d"] * k / 2
+    d.rectangle([x - w2, z - d2, x + w2, z + d2], fill=(205, 60, 180), outline=(90, 0, 80), width=2)
+    d.text((x, z - d2 - 8), l["name"], fill=(255, 230, 250), font=lm_font, anchor="mm", stroke_width=2, stroke_fill=(60, 0, 50))
+MARK = {"gun_store": ("G", (200, 30, 30)), "mod_shop": ("M", (240, 140, 20)), "car_dealer": ("C", (40, 120, 220)),
+        "boat_dealer": ("B", (20, 160, 200)), "clothing": ("S", (180, 80, 220)), "barber": ("H", (120, 80, 40)),
+        "tattoo": ("T", (40, 40, 40)), "convenience": ("$", (30, 150, 60)), "gas": ("F", (230, 200, 20)),
+        "liquor": ("L", (150, 40, 90)), "bank": ("K", (20, 90, 40)), "jewelry": ("J", (220, 180, 60)),
+        "pawn": ("P", (100, 100, 100)), "food": ("E", (230, 90, 60)), "bar": ("D", (110, 40, 160)),
+        "gym": ("Y", (60, 60, 160)), "cinema": ("V", (90, 90, 200)), "arcade": ("A", (200, 60, 120)),
+        "bowling": ("W", (100, 160, 160)), "hospital": ("+", (220, 40, 40)), "fire": ("R", (230, 60, 0)),
+        "police": ("*", (20, 50, 160))}
+mk_font = ImageFont.truetype("DejaVuSans-Bold.ttf", 11)
+for b in world["buildings"]:
+    if b.get("marker") in MARK:
+        ch, col = MARK[b["marker"]]
+        x, z = b["x"] * k, b["z"] * k
+        d.ellipse([x - 8, z - 8, x + 8, z + 8], fill=col, outline=(255, 255, 255), width=2)
+        d.text((x, z), ch, fill=(255, 255, 255), font=mk_font, anchor="mm")
+lx, ly = 24, S_PX - 30 - 18 * len(MARK)
+d.rectangle([lx - 8, ly - 8, lx + 260, S_PX - 16], fill=(20, 24, 30))
+for i, (name, (ch, col)) in enumerate(MARK.items()):
+    y = ly + 18 * i
+    d.ellipse([lx, y, lx + 14, y + 14], fill=col, outline=(255, 255, 255))
+    d.text((lx + 7, y + 7), ch, fill=(255, 255, 255), font=mk_font, anchor="mm")
+    d.text((lx + 22, y), name.replace("_", " "), fill=(230, 230, 230), font=mk_font)
+d.rectangle([lx + 150, ly, lx + 164, ly + 14], fill=(205, 60, 180), outline=(90, 0, 80))
+d.text((lx + 170, ly), "landmark", fill=(230, 230, 230), font=mk_font)
+
 d.text((24, 24), f"COSTA VERDE  ~{size * 0.28 / 1000:.1f} x {size * 0.28 / 1000:.1f} km   * = easter egg   o = station", fill=(255, 255, 255), font=font, stroke_width=3, stroke_fill=(0, 0, 0))
 
 out = sys.argv[1] if len(sys.argv) > 1 else "screenshots/map.png"

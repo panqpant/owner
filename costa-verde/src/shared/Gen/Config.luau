@@ -41,13 +41,15 @@ Config.BARRIER = { v0 = 0.3, v1 = 0.7, offset = 0.03, width = 0.006, inlets = { 
 
 -- Keys: quadratic arc from the south-east cape (a) bending through c to b.
 Config.KEYS_ARC = { a = { 0.6, 0.845 }, c = { 0.5, 0.97 }, b = { 0.2, 0.94 }, count = 24 }
+-- The chain ends in its biggest island, home of Key Marisol (like real keys chains): u, v, half-length, half-width.
+Config.TOWN_KEY = { 0.205, 0.942, 0.026, 0.01 }
 
 Config.BIG_LAKE = { 0.43, 0.24, 0.045 }
 Config.WETLANDS = { 0.4, 0.64, 0.24, 0.17 } -- centre u, v, radius u, radius v
 
 -- Metro sprawl: cores whose union is built up; hard western levee line like real wetland edges.
 Config.URBAN = {
-	cores = { { 0.72, 0.5, 0.11 }, { 0.75, 0.33, 0.09 }, { 0.71, 0.64, 0.08 }, { 0.15, 0.41, 0.05 }, { 0.3, 0.7, 0.022 }, { 0.47, 0.33, 0.022 } },
+	cores = { { 0.72, 0.5, 0.11 }, { 0.75, 0.33, 0.09 }, { 0.71, 0.64, 0.08 }, { 0.15, 0.41, 0.05 }, { 0.3, 0.7, 0.022 }, { 0.47, 0.33, 0.022 }, { 0.205, 0.942, 0.024 } },
 	levee = 0.6, -- metro stops at this u (south of v = 0.3)
 }
 
@@ -73,6 +75,7 @@ Config.DISTRICTS = {
 	{ id = "base", name = "Fort Calusa (restricted)", u = 0.17, v = 0.15, radius = 0.045, urban = false },
 	-- Keys
 	{ id = "keys", name = "The Sunset Keys", u = 0.4, v = 0.93, radius = 0.2, urban = false, special = true },
+	{ id = "keytown", name = "Key Marisol", u = 0.205, v = 0.942, radius = 0.024, urban = true, minH = 12, maxH = 40, style = "stucco", parkChance = 0.08, special = true },
 }
 
 -- Major roads (Roads.luau). Freeways and state roads are routed by A* through these waypoints
@@ -94,6 +97,7 @@ Config.ROADS = {
 		freeway = { water = 12, lake = 60, wetland = 2.5, mangrove = 4, urban = 1 },
 		state = { water = 25, lake = 80, wetland = 3, mangrove = 6, urban = 1.2 },
 		rail = { water = 15, lake = 80, wetland = 2.5, mangrove = 5, urban = 1.6 },
+		connector = { water = 25, lake = 80, wetland = 3, mangrove = 6, urban = 1.2, landmark = 500 },
 	},
 	FREEWAYS = {
 		{ { 0.7, 0.07 }, { 0.71, 0.3 }, { 0.715, 0.45 }, { 0.712, 0.52 }, { 0.7, 0.62 }, { 0.64, 0.74 }, { 0.6, 0.81 } }, -- I-1 coast spine through downtown

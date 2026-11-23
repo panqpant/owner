@@ -1,10 +1,10 @@
 {
  "costa_verde": {
-  "buildings": 8116,
-  "metro_commercial": 3037,
-  "rural_commercial": 438,
-  "represented_population_metro": 239641.77436324087,
-  "represented_population_rural": 59868.327340359574
+  "buildings": 7233,
+  "metro_commercial": 2842,
+  "rural_commercial": 355,
+  "represented_population_metro": 224254.83132707624,
+  "represented_population_rural": 48523.4159950403
  },
  "counties": {
   "urban": {
@@ -35,9 +35,9 @@
    "urban_per_100k": 22.624817051995123,
    "rural_per_100k": 39.00686702286891,
    "keys_per_100k": 57.58533656791394,
-   "metro": 54,
-   "rural_towns": 23,
-   "in_game": 77
+   "metro": 51,
+   "rural_towns": 19,
+   "in_game": 70
   },
   "New car dealer": {
    "group": "Vehicles",
@@ -47,9 +47,9 @@
    "urban_per_100k": 5.798982234686129,
    "rural_per_100k": 3.6285457695692007,
    "keys_per_100k": 4.90087970790757,
-   "metro": 14,
+   "metro": 13,
    "rural_towns": 2,
-   "in_game": 16
+   "in_game": 15
   },
   "Used car dealer": {
    "group": "Vehicles",
@@ -59,9 +59,9 @@
    "urban_per_100k": 10.938989215430652,
    "rural_per_100k": 6.349955096746101,
    "keys_per_100k": 0.0,
-   "metro": 26,
-   "rural_towns": 4,
-   "in_game": 30
+   "metro": 25,
+   "rural_towns": 3,
+   "in_game": 28
   },
   "Boat dealer": {
    "group": "Vehicles",
@@ -95,9 +95,9 @@
    "urban_per_100k": 7.2047961097615545,
    "rural_per_100k": 5.442818654353801,
    "keys_per_100k": 0.0,
-   "metro": 17,
+   "metro": 16,
    "rural_towns": 3,
-   "in_game": 20
+   "in_game": 19
   },
   "Auto parts store": {
    "group": "Vehicles",
@@ -107,9 +107,9 @@
    "urban_per_100k": 11.103733028916054,
    "rural_per_100k": 16.328455963061405,
    "keys_per_100k": 7.351319561861354,
-   "metro": 27,
-   "rural_towns": 10,
-   "in_game": 37
+   "metro": 25,
+   "rural_towns": 8,
+   "in_game": 33
   },
   "Auto repair (general)": {
    "group": "Vehicles",
@@ -119,9 +119,9 @@
    "urban_per_100k": 24.22832350325303,
    "rural_per_100k": 19.957001732630605,
    "keys_per_100k": 24.504398539537846,
-   "metro": 58,
-   "rural_towns": 12,
-   "in_game": 70
+   "metro": 54,
+   "rural_towns": 10,
+   "in_game": 64
   },
   "Body / paint shop": {
    "group": "Vehicles",
@@ -131,9 +131,9 @@
    "urban_per_100k": 10.444757774974448,
    "rural_per_100k": 4.535682211961501,
    "keys_per_100k": 8.576539488838247,
-   "metro": 25,
-   "rural_towns": 3,
-   "in_game": 28
+   "metro": 23,
+   "rural_towns": 2,
+   "in_game": 25
   },
   "Car wash": {
    "group": "Vehicles",
@@ -143,9 +143,9 @@
    "urban_per_100k": 7.633130024823598,
    "rural_per_100k": 0.0,
    "keys_per_100k": 6.126099634884461,
-   "metro": 18,
+   "metro": 17,
    "rural_towns": 0,
-   "in_game": 18
+   "in_game": 17
   },
   "Towing": {
    "group": "Vehicles",
@@ -155,9 +155,9 @@
    "urban_per_100k": 3.1740641398187335,
    "rural_per_100k": 4.535682211961501,
    "keys_per_100k": 6.126099634884461,
-   "metro": 8,
-   "rural_towns": 3,
-   "in_game": 11
+   "metro": 7,
+   "rural_towns": 2,
+   "in_game": 9
   },
   "Car rental": {
    "group": "Vehicles",
@@ -167,9 +167,9 @@
    "urban_per_100k": 6.2382990706472,
    "rural_per_100k": 1.3607046635884503,
    "keys_per_100k": 9.80175941581514,
-   "metro": 15,
+   "metro": 14,
    "rural_towns": 1,
-   "in_game": 16
+   "in_game": 15
   },
   "Supermarket / grocery": {
    "group": "Shopping",
@@ -179,9 +179,9 @@
    "urban_per_100k": 20.351352425896586,
    "rural_per_100k": 16.782024184257555,
    "keys_per_100k": 35.53137788232988,
-   "metro": 49,
-   "rural_towns": 10,
-   "in_game": 59
+   "metro": 46,
+   "rural_towns": 8,
+   "in_game": 54
   },
   "Convenience store": {
    "group": "Shopping",
@@ -192,9 +192,9 @@
    "urban_per_100k": 16.540278873934298,
    "rural_per_100k": 20.410569953826755,
    "keys_per_100k": 20.82873875860717,
-   "metro": 40,
-   "rural_towns": 12,
-   "in_game": 52
+   "metro": 37,
+   "rural_towns": 10,
+   "in_game": 47
   },
   "Liquor store": {
    "group": "Shopping",
@@ -205,9 +205,9 @@
    "urban_per_100k": 7.314625318751822,
    "rural_per_100k": 2.7214093271769006,
    "keys_per_100k": 13.477419196745815,
-   "metro": 18,
-   "rural_towns": 2,
-   "in_game": 20
+   "metro": 16,
+   "rural_towns": 1,
+   "in_game": 17
   },
   "Pharmacy": {
    "group": "Shopping",
@@ -218,9 +218,9 @@
    "urban_per_100k": 14.508438507614349,
    "rural_per_100k": 8.617796202726852,
    "keys_per_100k": 18.378298904653384,
-   "metro": 35,
-   "rural_towns": 5,
-   "in_game": 40
+   "metro": 33,
+   "rural_towns": 4,
+   "in_game": 37
   },
   "Department store": {
    "group": "Shopping",
@@ -244,9 +244,9 @@
    "urban_per_100k": 1.9879086827238435,
    "rural_per_100k": 0.0,
    "keys_per_100k": 0.0,
-   "metro": 5,
+   "metro": 4,
    "rural_towns": 0,
-   "in_game": 5
+   "in_game": 4
   },
   "Dollar / variety store": {
    "group": "Shopping",
@@ -257,9 +257,9 @@
    "urban_per_100k": 10.356894407782233,
    "rural_per_100k": 26.760525050572856,
    "keys_per_100k": 20.82873875860717,
-   "metro": 25,
-   "rural_towns": 16,
-   "in_game": 41
+   "metro": 23,
+   "rural_towns": 13,
+   "in_game": 36
   },
   "Home centre / hardware": {
    "group": "Shopping",
@@ -271,9 +271,9 @@
    "urban_per_100k": 4.415134201408757,
    "rural_per_100k": 7.257091539138401,
    "keys_per_100k": 14.702639123722708,
-   "metro": 11,
+   "metro": 10,
    "rural_towns": 4,
-   "in_game": 15
+   "in_game": 14
   },
   "Furniture store": {
    "group": "Shopping",
@@ -284,9 +284,9 @@
    "urban_per_100k": 8.555695380341845,
    "rural_per_100k": 2.7214093271769006,
    "keys_per_100k": 12.252199269768923,
-   "metro": 21,
-   "rural_towns": 2,
-   "in_game": 23
+   "metro": 19,
+   "rural_towns": 1,
+   "in_game": 20
   },
   "Electronics store": {
    "group": "Shopping",
@@ -297,9 +297,9 @@
    "urban_per_100k": 6.523855014021895,
    "rural_per_100k": 1.8142728847846004,
    "keys_per_100k": 0.0,
-   "metro": 16,
+   "metro": 15,
    "rural_towns": 1,
-   "in_game": 17
+   "in_game": 16
   },
   "Clothing store": {
    "group": "Shopping",
@@ -315,9 +315,9 @@
    "urban_per_100k": 39.1980446886265,
    "rural_per_100k": 6.349955096746101,
    "keys_per_100k": 123.74721262466613,
-   "metro": 94,
-   "rural_towns": 4,
-   "in_game": 98
+   "metro": 88,
+   "rural_towns": 3,
+   "in_game": 91
   },
   "Shoe store": {
    "group": "Shopping",
@@ -328,9 +328,9 @@
    "urban_per_100k": 7.402488685944036,
    "rural_per_100k": 1.3607046635884503,
    "keys_per_100k": 4.90087970790757,
-   "metro": 18,
+   "metro": 17,
    "rural_towns": 1,
-   "in_game": 19
+   "in_game": 18
   },
   "Jewelry store": {
    "group": "Shopping",
@@ -341,9 +341,9 @@
    "urban_per_100k": 11.312408525997562,
    "rural_per_100k": 0.0,
    "keys_per_100k": 28.180058320468525,
-   "metro": 27,
+   "metro": 25,
    "rural_towns": 0,
-   "in_game": 27
+   "in_game": 25
   },
   "Sporting goods (incl. gun shops)": {
    "group": "Shopping",
@@ -354,9 +354,9 @@
    "urban_per_100k": 6.721547590204377,
    "rural_per_100k": 2.2678411059807506,
    "keys_per_100k": 49.00879707907569,
-   "metro": 16,
+   "metro": 15,
    "rural_towns": 1,
-   "in_game": 17
+   "in_game": 16
   },
   "Florist": {
    "group": "Shopping",
@@ -380,9 +380,9 @@
    "urban_per_100k": 4.107612416236008,
    "rural_per_100k": 1.3607046635884503,
    "keys_per_100k": 9.80175941581514,
-   "metro": 10,
+   "metro": 9,
    "rural_towns": 1,
-   "in_game": 11
+   "in_game": 10
   },
   "Thrift / used goods": {
    "group": "Shopping",
@@ -393,9 +393,9 @@
    "urban_per_100k": 4.909365641864961,
    "rural_per_100k": 4.535682211961501,
    "keys_per_100k": 12.252199269768923,
-   "metro": 12,
-   "rural_towns": 3,
-   "in_game": 15
+   "metro": 11,
+   "rural_towns": 2,
+   "in_game": 13
   },
   "Tobacco / vape shop": {
    "group": "Shopping",
@@ -406,9 +406,9 @@
    "urban_per_100k": 6.875308482790752,
    "rural_per_100k": 1.8142728847846004,
    "keys_per_100k": 9.80175941581514,
-   "metro": 16,
+   "metro": 15,
    "rural_towns": 1,
-   "in_game": 17
+   "in_game": 16
   },
   "Full-service restaurant": {
    "group": "Food & nightlife",
@@ -418,9 +418,9 @@
    "urban_per_100k": 86.09511692747077,
    "rural_per_100k": 47.62466322559576,
    "keys_per_100k": 303.85454189026933,
-   "metro": 206,
-   "rural_towns": 29,
-   "in_game": 235
+   "metro": 193,
+   "rural_towns": 23,
+   "in_game": 216
   },
   "Fast food": {
    "group": "Food & nightlife",
@@ -430,9 +430,9 @@
    "urban_per_100k": 74.02488685944036,
    "rural_per_100k": 46.26395856200731,
    "keys_per_100k": 91.89149452326693,
-   "metro": 177,
-   "rural_towns": 28,
-   "in_game": 205
+   "metro": 166,
+   "rural_towns": 22,
+   "in_game": 188
   },
   "Coffee shop / snack bar": {
    "group": "Food & nightlife",
@@ -442,9 +442,9 @@
    "urban_per_100k": 22.888407153571766,
    "rural_per_100k": 9.071364423923002,
    "keys_per_100k": 34.30615795535299,
-   "metro": 55,
-   "rural_towns": 5,
-   "in_game": 60
+   "metro": 51,
+   "rural_towns": 4,
+   "in_game": 55
   },
   "Bar / nightclub": {
    "group": "Food & nightlife",
@@ -454,9 +454,9 @@
    "urban_per_100k": 7.14988150526642,
    "rural_per_100k": 2.7214093271769006,
    "keys_per_100k": 57.58533656791394,
-   "metro": 17,
-   "rural_towns": 2,
-   "in_game": 19
+   "metro": 16,
+   "rural_towns": 1,
+   "in_game": 17
   },
   "Barber shop": {
    "group": "Personal services",
@@ -466,9 +466,9 @@
    "urban_per_100k": 4.623809698490266,
    "rural_per_100k": 0.0,
    "keys_per_100k": 0.0,
-   "metro": 11,
+   "metro": 10,
    "rural_towns": 0,
-   "in_game": 11
+   "in_game": 10
   },
   "Beauty salon": {
    "group": "Personal services",
@@ -478,9 +478,9 @@
    "urban_per_100k": 37.90206002254135,
    "rural_per_100k": 11.339205529903753,
    "keys_per_100k": 37.981817736283666,
-   "metro": 91,
-   "rural_towns": 7,
-   "in_game": 98
+   "metro": 85,
+   "rural_towns": 6,
+   "in_game": 91
   },
   "Nail salon": {
    "group": "Personal services",
@@ -490,9 +490,9 @@
    "urban_per_100k": 7.4683862113381965,
    "rural_per_100k": 3.6285457695692007,
    "keys_per_100k": 11.026979342792032,
-   "metro": 18,
+   "metro": 17,
    "rural_towns": 2,
-   "in_game": 20
+   "in_game": 19
   },
   "Other personal care (incl. tattoo)": {
    "group": "Personal services",
@@ -502,9 +502,9 @@
    "urban_per_100k": 14.826943213686125,
    "rural_per_100k": 2.2678411059807506,
    "keys_per_100k": 14.702639123722708,
-   "metro": 36,
+   "metro": 33,
    "rural_towns": 1,
-   "in_game": 37
+   "in_game": 34
   },
   "Laundromat": {
    "group": "Personal services",
@@ -514,9 +514,9 @@
    "urban_per_100k": 4.151544099832115,
    "rural_per_100k": 2.7214093271769006,
    "keys_per_100k": 7.351319561861354,
-   "metro": 10,
-   "rural_towns": 2,
-   "in_game": 12
+   "metro": 9,
+   "rural_towns": 1,
+   "in_game": 10
   },
   "Dry cleaner": {
    "group": "Personal services",
@@ -526,9 +526,9 @@
    "urban_per_100k": 6.095521098959852,
    "rural_per_100k": 1.3607046635884503,
    "keys_per_100k": 6.126099634884461,
-   "metro": 15,
+   "metro": 14,
    "rural_towns": 1,
-   "in_game": 16
+   "in_game": 15
   },
   "Funeral home": {
    "group": "Personal services",
@@ -562,9 +562,9 @@
    "urban_per_100k": 8.95108053270681,
    "rural_per_100k": 0.0,
    "keys_per_100k": 0.0,
-   "metro": 21,
+   "metro": 20,
    "rural_towns": 0,
-   "in_game": 21
+   "in_game": 20
   },
   "Child day care": {
    "group": "Personal services",
@@ -574,9 +574,9 @@
    "urban_per_100k": 24.1734088987579,
    "rural_per_100k": 29.028366156553606,
    "keys_per_100k": 18.378298904653384,
-   "metro": 58,
-   "rural_towns": 17,
-   "in_game": 75
+   "metro": 54,
+   "rural_towns": 14,
+   "in_game": 68
   },
   "Veterinarian": {
    "group": "Personal services",
@@ -586,9 +586,9 @@
    "urban_per_100k": 11.125698870714107,
    "rural_per_100k": 8.617796202726852,
    "keys_per_100k": 17.153078977676493,
-   "metro": 27,
-   "rural_towns": 5,
-   "in_game": 32
+   "metro": 25,
+   "rural_towns": 4,
+   "in_game": 29
   },
   "Bank branch": {
    "group": "Money & offices",
@@ -598,9 +598,9 @@
    "urban_per_100k": 23.712126220998773,
    "rural_per_100k": 14.060614857080653,
    "keys_per_100k": 47.7835771520988,
-   "metro": 57,
-   "rural_towns": 8,
-   "in_game": 65
+   "metro": 53,
+   "rural_towns": 7,
+   "in_game": 60
   },
   "Credit union": {
    "group": "Money & offices",
@@ -610,9 +610,9 @@
    "urban_per_100k": 3.283893348809001,
    "rural_per_100k": 2.7214093271769006,
    "keys_per_100k": 11.026979342792032,
-   "metro": 8,
-   "rural_towns": 2,
-   "in_game": 10
+   "metro": 7,
+   "rural_towns": 1,
+   "in_game": 8
   },
   "Check cashing / pawn / payday": {
    "group": "Money & offices",
@@ -623,9 +623,9 @@
    "urban_per_100k": 10.796211243743304,
    "rural_per_100k": 6.349955096746101,
    "keys_per_100k": 0.0,
-   "metro": 26,
-   "rural_towns": 4,
-   "in_game": 30
+   "metro": 24,
+   "rural_towns": 3,
+   "in_game": 27
   },
   "Insurance agency": {
    "group": "Money & offices",
@@ -635,9 +635,9 @@
    "urban_per_100k": 58.13260031854864,
    "rural_per_100k": 26.306956829376706,
    "keys_per_100k": 46.55835722512191,
-   "metro": 139,
-   "rural_towns": 16,
-   "in_game": 155
+   "metro": 130,
+   "rural_towns": 13,
+   "in_game": 143
   },
   "Real estate office": {
    "group": "Money & offices",
@@ -647,9 +647,9 @@
    "urban_per_100k": 104.9857408737968,
    "rural_per_100k": 30.84263904133821,
    "keys_per_100k": 240.1431056874709,
-   "metro": 252,
-   "rural_towns": 18,
-   "in_game": 270
+   "metro": 235,
+   "rural_towns": 15,
+   "in_game": 250
   },
   "Self-storage": {
    "group": "Money & offices",
@@ -659,9 +659,9 @@
    "urban_per_100k": 7.314625318751822,
    "rural_per_100k": 2.2678411059807506,
    "keys_per_100k": 11.026979342792032,
-   "metro": 18,
+   "metro": 16,
    "rural_towns": 1,
-   "in_game": 19
+   "in_game": 17
   },
   "Law office": {
    "group": "Money & offices",
@@ -671,9 +671,9 @@
    "urban_per_100k": 122.20696084347075,
    "rural_per_100k": 20.410569953826755,
    "keys_per_100k": 82.08973510745179,
-   "metro": 293,
-   "rural_towns": 12,
-   "in_game": 305
+   "metro": 274,
+   "rural_towns": 10,
+   "in_game": 284
   },
   "Hospital (private)": {
    "group": "Health",
@@ -685,9 +685,9 @@
    "urban_per_100k": 1.504660163166666,
    "rural_per_100k": 4.082113990765351,
    "keys_per_100k": 3.675659780930677,
-   "metro": 4,
+   "metro": 3,
    "rural_towns": 2,
-   "in_game": 6
+   "in_game": 5
   },
   "Doctor's office": {
    "group": "Health",
@@ -697,9 +697,9 @@
    "urban_per_100k": 97.97863734021772,
    "rural_per_100k": 56.24245942832261,
    "keys_per_100k": 94.34193437722071,
-   "metro": 235,
-   "rural_towns": 34,
-   "in_game": 269
+   "metro": 220,
+   "rural_towns": 27,
+   "in_game": 247
   },
   "Dentist": {
    "group": "Health",
@@ -709,9 +709,9 @@
    "urban_per_100k": 50.64224826541239,
    "rural_per_100k": 14.514183078276803,
    "keys_per_100k": 36.75659780930677,
-   "metro": 121,
-   "rural_towns": 9,
-   "in_game": 130
+   "metro": 114,
+   "rural_towns": 7,
+   "in_game": 121
   },
   "Urgent care / outpatient centre": {
    "group": "Health",
@@ -722,9 +722,9 @@
    "urban_per_100k": 14.662199400200723,
    "rural_per_100k": 6.803523317942251,
    "keys_per_100k": 6.126099634884461,
-   "metro": 35,
-   "rural_towns": 4,
-   "in_game": 39
+   "metro": 33,
+   "rural_towns": 3,
+   "in_game": 36
   },
   "Nursing home": {
    "group": "Health",
@@ -734,9 +734,9 @@
    "urban_per_100k": 3.975817365447687,
    "rural_per_100k": 4.989250433157651,
    "keys_per_100k": 3.675659780930677,
-   "metro": 10,
-   "rural_towns": 3,
-   "in_game": 13
+   "metro": 9,
+   "rural_towns": 2,
+   "in_game": 11
   },
   "Assisted living": {
    "group": "Health",
@@ -747,9 +747,9 @@
    "urban_per_100k": 8.23719067427007,
    "rural_per_100k": 2.7214093271769006,
    "keys_per_100k": 0.0,
-   "metro": 20,
-   "rural_towns": 2,
-   "in_game": 22
+   "metro": 18,
+   "rural_towns": 1,
+   "in_game": 19
   },
   "Hotel / motel": {
    "group": "Lodging & leisure",
@@ -759,9 +759,9 @@
    "urban_per_100k": 16.232757088761552,
    "rural_per_100k": 11.339205529903753,
    "keys_per_100k": 160.5038104339729,
-   "metro": 39,
-   "rural_towns": 7,
-   "in_game": 46
+   "metro": 36,
+   "rural_towns": 6,
+   "in_game": 42
   },
   "RV park / campground": {
    "group": "Lodging & leisure",
@@ -772,8 +772,8 @@
    "rural_per_100k": 7.710659760334552,
    "keys_per_100k": 15.9278590506996,
    "metro": 1,
-   "rural_towns": 5,
-   "in_game": 6
+   "rural_towns": 4,
+   "in_game": 5
   },
   "Fitness centre / gym": {
    "group": "Lodging & leisure",
@@ -783,9 +783,9 @@
    "urban_per_100k": 14.88185781818126,
    "rural_per_100k": 4.082113990765351,
    "keys_per_100k": 18.378298904653384,
-   "metro": 36,
+   "metro": 33,
    "rural_towns": 2,
-   "in_game": 38
+   "in_game": 35
   },
   "Golf course / country club": {
    "group": "Lodging & leisure",
@@ -795,9 +795,9 @@
    "urban_per_100k": 1.9988916036228703,
    "rural_per_100k": 4.082113990765351,
    "keys_per_100k": 4.90087970790757,
-   "metro": 5,
+   "metro": 4,
    "rural_towns": 2,
-   "in_game": 7
+   "in_game": 6
   },
   "Marina": {
    "group": "Lodging & leisure",
@@ -879,9 +879,9 @@
    "urban_per_100k": 1.1092750108017027,
    "rural_per_100k": 1.3607046635884503,
    "keys_per_100k": 17.153078977676493,
-   "metro": 3,
+   "metro": 2,
    "rural_towns": 1,
-   "in_game": 4
+   "in_game": 3
   },
   "Zoo / botanical garden": {
    "group": "Lodging & leisure",
@@ -927,9 +927,9 @@
    "urban_per_100k": 33.20136987775789,
    "rural_per_100k": 77.56016582454167,
    "keys_per_100k": 45.33313729814502,
-   "metro": 80,
-   "rural_towns": 46,
-   "in_game": 126
+   "metro": 74,
+   "rural_towns": 38,
+   "in_game": 112
   },
   "Civic / social club": {
    "group": "Community",
@@ -939,9 +939,9 @@
    "urban_per_100k": 3.657312659375911,
    "rural_per_100k": 8.164227981530702,
    "keys_per_100k": 15.9278590506996,
-   "metro": 9,
-   "rural_towns": 5,
-   "in_game": 14
+   "metro": 8,
+   "rural_towns": 4,
+   "in_game": 12
   },
   "Private school": {
    "group": "Community",
@@ -951,9 +951,9 @@
    "urban_per_100k": 8.929114690908756,
    "rural_per_100k": 2.7214093271769006,
    "keys_per_100k": 7.351319561861354,
-   "metro": 21,
-   "rural_towns": 2,
-   "in_game": 23
+   "metro": 20,
+   "rural_towns": 1,
+   "in_game": 21
   },
   "College / university": {
    "group": "Community",
@@ -1001,9 +1001,9 @@
    "urban_per_100k": 5.8978285227773695,
    "rural_per_100k": 0.0,
    "keys_per_100k": 0.0,
-   "metro": 14,
+   "metro": 13,
    "rural_towns": 0,
-   "in_game": 14
+   "in_game": 13
   },
   "Trucking company": {
    "group": "Industry & logistics",
@@ -1015,9 +1015,9 @@
    "urban_per_100k": 42.84437442710339,
    "rural_per_100k": 34.01761658971126,
    "keys_per_100k": 20.82873875860717,
-   "metro": 103,
-   "rural_towns": 20,
-   "in_game": 123
+   "metro": 96,
+   "rural_towns": 17,
+   "in_game": 113
   },
   "Port / marine cargo": {
    "group": "Industry & logistics",
@@ -1028,9 +1028,9 @@
    "urban_per_100k": 0.637009412143552,
    "rural_per_100k": 0.0,
    "keys_per_100k": 0.0,
-   "metro": 2,
+   "metro": 1,
    "rural_towns": 0,
-   "in_game": 2
+   "in_game": 1
   },
   "Airport services": {
    "group": "Industry & logistics",
@@ -1041,9 +1041,9 @@
    "urban_per_100k": 5.996674810868611,
    "rural_per_100k": 1.3607046635884503,
    "keys_per_100k": 12.252199269768923,
-   "metro": 14,
+   "metro": 13,
    "rural_towns": 1,
-   "in_game": 15
+   "in_game": 14
   },
   "Boat building / repair": {
    "group": "Industry & logistics",
@@ -1210,30 +1210,35 @@
   }
  },
  "civic": {
+  "Police station": {
+   "per_100k": 5.263022765653385,
+   "source": "BJS Census of State and Local Law Enforcement Agencies, 2018 (agencies, as a floor for stations)",
+   "in_game": 14
+  },
   "Fire station": {
    "per_100k": 15.604242915075284,
    "source": "USFA National Fire Department Registry, Jan 2023",
-   "in_game": 47
+   "in_game": 43
   },
   "Public elementary school": {
    "per_100k": 15.744362157510729,
    "source": "NCES via Education Week",
-   "in_game": 47
+   "in_game": 43
   },
   "Public middle school": {
    "per_100k": 4.890071548635703,
    "source": "NCES via Education Week",
-   "in_game": 15
+   "in_game": 13
   },
   "Public high school": {
    "per_100k": 7.143981075777155,
    "source": "NCES via Education Week",
-   "in_game": 21
+   "in_game": 19
   },
   "Post office (USPS-run)": {
    "per_100k": 9.338182403251256,
    "source": "USPS Postal Facts",
-   "in_game": 28
+   "in_game": 25
   },
   "Hospital (all)": {
    "per_100k": 1.8362521706743464,
@@ -1243,7 +1248,7 @@
   "Religious congregation (all)": {
    "per_100k": 107.00729520484319,
    "source": "U.S. Religion Census 2020",
-   "in_game": 320
+   "in_game": 292
   },
   "Municipal landfill": {
    "per_100k": 0.4620634547121722,

@@ -8,6 +8,7 @@ local Districts = require("./Districts")
 local Hash = require("./Hash")
 local Roads = require("./Roads")
 local Streets = require("./Streets")
+local Landmarks = require("./Landmarks")
 local StreetStyles = require("./StreetStyles")
 
 local City = {}
@@ -63,14 +64,14 @@ local function urbanDistrict(x: number, z: number): Config.District?
 	if s.water or s.land < 30 then
 		return nil
 	end
-	if s.shape ~= "barrier" and (s.shape ~= "main" or Districts.urban(x, z) <= 0) then
+	if s.shape ~= "barrier" and ((s.shape ~= "main" and s.shape ~= "key") or Districts.urban(x, z) <= 0) then
 		return nil
 	end
 	local d = Districts.byId[Districts.at(x, z, s)]
 	return if d and d.urban then d else nil
 end
 
-function City.generate(): { roads: { Road }, buildings: { Building }, parks: { Park }, shared: Streets.Shared }
+function City.generate(): { roads: { Road }, buildings: { Building }, parks: { Park }, shared: Streets.Shared, landmarks: { Landmarks.Landmark } }
 	local roads, buildings, parks = {}, {}, {}
 	local shared = Streets.newShared()
 	local segs = segIndex()
@@ -109,6 +110,104 @@ function City.generate(): { roads: { Road }, buildings: { Building }, parks: { P
 		end
 	end
 
+	-- 1b. Landmarks claim their ground before local streets; each gets an access road to the nearest
+	-- surface major road (vertices bucketed in 512-stud cells for the search).
+	local majorPts: { [number]: { { number } } } = {}
+	for _, m in majors do
+		if m.kind ~= "freeway" and m.kind ~= "ramp" then
+			for i = 1, #m.pts - 1, 2 do
+				local k = (m.pts[i] // 512) * 4096 + m.pts[i + 1] // 512
+				majorPts[k] = majorPts[k] or {}
+				table.insert(majorPts[k], { m.pts[i], m.pts[i + 1] })
+			end
+		end
+	end
+	local function accessRoad(l: Landmarks.Landmark): boolean
+		-- nearest road points first; the first one reachable over land wins
+		local cands = {}
+		for _, e in { { l.x, l.z - l.d / 2 }, { l.x, l.z + l.d / 2 }, { l.x - l.w / 2, l.z }, { l.x + l.w / 2, l.z } } do
+			local gx, gz = e[1] // 512, e[2] // 512
+			for i = -12, 12 do
+				for j = -12, 12 do
+					for _, p in majorPts[(gx + i) * 4096 + gz + j] or {} do
+						table.insert(cands, { (p[1] - e[1]) ^ 2 + (p[2] - e[2]) ^ 2, e, p })
+					end
+				end
+			end
+		end
+		table.sort(cands, function(a, b)
+			return a[1] < b[1]
+		end)
+		local best, from, to = math.huge, nil, nil
+		for k = 1, math.min(#cands, 40) do
+			local c = cands[k]
+			if Terrain.dryLink(c[2][1], c[2][2], c[3][1], c[3][2]) then
+				best, from, to = c[1], c[2], c[3]
+				break
+			end
+		end
+		-- none over dry land (wetland sites): the nearest, as a park road on a causeway, if it isn't too long
+		if not from and cands[1] and cands[1][1] < 6000 ^ 2 then
+			best, from, to = cands[1][1], cands[1][2], cands[1][3]
+		end
+		if from and to then
+			local n = math.max(1, math.ceil(math.sqrt(best) / 40))
+			local pts = {}
+			for k = 0, n do
+				table.insert(pts, from[1] + (to[1] - from[1]) * k / n)
+				table.insert(pts, from[2] + (to[2] - from[2]) * k / n)
+			end
+			pts[#pts - 1], pts[#pts] = to[1], to[2] -- exact junction
+			Streets.addExternal(shared, pts)
+			for k = 1, #pts - 1, 2 do -- later landmarks may link to this road (a park-road network)
+				local key = (pts[k] // 512) * 4096 + pts[k + 1] // 512
+				majorPts[key] = majorPts[key] or {}
+				table.insert(majorPts[key], { pts[k], pts[k + 1] })
+			end
+			local wet = {}
+			for k = 1, #pts - 3, 2 do
+				table.insert(wet, Terrain.sample((pts[k] + pts[k + 2]) / 2, (pts[k + 1] + pts[k + 3]) / 2).water ~= nil)
+			end
+			addRoad(pts, Config.ROAD_W, "access", wet)
+			return true
+		end
+		return false
+	end
+	-- bridge runs on surface-and-freeway majors (midpoint and length), for bridge landmarks
+	local bridgeRuns = {}
+	for _, m in majors do
+		local runStart: number? = nil
+		for k = 1, #m.bridge + 1 do
+			local on = m.bridge[k] == true
+			if on and not runStart then
+				runStart = k
+			elseif not on and runStart then
+				local a, b = runStart * 2 - 1, k * 2 - 1
+				local len = math.sqrt((m.pts[b] - m.pts[a]) ^ 2 + (m.pts[b + 1] - m.pts[a + 1]) ^ 2)
+				local mid = ((runStart + k) // 2) * 2 - 1
+				table.insert(bridgeRuns, { m.pts[mid], m.pts[mid + 1], len })
+				runStart = nil
+			end
+		end
+	end
+	local landmarks = Landmarks.place(segs.clear, bridgeRuns)
+	-- access roads in passes: a site that reaches nothing at first may reach another landmark's road later
+	local pending = {}
+	for _, l in landmarks do
+		if l.site ~= "offshore" and l.site ~= "islet" and l.site ~= "bridge" then
+			table.insert(pending, l)
+		end
+	end
+	for _ = 1, 3 do
+		local still = {}
+		for _, l in pending do
+			if not accessRoad(l) then
+				table.insert(still, l)
+			end
+		end
+		pending = still
+	end
+
 	-- 2. Local streets per superblock, grown from the majors around it.
 	local localNets: { { net: { Streets.Road }, d: Config.District } } = {}
 	for i = 0, math.floor(W / SP) - 1 do
@@ -132,11 +231,11 @@ function City.generate(): { roads: { Road }, buildings: { Building }, parks: { P
 				local style = d.style :: string
 				local params = StreetStyles[style] or StreetStyles.house
 				local function inside(x: number, z: number): boolean
-					return x > x0 + 20 and x < x0 + SP - 20 and z > z0 + 20 and z < z0 + SP - 20 and urbanDistrict(x, z) ~= nil
+					return x > x0 + 20 and x < x0 + SP - 20 and z > z0 + 20 and z < z0 + SP - 20 and urbanDistrict(x, z) ~= nil and not Landmarks.blocked(x, z)
 				end
 				local every = math.max(1, math.round((params.seedEvery or 240) / SEED_STEP))
 				local seeds = Streets.blockSeeds(seedBucket[i * 4096 + j] or {}, every, inside)
-				local net = Streets.grow(params, inside, x0 + SP / 2, z0 + SP / 2, SP / 2, 0, Config.SEED + i * 977 + j, 400, shared, seeds, Terrain.dryLink)
+				local net = Streets.grow(params, inside, x0 + SP / 2, z0 + SP / 2, SP / 2, 0, Config.SEED + i * 977 + j, 400, shared, seeds, Landmarks.okLink)
 				for _, r in net do
 					addRoad(r.pts, Config.ROAD_W, if r.kind == "collector" then "collector" else "street")
 				end
@@ -152,7 +251,7 @@ function City.generate(): { roads: { Road }, buildings: { Building }, parks: { P
 			table.insert(allLocal, rd)
 		end
 	end
-	for _, link in Streets.stitch(shared, allLocal, 300, Terrain.dryLink) do
+	for _, link in Streets.stitch(shared, allLocal, 300, Landmarks.okLink) do
 		Streets.addExternal(shared, link.pts)
 		addRoad(link.pts, Config.ROAD_W, "street")
 	end
@@ -191,7 +290,7 @@ function City.generate(): { roads: { Road }, buildings: { Building }, parks: { P
 						local x, z = px - dz * off * side, pz + dx * off * side
 						local rad = math.max(w, dep) * 0.5
 						local ld = urbanDistrict(x, z)
-						if ld and segs.clear(x, z, rad * 0.85) and free(x, z, rad * 0.9) then
+						if ld and segs.clear(x, z, rad * 0.85) and free(x, z, rad * 0.9) and not Landmarks.blocked(x, z, rad) then
 							local style = ld.style :: string
 							local s = Terrain.sample(x, z)
 							local k = (math.floor(x / 128) + 4096) * 8192 + math.floor(z / 128) + 4096
@@ -241,7 +340,7 @@ function City.generate(): { roads: { Road }, buildings: { Building }, parks: { P
 		local x, z = a.u * W, a.v * W + off
 		table.insert(roads, { ax = x - 1100, az = z, bx = x + 1100, bz = z, width = 110, kind = "runway", bridge = false })
 	end
-	return { roads = roads, buildings = buildings, parks = parks, shared = shared }
+	return { roads = roads, buildings = buildings, parks = parks, shared = shared, landmarks = landmarks }
 end
 
 return City

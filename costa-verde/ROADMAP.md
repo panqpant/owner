@@ -24,6 +24,18 @@ statistics. No real place is copied.
 - Still to do: interchanges and on-ramps as geometry, tiny towns (Gator Hollow) get streets, real
   cul-de-sac share in suburbs (the stitch pass joins most loose streets on purpose).
 
+## Phase B2: Map assembly (done, audited)
+- All 200 unique landmarks (LANDMARKS.md) placed by siting rule: in town, open country, on the shore, offshore
+  or on islets, with bridge landmarks on real bridges. Each has a real-size footprint and an access road;
+  streets, lots and farms grow around them.
+- Key Marisol: a town on the biggest island at the end of the Keys.
+- Every building has a use in the real Florida mix (Census business counts by style). The 133 playable
+  map markers (gun stores, mod shops, banks, police...) are spread through the towns.
+- Audit adds: all 200 placed, none cut by roads, none with buildings inside, all reachable; uses match
+  the real mix; every building has a use.
+- Still to do: landmark-specific lot shapes (runways, car parks, stadium bowls), marker density in small
+  towns, landmark labels decluttered at map scale.
+
 ## Phase C: Roblox world builder (needs you in Studio)
 - Server script that runs the generator: terrain voxels in chunks (WriteVoxels), water at each lake's level,
   roads as parts or meshes, buildings as placeholders, streaming setup.

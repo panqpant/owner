@@ -2,6 +2,7 @@
 Each is an original design: `analog` names the kind of real place it's modelled on, `gta` a comparable
 GTA V/VI landmark (reference only). Usage: python tools/landmarks.py"""
 import json
+import re
 from collections import Counter
 
 # district, name, type, real-world analog (type of place), gameplay, comparable GTA landmark
@@ -149,7 +150,7 @@ L = [
  ("swamptown", "Old Trading Post", "Frontier trading post", "Historic swamp trading posts", "Fence goods", ""),
  ("swamptown", "Sawgrass Ranger Station", "Park ranger station", "Park ranger stations", "Ranger missions", "Park rangers (V)"),
  ("swamptown", "The Snake Pit", "Swamp biker bar", "Roadside biker bars", "Biker gang turf", "Lost MC clubhouse (V)"),
- ("swamptown", "Stilt Shacks", "Fishing shacks on stilts", "Stiltsville-type shacks", "Hideouts", ""),
+ ("islands", "Stilt Shacks", "Fishing shacks on stilts in the bay", "Stiltsville-type shacks", "Hideouts", ""),
  # Mile 88
  ("truckstop", "Mile 88 Travel Plaza", "Truck stop with diner", "Interstate travel plazas", "Trucker jobs", "You Tool / truck stops (V)"),
  ("truckstop", "Mile 88 Weigh Station", "Truck weigh station", "Interstate weigh stations", "Smuggling checkpoint", ""),
@@ -221,7 +222,7 @@ L = [
  ("islands", "Cay Light", "Lighthouse on a lonely cay", "Reef lighthouses", "Lookout", ""),
  # Map-wide
  ("airport", "Costa Verde Emergency Operations Center", "Hardened hurricane command bunker", "County emergency operations centres", "Hurricane event HQ", ""),
- ("northshore", "Ridge Transmitter Farm", "TV and radio mast farm", "Broadcast tower farms", "Climb, pirate radio", ""),
+ ("rural", "Ridge Transmitter Farm", "TV and radio mast farm", "Broadcast tower farms", "Climb, pirate radio", ""),
  ("downtown", "Strand Causeway Toll Plaza", "Causeway toll plaza", "Causeway toll plazas", "Toll-booth heist", ""),
  ("docks", "River Drawbridge", "Bascule drawbridge", "Miami River-type drawbridges", "Bridge-jump chase", ""),
  ("truckstop", "I-1 Rest Area", "Interstate rest area", "Interstate rest areas", "Meet-ups, easter eggs", ""),
@@ -229,7 +230,68 @@ L = [
 
 assert len(L) == 200, len(L)
 assert len({x[1] for x in L}) == 200, [n for n, c in Counter(x[1] for x in L).items() if c > 1]
-json.dump([dict(zip(("district", "name", "type", "analog", "gameplay", "gta"), x)) for x in L], open("tools/data/landmarks.json", "w"), indent=1)
+
+# Footprint (w, d in studs, h = height) and siting rule from what each landmark is (first keyword match on
+# name + type). Sizes follow real ones at map scale (1 m = 2.4 studs).
+SITE = [  # keywords -> site: shore (on land at the water), offshore (in the sea), islet (on a small island),
+          # open (open country, away from towns), urban (inside its district's built-up land)
+    (("seven-mile-style bridge", "drawbridge"), "bridge"),
+    (("casino",), "urban"),  # tribal casino resorts are inland, not on the beach  # marks an existing bridge on the road network
+    (("platform", "wreck", "anchored cruise ship", "in the bay"), "offshore"),
+    (("private island", "island brick fort", "lonely cay"), "islet"),
+    (("pier", "marina", "wharf", "cruise", "container", "dry dock", "fireboat", "coast guard", "lighthouse", "inlet light",
+      "fishing", "shrimp", "boat", "yacht", "watersports", "coastal", "launch", "airboat tour", "stilts", "drawbridge",
+      "seafood", "fish market", "sunset bar", "dolphin", "turtle", "naval air", "resort"), "shore"),
+    (("mine", "solar", "theme park", "prison", "landfill", "power plant", "airfield", "air base", "fairgrounds",
+      "sugar mill", "dairy", "horse farm", "nursery", "rodeo", "auction", "packing", "juice", "feed mill",
+      "water treatment", "county jail", "spring", "carillon", "skydiving", "hunting", "observation tower", "missile",
+      "airboat racing", "pump station", "research station", "radar", "weapons lab", "barracks", "base gate", "bunker",
+      "space centre visitor", "mast farm"), "open"),
+]
+SIZE = [  # keywords -> (w, d, h)
+    (("tallest skyscraper",), (110, 110, 950)),
+    (("courthouse", "city hall"), (150, 120, 90)), (("water tower",), (40, 40, 140)), (("control tower",), (50, 50, 240)),
+    (("observation tower", "bat tower", "carillon", "lighthouse", "inlet light"), (40, 40, 150)), (("library tower",), (80, 80, 200)),
+    (("tower", "skyscraper"), (90, 90, 300)),
+    (("phosphate", "mine"), (1000, 800, 20)), (("solar farm",), (900, 600, 8)), (("theme park",), (900, 800, 120)),
+    (("launch",), (500, 500, 220)), (("nuclear",), (500, 420, 160)), (("air base", "airfield"), (1300, 260, 30)),
+    (("prison", "penitentiary"), (520, 520, 40)), (("landfill",), (650, 520, 30)), (("power plant",), (420, 320, 120)),
+    (("container", "rail yard"), (700, 300, 60)), (("racetrack", "speedway", "racecourse"), (560, 360, 30)),
+    (("tank farm",), (360, 260, 60)),
+    (("fairgrounds", "rodeo", "farm", "golf", "country club", "estates", "community", "mansion row"), (500, 420, 20)),
+    (("stadium", "arena", "ballpark", "fronton"), (340, 290, 70)), (("mall", "galleria", "outlets", "power cent"), (380, 300, 40)),
+    (("terminal",), (420, 180, 40)), (("convention", "distribution", "mega warehouse"), (360, 240, 40)),
+    (("hospital", "medical"), (240, 200, 70)), (("sugar mill", "juice", "packing", "water treatment", "tank farm"), (360, 260, 60)),
+    (("resort", "water park", "drive-in", "trailer park", "self-storage", "junkyard", "salvage", "cemetery"), (300, 240, 25)),
+    (("bridge",), (60, 60, 20)), (("pier",), (60, 360, 10)), (("platform",), (160, 160, 90)), (("cruise ship",), (420, 80, 70)),
+    (("museum", "library", "courthouse", "city hall", "hotel", "headquarters", "hq", "center", "centre", "station"), (140, 120, 60)),
+]
+
+
+def has(text, keys):
+    """Whole-word match: 'mall' must not match 'small', 'spring' must not match 'spring-training'."""
+    return any(re.search(r"\b" + re.escape(k) + r"s?\b(?!-)", text) for k in keys)
+
+
+def classify(name, typ, district):
+    text = (name + " " + typ).lower()
+    site = next((s for keys, s in SITE if has(text, keys)), "urban")
+    if district == "islands" and site not in ("offshore", "islet"):
+        site = "offshore"
+    w, d, h = next((v for keys, v in SIZE if has(text, keys)), (100, 90, 40))
+    return site, w, d, h
+
+
+rows = [dict(zip(("district", "name", "type", "analog", "gameplay", "gta"), x)) for x in L]
+for r in rows:
+    r["site"], r["w"], r["d"], r["h"] = classify(r["name"], r["type"], r["district"])
+json.dump(rows, open("tools/data/landmarks.json", "w"), indent=1)
+with open("src/shared/Gen/LandmarkData.luau", "w") as fh:
+    fh.write("-- Generated by tools/landmarks.py: the 200 unique landmarks with footprint and siting rule. Do not edit.\nreturn {\n")
+    for r in sorted(rows, key=lambda r: -r["w"] * r["d"]):  # biggest first, so they find room
+        fh.write(f'\t{{ name = {json.dumps(r["name"], ensure_ascii=False)}, district = "{r["district"]}", site = "{r["site"]}", w = {r["w"]}, d = {r["d"]}, h = {r["h"]} }},\n')
+    fh.write("}\n")
+print("sites:", dict(Counter(r["site"] for r in rows)))
 
 NAMES = {"downtown": "Port Solano Downtown", "midtown": "Midtown", "beach": "Coral Strand", "calle": "Calle Verde",
          "docks": "Solano Docks", "northshore": "North Shore", "westside": "Westside", "palmgrove": "Palm Grove",

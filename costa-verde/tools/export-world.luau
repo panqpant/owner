@@ -8,6 +8,8 @@ local t0 = os.clock()
 local hm = Gen.heightmap(Gen.Config.CELL)
 local city = Gen.City.generate()
 local settlements = Gen.Rural.generate(city.roads, city.buildings, city.shared)
+Gen.Uses.assign(city.buildings, Gen.Config.SEED + 800) -- every building gets a real use
+Gen.Uses.markers(city.buildings, Gen.Config.SEED + 801) -- then the playable ones
 local pois = Gen.Rural.pois()
 local tracks, stations = Gen.Transit.generate(settlements, city.roads)
 
@@ -28,6 +30,7 @@ fs.writeFile(
 		buildings = city.buildings,
 		parks = city.parks,
 		districts = districts,
+		landmarks = city.landmarks,
 		settlements = settlements,
 		pois = pois,
 		tracks = tracks,

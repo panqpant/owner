@@ -9,6 +9,7 @@ Gen.Districts = require("@self/Districts")
 Gen.City = require("@self/City")
 Gen.Rural = require("@self/Rural")
 Gen.Transit = require("@self/Transit")
+Gen.Uses = require("@self/Uses")
 Gen.Hash = require("@self/Hash")
 Gen.Noise = require("@self/Noise")
 
@@ -27,7 +28,7 @@ function Gen.heightmap(cell: number)
 			table.insert(dist, Gen.Districts.at(x, z, s))
 			table.insert(biome, s.biome)
 			table.insert(ltype, s.ltype)
-			table.insert(built, not s.water and s.land > 20 and (s.shape == "barrier" or (s.shape == "main" and Gen.Districts.urban(x, z) > 0)))
+			table.insert(built, not s.water and s.land > 20 and (s.shape == "barrier" or ((s.shape == "main" or s.shape == "key") and Gen.Districts.urban(x, z) > 0)))
 		end
 	end
 	return { n = n, cell = cell, h = h, water = wat, material = mat, district = dist, biome = biome, ltype = ltype, built = built }

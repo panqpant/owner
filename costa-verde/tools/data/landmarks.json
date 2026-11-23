@@ -5,7 +5,11 @@
   "type": "Tallest skyscraper, rooftop helipad",
   "analog": "Brickell supertall towers",
   "gameplay": "BASE jumps, rooftop heist finale",
-  "gta": "Maze Bank Tower (V)"
+  "gta": "Maze Bank Tower (V)",
+  "site": "urban",
+  "w": 110,
+  "d": 110,
+  "h": 950
  },
  {
   "district": "downtown",
@@ -13,7 +17,11 @@
   "type": "Federal law-enforcement field office",
   "analog": "Downtown federal office towers",
   "gameplay": "Story HQ, infiltration mission",
-  "gta": "FIB Building (V)"
+  "gta": "FIB Building (V)",
+  "site": "urban",
+  "w": 100,
+  "d": 90,
+  "h": 40
  },
  {
   "district": "downtown",
@@ -21,7 +29,11 @@
   "type": "City hall",
   "analog": "Florida city halls",
   "gameplay": "Political missions",
-  "gta": "Los Santos City Hall (V)"
+  "gta": "Los Santos City Hall (V)",
+  "site": "urban",
+  "w": 150,
+  "d": 120,
+  "h": 90
  },
  {
   "district": "downtown",
@@ -29,7 +41,11 @@
   "type": "Neoclassical courthouse with tower",
   "analog": "Dade County Courthouse",
   "gameplay": "Trials, prisoner transfers",
-  "gta": "Davis courthouse (V)"
+  "gta": "Davis courthouse (V)",
+  "site": "urban",
+  "w": 150,
+  "d": 120,
+  "h": 90
  },
  {
   "district": "downtown",
@@ -37,7 +53,11 @@
   "type": "Police HQ and impound",
   "analog": "Big-city police HQ",
   "gameplay": "Arrest respawn, impound lot",
-  "gta": "Mission Row PD (V)"
+  "gta": "Mission Row PD (V)",
+  "site": "urban",
+  "w": 140,
+  "d": 120,
+  "h": 60
  },
  {
   "district": "downtown",
@@ -45,7 +65,11 @@
   "type": "Rail and metro hub",
   "analog": "Union-style central stations",
   "gameplay": "Train travel hub",
-  "gta": "Union Depot (V)"
+  "gta": "Union Depot (V)",
+  "site": "urban",
+  "w": 140,
+  "d": 120,
+  "h": 60
  },
  {
   "district": "downtown",
@@ -53,7 +77,11 @@
   "type": "Indoor sports arena",
   "analog": "Downtown NBA arenas",
   "gameplay": "Events, concert mission",
-  "gta": "Maze Bank Arena (V) / Sahara Arena (VI, reported)"
+  "gta": "Maze Bank Arena (V) / Sahara Arena (VI, reported)",
+  "site": "urban",
+  "w": 340,
+  "d": 290,
+  "h": 70
  },
  {
   "district": "downtown",
@@ -61,7 +89,11 @@
   "type": "Opera and concert hall",
   "analog": "Modern performing arts centres",
   "gameplay": "Gala heist setup",
-  "gta": ""
+  "gta": "",
+  "site": "urban",
+  "w": 140,
+  "d": 120,
+  "h": 60
  },
  {
   "district": "downtown",
@@ -69,7 +101,11 @@
   "type": "Convention hall",
   "analog": "City convention centres",
   "gameplay": "Trade-show events",
-  "gta": ""
+  "gta": "",
+  "site": "urban",
+  "w": 360,
+  "d": 240,
+  "h": 40
  },
  {
   "district": "downtown",
@@ -77,7 +113,11 @@
   "type": "Bank headquarters with vault",
   "analog": "Bank HQ towers",
   "gameplay": "Big bank heist",
-  "gta": "Union Depository (V)"
+  "gta": "Union Depository (V)",
+  "site": "urban",
+  "w": 90,
+  "d": 90,
+  "h": 300
  },
  {
   "district": "downtown",
@@ -85,7 +125,11 @@
   "type": "Historic Mediterranean-revival tower",
   "analog": "Freedom Tower-type immigration landmark",
   "gameplay": "History museum",
-  "gta": ""
+  "gta": "",
+  "site": "urban",
+  "w": 90,
+  "d": 90,
+  "h": 300
  },
  {
   "district": "downtown",
@@ -93,7 +137,11 @@
   "type": "Waterfront festival marketplace",
   "analog": "Bayside-type marketplaces",
   "gameplay": "Shops, boat tours",
-  "gta": ""
+  "gta": "",
+  "site": "shore",
+  "w": 100,
+  "d": 90,
+  "h": 40
  },
  {
   "district": "downtown",
@@ -101,7 +149,11 @@
   "type": "Luxury hotel tower",
   "analog": "Five-star downtown hotels",
   "gameplay": "Hit on a hotel guest",
-  "gta": ""
+  "gta": "",
+  "site": "urban",
+  "w": 90,
+  "d": 90,
+  "h": 300
  },
  {
   "district": "downtown",
@@ -109,7 +161,11 @@
   "type": "TV news station",
   "analog": "Local TV studios",
   "gameplay": "News-van missions",
-  "gta": "Weazel News (V)"
+  "gta": "Weazel News (V)",
+  "site": "urban",
+  "w": 140,
+  "d": 120,
+  "h": 60
  },
  {
   "district": "downtown",
@@ -117,7 +173,11 @@
   "type": "Central public library",
   "analog": "Main library buildings",
   "gameplay": "Research side-quests",
-  "gta": ""
+  "gta": "",
+  "site": "urban",
+  "w": 140,
+  "d": 120,
+  "h": 60
  },
  {
   "district": "downtown",
@@ -125,7 +185,11 @@
   "type": "Federal jail tower",
   "analog": "Downtown federal jails",
   "gameplay": "Breakout mission",
-  "gta": ""
+  "gta": "",
+  "site": "urban",
+  "w": 90,
+  "d": 90,
+  "h": 300
  },
  {
   "district": "downtown",
@@ -133,7 +197,11 @@
   "type": "Elevated automated loop line",
   "analog": "Metromover-type people movers",
   "gameplay": "Free downtown transit",
-  "gta": ""
+  "gta": "",
+  "site": "urban",
+  "w": 100,
+  "d": 90,
+  "h": 40
  },
  {
   "district": "downtown",
@@ -141,7 +209,11 @@
   "type": "Rooftop nightclub",
   "analog": "Rooftop bars",
   "gameplay": "Club activity",
-  "gta": "Nine1Nine-type club (VI, reported)"
+  "gta": "Nine1Nine-type club (VI, reported)",
+  "site": "urban",
+  "w": 100,
+  "d": 90,
+  "h": 40
  },
  {
   "district": "downtown",
@@ -149,7 +221,11 @@
   "type": "Abandoned half-built condo tower",
   "analog": "Stalled Florida condo projects",
   "gameplay": "Climb, shootout set piece",
-  "gta": "Unfinished building (V)"
+  "gta": "Unfinished building (V)",
+  "site": "urban",
+  "w": 90,
+  "d": 90,
+  "h": 300
  },
  {
   "district": "downtown",
@@ -157,7 +233,11 @@
   "type": "Sculptural parking garage",
   "analog": "Designer parking garages",
   "gameplay": "Car chase set piece",
-  "gta": ""
+  "gta": "",
+  "site": "urban",
+  "w": 100,
+  "d": 90,
+  "h": 40
  },
  {
   "district": "midtown",
@@ -165,7 +245,11 @@
   "type": "Street-art warehouse district",
   "analog": "Wynwood-type mural districts",
   "gameplay": "Graffiti collectibles",
-  "gta": ""
+  "gta": "",
+  "site": "urban",
+  "w": 100,
+  "d": 90,
+  "h": 40
  },
  {
   "district": "midtown",
@@ -173,7 +257,11 @@
   "type": "Luxury design-district shopping",
   "analog": "Design districts",
   "gameplay": "High-end clothing",
-  "gta": "Ponsonbys-type luxury shops (V)"
+  "gta": "Ponsonbys-type luxury shops (V)",
+  "site": "urban",
+  "w": 100,
+  "d": 90,
+  "h": 40
  },
  {
   "district": "midtown",
@@ -181,7 +269,11 @@
   "type": "Children's hospital",
   "analog": "Regional children's hospitals",
   "gameplay": "Respawn point",
-  "gta": ""
+  "gta": "",
+  "site": "urban",
+  "w": 240,
+  "d": 200,
+  "h": 70
  },
  {
   "district": "midtown",
@@ -189,7 +281,11 @@
   "type": "Science museum and planetarium",
   "analog": "Science museums",
   "gameplay": "Exhibit heist",
-  "gta": "Galileo Observatory-type attraction (V)"
+  "gta": "Galileo Observatory-type attraction (V)",
+  "site": "urban",
+  "w": 140,
+  "d": 120,
+  "h": 60
  },
  {
   "district": "midtown",
@@ -197,7 +293,11 @@
   "type": "Art museum",
   "analog": "Waterfront art museums",
   "gameplay": "Painting theft",
-  "gta": "Kortz Center-type museum (V)"
+  "gta": "Kortz Center-type museum (V)",
+  "site": "urban",
+  "w": 140,
+  "d": 120,
+  "h": 60
  },
  {
   "district": "midtown",
@@ -205,7 +305,11 @@
   "type": "Craft brewery taproom",
   "analog": "Brewery districts",
   "gameplay": "Bar activity",
-  "gta": ""
+  "gta": "",
+  "site": "urban",
+  "w": 100,
+  "d": 90,
+  "h": 40
  },
  {
   "district": "midtown",
@@ -213,7 +317,11 @@
   "type": "Vertical shopping mall",
   "analog": "Urban malls",
   "gameplay": "Mall shootout set piece",
-  "gta": ""
+  "gta": "",
+  "site": "urban",
+  "w": 380,
+  "d": 300,
+  "h": 40
  },
  {
   "district": "midtown",
@@ -221,7 +329,11 @@
   "type": "Megachurch",
   "analog": "Florida megachurches",
   "gameplay": "Cult/scam storyline",
-  "gta": "Epsilon Program-type (V)"
+  "gta": "Epsilon Program-type (V)",
+  "site": "urban",
+  "w": 100,
+  "d": 90,
+  "h": 40
  },
  {
   "district": "midtown",
@@ -229,7 +341,11 @@
   "type": "Glass tech-startup HQ",
   "analog": "Tech campuses",
   "gameplay": "Data-theft heist",
-  "gta": "Lifeinvader HQ (V)"
+  "gta": "Lifeinvader HQ (V)",
+  "site": "urban",
+  "w": 140,
+  "d": 120,
+  "h": 60
  },
  {
   "district": "midtown",
@@ -237,7 +353,11 @@
   "type": "Recording studio",
   "analog": "Miami music studios",
   "gameplay": "Music missions",
-  "gta": "Record A Studios (V Online)"
+  "gta": "Record A Studios (V Online)",
+  "site": "urban",
+  "w": 100,
+  "d": 90,
+  "h": 40
  },
  {
   "district": "beach",
@@ -245,7 +365,11 @@
   "type": "Art Deco hotel",
   "analog": "Ocean Drive-type Deco hotels",
   "gameplay": "Hotel stay, missions",
-  "gta": "Ocean Drive hotels (VI)"
+  "gta": "Ocean Drive hotels (VI)",
+  "site": "urban",
+  "w": 140,
+  "d": 120,
+  "h": 60
  },
  {
   "district": "beach",
@@ -253,7 +377,11 @@
   "type": "Art Deco hotel with neon",
   "analog": "Streamline Moderne hotels",
   "gameplay": "Rooftop pool party",
-  "gta": ""
+  "gta": "",
+  "site": "urban",
+  "w": 140,
+  "d": 120,
+  "h": 60
  },
  {
   "district": "beach",
@@ -261,7 +389,11 @@
   "type": "Set of colourful lifeguard huts",
   "analog": "Painted beach lifeguard towers",
   "gameplay": "Photo collectibles",
-  "gta": ""
+  "gta": "",
+  "site": "urban",
+  "w": 90,
+  "d": 90,
+  "h": 300
  },
  {
   "district": "beach",
@@ -269,7 +401,11 @@
   "type": "Amusement pier with Ferris wheel",
   "analog": "Florida amusement piers",
   "gameplay": "Rides, pier chase",
-  "gta": "Del Perro Pier (V)"
+  "gta": "Del Perro Pier (V)",
+  "site": "shore",
+  "w": 60,
+  "d": 360,
+  "h": 10
  },
  {
   "district": "beach",
@@ -277,7 +413,11 @@
   "type": "Outdoor beach gym",
   "analog": "Beach outdoor gyms",
   "gameplay": "Stats training",
-  "gta": "Muscle Sands (V)"
+  "gta": "Muscle Sands (V)",
+  "site": "urban",
+  "w": 100,
+  "d": 90,
+  "h": 40
  },
  {
   "district": "beach",
@@ -285,7 +425,11 @@
   "type": "Notorious Mediterranean mansion",
   "analog": "Infamous beach mansions",
   "gameplay": "Murder-mystery mission",
-  "gta": ""
+  "gta": "",
+  "site": "urban",
+  "w": 100,
+  "d": 90,
+  "h": 40
  },
  {
   "district": "beach",
@@ -293,7 +437,11 @@
   "type": "Beach-strip nightclub",
   "analog": "South Beach clubs",
   "gameplay": "Club activity",
-  "gta": "Vice City clubs (VI)"
+  "gta": "Vice City clubs (VI)",
+  "site": "urban",
+  "w": 100,
+  "d": 90,
+  "h": 40
  },
  {
   "district": "beach",
@@ -301,7 +449,11 @@
   "type": "Small botanical garden",
   "analog": "Beach botanical gardens",
   "gameplay": "Quiet meet-ups",
-  "gta": ""
+  "gta": "",
+  "site": "urban",
+  "w": 100,
+  "d": 90,
+  "h": 40
  },
  {
   "district": "beach",
@@ -309,7 +461,11 @@
   "type": "Historic 1950s hotel ballroom",
   "analog": "Mid-century resort hotels",
   "gameplay": "Gala infiltration",
-  "gta": ""
+  "gta": "",
+  "site": "urban",
+  "w": 140,
+  "d": 120,
+  "h": 60
  },
  {
   "district": "beach",
@@ -317,7 +473,11 @@
   "type": "Fishing pier at the island tip",
   "analog": "Inlet fishing piers",
   "gameplay": "Fishing activity",
-  "gta": ""
+  "gta": "",
+  "site": "shore",
+  "w": 60,
+  "d": 360,
+  "h": 10
  },
  {
   "district": "beach",
@@ -325,7 +485,11 @@
   "type": "Superyacht marina",
   "analog": "Superyacht marinas",
   "gameplay": "Yacht purchase",
-  "gta": "Yachts (V Online)"
+  "gta": "Yachts (V Online)",
+  "site": "shore",
+  "w": 100,
+  "d": 90,
+  "h": 40
  },
  {
   "district": "beach",
@@ -333,7 +497,11 @@
   "type": "Logo water tower",
   "analog": "Branded beach-town water towers",
   "gameplay": "Climb, sniper spot",
-  "gta": ""
+  "gta": "",
+  "site": "urban",
+  "w": 40,
+  "d": 40,
+  "h": 140
  },
  {
   "district": "beach",
@@ -341,7 +509,11 @@
   "type": "Beach police station",
   "analog": "Beach police substations",
   "gameplay": "Arrest respawn",
-  "gta": "Vespucci Beach police (V)"
+  "gta": "Vespucci Beach police (V)",
+  "site": "urban",
+  "w": 140,
+  "d": 120,
+  "h": 60
  },
  {
   "district": "beach",
@@ -349,7 +521,11 @@
   "type": "Surf and tattoo shop strip",
   "analog": "Beach shop strips",
   "gameplay": "Tattoos, surf gear",
-  "gta": ""
+  "gta": "",
+  "site": "urban",
+  "w": 100,
+  "d": 90,
+  "h": 40
  },
  {
   "district": "beach",
@@ -357,7 +533,11 @@
   "type": "Dive bar on the sand",
   "analog": "Beach dive bars",
   "gameplay": "Bar activity",
-  "gta": ""
+  "gta": "",
+  "site": "urban",
+  "w": 100,
+  "d": 90,
+  "h": 40
  },
  {
   "district": "beach",
@@ -365,7 +545,11 @@
   "type": "Resort with lagoon pool",
   "analog": "Mega beach resorts",
   "gameplay": "Resort heist",
-  "gta": ""
+  "gta": "",
+  "site": "shore",
+  "w": 300,
+  "d": 240,
+  "h": 25
  },
  {
   "district": "beach",
@@ -373,7 +557,11 @@
   "type": "Condemned 1920s hotel",
   "analog": "Abandoned Boom-era hotels",
   "gameplay": "Haunted easter egg",
-  "gta": ""
+  "gta": "",
+  "site": "urban",
+  "w": 140,
+  "d": 120,
+  "h": 60
  },
  {
   "district": "beach",
@@ -381,7 +569,11 @@
   "type": "Jet ski and parasail rentals",
   "analog": "Beach rental docks",
   "gameplay": "Jet ski races",
-  "gta": ""
+  "gta": "",
+  "site": "shore",
+  "w": 100,
+  "d": 90,
+  "h": 40
  },
  {
   "district": "beach",
@@ -389,7 +581,11 @@
   "type": "Coast Guard station",
   "analog": "Coast Guard stations at inlets",
   "gameplay": "Boat chases",
-  "gta": "Coast Guard (V)"
+  "gta": "Coast Guard (V)",
+  "site": "shore",
+  "w": 140,
+  "d": 120,
+  "h": 60
  },
  {
   "district": "beach",
@@ -397,7 +593,11 @@
   "type": "Lighthouse at the north inlet",
   "analog": "Florida inlet lighthouses",
   "gameplay": "Lookout, collectible",
-  "gta": "Lighthouse (V)"
+  "gta": "Lighthouse (V)",
+  "site": "shore",
+  "w": 40,
+  "d": 40,
+  "h": 150
  },
  {
   "district": "calle",
@@ -405,7 +605,11 @@
   "type": "Domino park",
   "analog": "Little Havana domino parks",
   "gameplay": "Domino minigame",
-  "gta": ""
+  "gta": "",
+  "site": "urban",
+  "w": 100,
+  "d": 90,
+  "h": 40
  },
  {
   "district": "calle",
@@ -413,7 +617,11 @@
   "type": "Cigar factory",
   "analog": "Hand-rolled cigar factories",
   "gameplay": "Smuggling front",
-  "gta": ""
+  "gta": "",
+  "site": "urban",
+  "w": 100,
+  "d": 90,
+  "h": 40
  },
  {
   "district": "calle",
@@ -421,7 +629,11 @@
   "type": "Historic movie palace",
   "analog": "Atmospheric movie palaces",
   "gameplay": "Cinema activity",
-  "gta": "Ten Cent Theater-type (V)"
+  "gta": "Ten Cent Theater-type (V)",
+  "site": "urban",
+  "w": 100,
+  "d": 90,
+  "h": 40
  },
  {
   "district": "calle",
@@ -429,7 +641,11 @@
   "type": "Famous family restaurant",
   "analog": "Iconic Cuban-American restaurants",
   "gameplay": "Story meetings",
-  "gta": ""
+  "gta": "",
+  "site": "urban",
+  "w": 100,
+  "d": 90,
+  "h": 40
  },
  {
   "district": "calle",
@@ -437,7 +653,11 @@
   "type": "Bot\u00e1nica shop",
   "analog": "Bot\u00e1nica shops",
   "gameplay": "Curios, easter egg",
-  "gta": ""
+  "gta": "",
+  "site": "urban",
+  "w": 100,
+  "d": 90,
+  "h": 40
  },
  {
   "district": "calle",
@@ -445,7 +665,11 @@
   "type": "Mural plaza",
   "analog": "Neighbourhood mural plazas",
   "gameplay": "Festival event",
-  "gta": ""
+  "gta": "",
+  "site": "urban",
+  "w": 100,
+  "d": 90,
+  "h": 40
  },
  {
   "district": "calle",
@@ -453,7 +677,11 @@
   "type": "Sidewalk stars",
   "analog": "Sidewalk walks of fame",
   "gameplay": "Collectibles",
-  "gta": "Vinewood Walk of Fame (V)"
+  "gta": "Vinewood Walk of Fame (V)",
+  "site": "urban",
+  "w": 100,
+  "d": 90,
+  "h": 40
  },
  {
   "district": "calle",
@@ -461,7 +689,11 @@
   "type": "24-hour coffee window",
   "analog": "Cafecito windows",
   "gameplay": "Quick heal stop",
-  "gta": ""
+  "gta": "",
+  "site": "urban",
+  "w": 100,
+  "d": 90,
+  "h": 40
  },
  {
   "district": "calle",
@@ -469,7 +701,11 @@
   "type": "Seaside shrine church",
   "analog": "Waterfront shrine churches",
   "gameplay": "Story scene",
-  "gta": ""
+  "gta": "",
+  "site": "urban",
+  "w": 100,
+  "d": 90,
+  "h": 40
  },
  {
   "district": "calle",
@@ -477,7 +713,11 @@
   "type": "Painted rooster statues",
   "analog": "Street sculpture trails",
   "gameplay": "Collectibles",
-  "gta": ""
+  "gta": "",
+  "site": "urban",
+  "w": 100,
+  "d": 90,
+  "h": 40
  },
  {
   "district": "docks",
@@ -485,7 +725,11 @@
   "type": "Container port with gantry cranes",
   "analog": "Container terminals",
   "gameplay": "Cargo heists, crane climb",
-  "gta": "Port of Los Santos (V)"
+  "gta": "Port of Los Santos (V)",
+  "site": "shore",
+  "w": 700,
+  "d": 300,
+  "h": 60
  },
  {
   "district": "docks",
@@ -493,7 +737,11 @@
   "type": "Cruise ship terminal",
   "analog": "Cruise terminals",
   "gameplay": "Cruise ship mission",
-  "gta": ""
+  "gta": "",
+  "site": "shore",
+  "w": 420,
+  "d": 180,
+  "h": 40
  },
  {
   "district": "docks",
@@ -501,7 +749,11 @@
   "type": "Port control tower",
   "analog": "Port administration buildings",
   "gameplay": "Bribe the harbour master",
-  "gta": ""
+  "gta": "",
+  "site": "urban",
+  "w": 50,
+  "d": 50,
+  "h": 240
  },
  {
   "district": "docks",
@@ -509,7 +761,11 @@
   "type": "Shipyard with dry dock",
   "analog": "Ship repair yards",
   "gameplay": "Ship sabotage",
-  "gta": ""
+  "gta": "",
+  "site": "shore",
+  "w": 100,
+  "d": 90,
+  "h": 40
  },
  {
   "district": "docks",
@@ -517,7 +773,11 @@
   "type": "Customs warehouse",
   "analog": "Port customs facilities",
   "gameplay": "Seized-goods heist",
-  "gta": ""
+  "gta": "",
+  "site": "urban",
+  "w": 100,
+  "d": 90,
+  "h": 40
  },
  {
   "district": "docks",
@@ -525,7 +785,11 @@
   "type": "Fishing fleet wharf and fish market",
   "analog": "Working fish markets",
   "gameplay": "Fishing jobs",
-  "gta": ""
+  "gta": "",
+  "site": "shore",
+  "w": 100,
+  "d": 90,
+  "h": 40
  },
  {
   "district": "docks",
@@ -533,7 +797,11 @@
   "type": "Freight rail yard",
   "analog": "Port rail yards",
   "gameplay": "Train heist",
-  "gta": "Rail yards (V)"
+  "gta": "Rail yards (V)",
+  "site": "urban",
+  "w": 700,
+  "d": 300,
+  "h": 60
  },
  {
   "district": "docks",
@@ -541,7 +809,11 @@
   "type": "Fuel storage tank farm",
   "analog": "Port fuel terminals",
   "gameplay": "Explosive set piece",
-  "gta": "Tank farms (V)"
+  "gta": "Tank farms (V)",
+  "site": "urban",
+  "w": 360,
+  "d": 260,
+  "h": 60
  },
  {
   "district": "docks",
@@ -549,7 +821,11 @@
   "type": "Car export lot",
   "analog": "Vehicle roll-on/roll-off lots",
   "gameplay": "Car theft deliveries",
-  "gta": "Import/Export (V Online)"
+  "gta": "Import/Export (V Online)",
+  "site": "urban",
+  "w": 100,
+  "d": 90,
+  "h": 40
  },
  {
   "district": "docks",
@@ -557,7 +833,11 @@
   "type": "Abandoned cannery",
   "analog": "Derelict waterfront canneries",
   "gameplay": "Hideout",
-  "gta": ""
+  "gta": "",
+  "site": "urban",
+  "w": 100,
+  "d": 90,
+  "h": 40
  },
  {
   "district": "docks",
@@ -565,7 +845,11 @@
   "type": "Seafarers' bar",
   "analog": "Dockside bars",
   "gameplay": "Contacts and tips",
-  "gta": ""
+  "gta": "",
+  "site": "urban",
+  "w": 100,
+  "d": 90,
+  "h": 40
  },
  {
   "district": "docks",
@@ -573,7 +857,11 @@
   "type": "Fireboat station",
   "analog": "Port fire stations",
   "gameplay": "Firefighting boat missions",
-  "gta": ""
+  "gta": "",
+  "site": "shore",
+  "w": 140,
+  "d": 120,
+  "h": 60
  },
  {
   "district": "northshore",
@@ -581,7 +869,11 @@
   "type": "Horse racetrack",
   "analog": "Florida thoroughbred tracks",
   "gameplay": "Betting, horse races",
-  "gta": "Vinewood Racetrack (V)"
+  "gta": "Vinewood Racetrack (V)",
+  "site": "urban",
+  "w": 560,
+  "d": 360,
+  "h": 30
  },
  {
   "district": "northshore",
@@ -589,7 +881,11 @@
   "type": "Tribal resort casino with guitar-shaped tower",
   "analog": "Florida tribal casino resorts",
   "gameplay": "Casino games, casino heist",
-  "gta": "Diamond Casino (V Online)"
+  "gta": "Diamond Casino (V Online)",
+  "site": "urban",
+  "w": 90,
+  "d": 90,
+  "h": 300
  },
  {
   "district": "northshore",
@@ -597,7 +893,11 @@
   "type": "Lakefront mansion row",
   "analog": "Lakefront mansion enclaves",
   "gameplay": "Mansion burglaries",
-  "gta": "Rockford Hills (V)"
+  "gta": "Rockford Hills (V)",
+  "site": "urban",
+  "w": 500,
+  "d": 420,
+  "h": 20
  },
  {
   "district": "northshore",
@@ -605,7 +905,11 @@
   "type": "Enclosed shopping mall",
   "analog": "Regional malls",
   "gameplay": "Shopping, mall chase",
-  "gta": ""
+  "gta": "",
+  "site": "urban",
+  "w": 380,
+  "d": 300,
+  "h": 40
  },
  {
   "district": "northshore",
@@ -613,7 +917,11 @@
   "type": "Jai-alai fronton",
   "analog": "Florida jai-alai frontons",
   "gameplay": "Betting minigame",
-  "gta": ""
+  "gta": "",
+  "site": "urban",
+  "w": 340,
+  "d": 290,
+  "h": 70
  },
  {
   "district": "northshore",
@@ -621,7 +929,11 @@
   "type": "General hospital",
   "analog": "Regional hospitals",
   "gameplay": "Respawn point",
-  "gta": "Mount Zonah (V)"
+  "gta": "Mount Zonah (V)",
+  "site": "urban",
+  "w": 240,
+  "d": 200,
+  "h": 70
  },
  {
   "district": "northshore",
@@ -629,7 +941,11 @@
   "type": "Golf country club",
   "analog": "Florida country clubs",
   "gameplay": "Golf, tennis",
-  "gta": "Los Santos Golf Club (V)"
+  "gta": "Los Santos Golf Club (V)",
+  "site": "urban",
+  "w": 500,
+  "d": 420,
+  "h": 20
  },
  {
   "district": "northshore",
@@ -637,7 +953,11 @@
   "type": "Water park",
   "analog": "Florida water parks",
   "gameplay": "Slides, races",
-  "gta": ""
+  "gta": "",
+  "site": "urban",
+  "w": 300,
+  "d": 240,
+  "h": 25
  },
  {
   "district": "northshore",
@@ -645,7 +965,11 @@
   "type": "Gated retirement community",
   "analog": "Florida retirement communities",
   "gameplay": "Golf-cart missions",
-  "gta": ""
+  "gta": "",
+  "site": "urban",
+  "w": 500,
+  "d": 420,
+  "h": 20
  },
  {
   "district": "northshore",
@@ -653,7 +977,11 @@
   "type": "Drive-in cinema",
   "analog": "Surviving drive-in theatres",
   "gameplay": "Cinema, dates",
-  "gta": ""
+  "gta": "",
+  "site": "urban",
+  "w": 300,
+  "d": 240,
+  "h": 25
  },
  {
   "district": "westside",
@@ -661,7 +989,11 @@
   "type": "Big-box retail power centre",
   "analog": "Big-box power centres",
   "gameplay": "Shopping hub",
-  "gta": ""
+  "gta": "",
+  "site": "urban",
+  "w": 140,
+  "d": 120,
+  "h": 60
  },
  {
   "district": "westside",
@@ -669,7 +1001,11 @@
   "type": "Giant flea market",
   "analog": "Florida swap shops",
   "gameplay": "Fence stolen goods",
-  "gta": ""
+  "gta": "",
+  "site": "urban",
+  "w": 100,
+  "d": 90,
+  "h": 40
  },
  {
   "district": "westside",
@@ -677,7 +1013,11 @@
   "type": "Oval speedway and drag strip",
   "analog": "Local speedways",
   "gameplay": "Street and oval races",
-  "gta": "LS Car Meet / races (V)"
+  "gta": "LS Car Meet / races (V)",
+  "site": "urban",
+  "w": 560,
+  "d": 360,
+  "h": 30
  },
  {
   "district": "westside",
@@ -685,7 +1025,11 @@
   "type": "Self-storage maze",
   "analog": "Self-storage complexes",
   "gameplay": "Storage-unit stash missions",
-  "gta": ""
+  "gta": "",
+  "site": "urban",
+  "w": 300,
+  "d": 240,
+  "h": 25
  },
  {
   "district": "westside",
@@ -693,7 +1037,11 @@
   "type": "Bus depot",
   "analog": "Transit bus garages",
   "gameplay": "Bus driver job",
-  "gta": "Dashound depot (V)"
+  "gta": "Dashound depot (V)",
+  "site": "urban",
+  "w": 100,
+  "d": 90,
+  "h": 40
  },
  {
   "district": "westside",
@@ -701,7 +1049,11 @@
   "type": "Trailer park",
   "analog": "Florida trailer parks",
   "gameplay": "Gang turf",
-  "gta": "Sandy Shores trailers (V)"
+  "gta": "Sandy Shores trailers (V)",
+  "site": "urban",
+  "w": 500,
+  "d": 420,
+  "h": 20
  },
  {
   "district": "westside",
@@ -709,7 +1061,11 @@
   "type": "Mega warehouse",
   "analog": "E-commerce fulfilment centres",
   "gameplay": "Truck hijacks",
-  "gta": ""
+  "gta": "",
+  "site": "urban",
+  "w": 360,
+  "d": 240,
+  "h": 40
  },
  {
   "district": "westside",
@@ -717,7 +1073,11 @@
   "type": "Junkyard with car crusher",
   "analog": "Salvage yards",
   "gameplay": "Destroy evidence cars",
-  "gta": "Scrapyard (V)"
+  "gta": "Scrapyard (V)",
+  "site": "urban",
+  "w": 300,
+  "d": 240,
+  "h": 25
  },
  {
   "district": "palmgrove",
@@ -725,7 +1085,11 @@
   "type": "Gated golf community",
   "analog": "Gated golf communities",
   "gameplay": "Home invasions",
-  "gta": ""
+  "gta": "",
+  "site": "urban",
+  "w": 500,
+  "d": 420,
+  "h": 20
  },
  {
   "district": "palmgrove",
@@ -733,7 +1097,11 @@
   "type": "High school with football stadium",
   "analog": "Florida high schools",
   "gameplay": "Friday-night football",
-  "gta": ""
+  "gta": "",
+  "site": "urban",
+  "w": 340,
+  "d": 290,
+  "h": 70
  },
  {
   "district": "palmgrove",
@@ -741,7 +1109,11 @@
   "type": "Community college campus",
   "analog": "State colleges",
   "gameplay": "Classes side-activity",
-  "gta": ""
+  "gta": "",
+  "site": "urban",
+  "w": 500,
+  "d": 420,
+  "h": 20
  },
  {
   "district": "palmgrove",
@@ -749,7 +1121,11 @@
   "type": "Suburban fashion mall",
   "analog": "Suburban malls",
   "gameplay": "Clothing shopping",
-  "gta": ""
+  "gta": "",
+  "site": "urban",
+  "w": 380,
+  "d": 300,
+  "h": 40
  },
  {
   "district": "palmgrove",
@@ -757,7 +1133,11 @@
   "type": "Outlet mall",
   "analog": "Outlet malls",
   "gameplay": "Discount clothing",
-  "gta": ""
+  "gta": "",
+  "site": "urban",
+  "w": 380,
+  "d": 300,
+  "h": 40
  },
  {
   "district": "palmgrove",
@@ -765,7 +1145,11 @@
   "type": "Fire training tower",
   "analog": "Fire training centres",
   "gameplay": "Firefighter missions",
-  "gta": ""
+  "gta": "",
+  "site": "urban",
+  "w": 90,
+  "d": 90,
+  "h": 300
  },
  {
   "district": "palmgrove",
@@ -773,7 +1157,11 @@
   "type": "Suburban megachurch",
   "analog": "Suburban megachurches",
   "gameplay": "Community missions",
-  "gta": ""
+  "gta": "",
+  "site": "urban",
+  "w": 100,
+  "d": 90,
+  "h": 40
  },
  {
   "district": "palmgrove",
@@ -781,7 +1169,11 @@
   "type": "Haunted cul-de-sac house",
   "analog": "Local legend houses",
   "gameplay": "Ghost easter egg",
-  "gta": "Haunted spots (V)"
+  "gta": "Haunted spots (V)",
+  "site": "urban",
+  "w": 100,
+  "d": 90,
+  "h": 40
  },
  {
   "district": "university",
@@ -789,7 +1181,11 @@
   "type": "College football stadium",
   "analog": "College stadiums",
   "gameplay": "Game-day events",
-  "gta": ""
+  "gta": "",
+  "site": "urban",
+  "w": 340,
+  "d": 290,
+  "h": 70
  },
  {
   "district": "university",
@@ -797,7 +1193,11 @@
   "type": "Research and teaching hospital",
   "analog": "Academic medical centres",
   "gameplay": "Respawn, lab heist",
-  "gta": "Pillbox Hill Medical (V)"
+  "gta": "Pillbox Hill Medical (V)",
+  "site": "urban",
+  "w": 240,
+  "d": 200,
+  "h": 70
  },
  {
   "district": "university",
@@ -805,7 +1205,11 @@
   "type": "Marine research campus",
   "analog": "Oceanographic institutes",
   "gameplay": "Submarine missions",
-  "gta": ""
+  "gta": "",
+  "site": "urban",
+  "w": 100,
+  "d": 90,
+  "h": 40
  },
  {
   "district": "university",
@@ -813,7 +1217,11 @@
   "type": "Fraternity houses",
   "analog": "Fraternity rows",
   "gameplay": "Party missions",
-  "gta": ""
+  "gta": "",
+  "site": "urban",
+  "w": 100,
+  "d": 90,
+  "h": 40
  },
  {
   "district": "university",
@@ -821,7 +1229,11 @@
   "type": "Campus library tower",
   "analog": "Campus landmark towers",
   "gameplay": "Climb, collectible",
-  "gta": "ULSA campus (V)"
+  "gta": "ULSA campus (V)",
+  "site": "urban",
+  "w": 80,
+  "d": 80,
+  "h": 200
  },
  {
   "district": "university",
@@ -829,7 +1241,11 @@
   "type": "Hurricane forecasting centre",
   "analog": "Hurricane research centres",
   "gameplay": "Storm-chaser missions",
-  "gta": ""
+  "gta": "",
+  "site": "urban",
+  "w": 140,
+  "d": 120,
+  "h": 60
  },
  {
   "district": "airport",
@@ -837,7 +1253,11 @@
   "type": "Airport passenger terminal",
   "analog": "International terminals",
   "gameplay": "Flights, airport heist",
-  "gta": "LSIA (V) / Vice City International (VI)"
+  "gta": "LSIA (V) / Vice City International (VI)",
+  "site": "urban",
+  "w": 420,
+  "d": 180,
+  "h": 40
  },
  {
   "district": "airport",
@@ -845,7 +1265,11 @@
   "type": "Air traffic control tower",
   "analog": "Airport control towers",
   "gameplay": "Climb, sniper spot",
-  "gta": ""
+  "gta": "",
+  "site": "urban",
+  "w": 50,
+  "d": 50,
+  "h": 240
  },
  {
   "district": "airport",
@@ -853,7 +1277,11 @@
   "type": "Freight terminal and hangars",
   "analog": "Air cargo facilities",
   "gameplay": "Cargo plane theft",
-  "gta": ""
+  "gta": "",
+  "site": "urban",
+  "w": 420,
+  "d": 180,
+  "h": 40
  },
  {
   "district": "airport",
@@ -861,7 +1289,11 @@
   "type": "Private-jet terminal",
   "analog": "Fixed-base operators",
   "gameplay": "Buy jets",
-  "gta": "Private hangars (V)"
+  "gta": "Private hangars (V)",
+  "site": "urban",
+  "w": 420,
+  "d": 180,
+  "h": 40
  },
  {
   "district": "airport",
@@ -869,7 +1301,11 @@
   "type": "Airport hotel",
   "analog": "Airport hotels",
   "gameplay": "Meet-ups",
-  "gta": ""
+  "gta": "",
+  "site": "urban",
+  "w": 140,
+  "d": 120,
+  "h": 60
  },
  {
   "district": "airport",
@@ -877,7 +1313,11 @@
   "type": "Retired aircraft storage",
   "analog": "Aircraft boneyards",
   "gameplay": "Hidden plane collectible",
-  "gta": ""
+  "gta": "",
+  "site": "urban",
+  "w": 100,
+  "d": 90,
+  "h": 40
  },
  {
   "district": "airport",
@@ -885,7 +1325,11 @@
   "type": "Jet fuel depot",
   "analog": "Airport fuel farms",
   "gameplay": "Sabotage",
-  "gta": ""
+  "gta": "",
+  "site": "urban",
+  "w": 500,
+  "d": 420,
+  "h": 20
  },
  {
   "district": "airport",
@@ -893,7 +1337,11 @@
   "type": "Consolidated rental-car garage",
   "analog": "Rental car centres",
   "gameplay": "Car theft",
-  "gta": ""
+  "gta": "",
+  "site": "urban",
+  "w": 140,
+  "d": 120,
+  "h": 60
  },
  {
   "district": "gulftown",
@@ -901,7 +1349,11 @@
   "type": "Long Gulf fishing pier",
   "analog": "Gulf fishing piers",
   "gameplay": "Fishing",
-  "gta": ""
+  "gta": "",
+  "site": "shore",
+  "w": 60,
+  "d": 360,
+  "h": 10
  },
  {
   "district": "gulftown",
@@ -909,7 +1361,11 @@
   "type": "Historic railroad depot",
   "analog": "Restored train depots",
   "gameplay": "Train stop",
-  "gta": ""
+  "gta": "",
+  "site": "urban",
+  "w": 100,
+  "d": 90,
+  "h": 40
  },
  {
   "district": "gulftown",
@@ -917,7 +1373,11 @@
   "type": "Shrimp boat harbour",
   "analog": "Gulf shrimping ports",
   "gameplay": "Fishing-boat jobs",
-  "gta": ""
+  "gta": "",
+  "site": "shore",
+  "w": 100,
+  "d": 90,
+  "h": 40
  },
  {
   "district": "gulftown",
@@ -925,7 +1385,11 @@
   "type": "Spring-training baseball stadium",
   "analog": "Spring-training parks",
   "gameplay": "Baseball minigame",
-  "gta": ""
+  "gta": "",
+  "site": "urban",
+  "w": 340,
+  "d": 290,
+  "h": 70
  },
  {
   "district": "gulftown",
@@ -933,7 +1397,11 @@
   "type": "Circus winter-quarters museum",
   "analog": "Circus museums",
   "gameplay": "Weird easter eggs",
-  "gta": ""
+  "gta": "",
+  "site": "urban",
+  "w": 140,
+  "d": 120,
+  "h": 60
  },
  {
   "district": "gulftown",
@@ -941,7 +1409,11 @@
   "type": "Venetian-style mansion museum",
   "analog": "Gulf-coast mansion museums",
   "gameplay": "Art heist",
-  "gta": ""
+  "gta": "",
+  "site": "urban",
+  "w": 140,
+  "d": 120,
+  "h": 60
  },
  {
   "district": "gulftown",
@@ -949,7 +1421,11 @@
   "type": "Retirees' shuffleboard club",
   "analog": "Historic shuffleboard clubs",
   "gameplay": "Shuffleboard minigame",
-  "gta": ""
+  "gta": "",
+  "site": "urban",
+  "w": 100,
+  "d": 90,
+  "h": 40
  },
  {
   "district": "gulftown",
@@ -957,7 +1433,11 @@
   "type": "Beachfront resort",
   "analog": "Gulf beach resorts",
   "gameplay": "Resort missions",
-  "gta": ""
+  "gta": "",
+  "site": "shore",
+  "w": 300,
+  "d": 240,
+  "h": 25
  },
  {
   "district": "gulftown",
@@ -965,7 +1445,11 @@
   "type": "County-seat courthouse",
   "analog": "Small-town courthouses",
   "gameplay": "Court missions",
-  "gta": ""
+  "gta": "",
+  "site": "urban",
+  "w": 150,
+  "d": 120,
+  "h": 90
  },
  {
   "district": "gulftown",
@@ -973,7 +1457,11 @@
   "type": "Town water tower",
   "analog": "Small-town water towers",
   "gameplay": "Climb, collectible",
-  "gta": ""
+  "gta": "",
+  "site": "urban",
+  "w": 40,
+  "d": 40,
+  "h": 140
  },
  {
   "district": "gulftown",
@@ -981,7 +1469,11 @@
   "type": "Sunset bar",
   "analog": "Gulf-coast sunset bars",
   "gameplay": "Bar activity",
-  "gta": ""
+  "gta": "",
+  "site": "shore",
+  "w": 100,
+  "d": 90,
+  "h": 40
  },
  {
   "district": "gulftown",
@@ -989,7 +1481,11 @@
   "type": "Seafood processing plant",
   "analog": "Seafood processors",
   "gameplay": "Smuggling front",
-  "gta": ""
+  "gta": "",
+  "site": "shore",
+  "w": 100,
+  "d": 90,
+  "h": 40
  },
  {
   "district": "swamptown",
@@ -997,7 +1493,11 @@
   "type": "Airboat tour dock",
   "analog": "Everglades airboat tours",
   "gameplay": "Airboat races",
-  "gta": ""
+  "gta": "",
+  "site": "shore",
+  "w": 100,
+  "d": 90,
+  "h": 40
  },
  {
   "district": "swamptown",
@@ -1005,7 +1505,11 @@
   "type": "Alligator farm with wrestling show",
   "analog": "Roadside gator farms",
   "gameplay": "Gator show, easter egg",
-  "gta": ""
+  "gta": "",
+  "site": "urban",
+  "w": 500,
+  "d": 420,
+  "h": 20
  },
  {
   "district": "swamptown",
@@ -1013,7 +1517,11 @@
   "type": "Tiny shed post office",
   "analog": "Ochopee-type tiny post offices",
   "gameplay": "Collectible, delivery jobs",
-  "gta": ""
+  "gta": "",
+  "site": "urban",
+  "w": 100,
+  "d": 90,
+  "h": 40
  },
  {
   "district": "swamptown",
@@ -1021,7 +1529,11 @@
   "type": "Fish camp and bait shop",
   "analog": "Swamp fish camps",
   "gameplay": "Fishing, boat rental",
-  "gta": ""
+  "gta": "",
+  "site": "urban",
+  "w": 100,
+  "d": 90,
+  "h": 40
  },
  {
   "district": "swamptown",
@@ -1029,7 +1541,11 @@
   "type": "Frontier trading post",
   "analog": "Historic swamp trading posts",
   "gameplay": "Fence goods",
-  "gta": ""
+  "gta": "",
+  "site": "urban",
+  "w": 100,
+  "d": 90,
+  "h": 40
  },
  {
   "district": "swamptown",
@@ -1037,7 +1553,11 @@
   "type": "Park ranger station",
   "analog": "Park ranger stations",
   "gameplay": "Ranger missions",
-  "gta": "Park rangers (V)"
+  "gta": "Park rangers (V)",
+  "site": "urban",
+  "w": 140,
+  "d": 120,
+  "h": 60
  },
  {
   "district": "swamptown",
@@ -1045,15 +1565,23 @@
   "type": "Swamp biker bar",
   "analog": "Roadside biker bars",
   "gameplay": "Biker gang turf",
-  "gta": "Lost MC clubhouse (V)"
+  "gta": "Lost MC clubhouse (V)",
+  "site": "urban",
+  "w": 100,
+  "d": 90,
+  "h": 40
  },
  {
-  "district": "swamptown",
+  "district": "islands",
   "name": "Stilt Shacks",
-  "type": "Fishing shacks on stilts",
+  "type": "Fishing shacks on stilts in the bay",
   "analog": "Stiltsville-type shacks",
   "gameplay": "Hideouts",
-  "gta": ""
+  "gta": "",
+  "site": "offshore",
+  "w": 100,
+  "d": 90,
+  "h": 40
  },
  {
   "district": "truckstop",
@@ -1061,7 +1589,11 @@
   "type": "Truck stop with diner",
   "analog": "Interstate travel plazas",
   "gameplay": "Trucker jobs",
-  "gta": "You Tool / truck stops (V)"
+  "gta": "You Tool / truck stops (V)",
+  "site": "urban",
+  "w": 100,
+  "d": 90,
+  "h": 40
  },
  {
   "district": "truckstop",
@@ -1069,7 +1601,11 @@
   "type": "Truck weigh station",
   "analog": "Interstate weigh stations",
   "gameplay": "Smuggling checkpoint",
-  "gta": ""
+  "gta": "",
+  "site": "urban",
+  "w": 140,
+  "d": 120,
+  "h": 60
  },
  {
   "district": "truckstop",
@@ -1077,7 +1613,11 @@
   "type": "Giant-orange fruit stand",
   "analog": "Roadside citrus stands",
   "gameplay": "Easter egg",
-  "gta": ""
+  "gta": "",
+  "site": "urban",
+  "w": 100,
+  "d": 90,
+  "h": 40
  },
  {
   "district": "truckstop",
@@ -1085,7 +1625,11 @@
   "type": "Roadside reptile zoo",
   "analog": "Tourist-trap reptile parks",
   "gameplay": "Easter egg",
-  "gta": ""
+  "gta": "",
+  "site": "urban",
+  "w": 100,
+  "d": 90,
+  "h": 40
  },
  {
   "district": "truckstop",
@@ -1093,7 +1637,11 @@
   "type": "Cheap highway motel",
   "analog": "Mid-century motor lodges",
   "gameplay": "Hideout motel",
-  "gta": "Motels (VI trailers)"
+  "gta": "Motels (VI trailers)",
+  "site": "urban",
+  "w": 100,
+  "d": 90,
+  "h": 40
  },
  {
   "district": "truckstop",
@@ -1101,7 +1649,11 @@
   "type": "Fireworks superstore",
   "analog": "Florida roadside fireworks stores",
   "gameplay": "Buy explosives",
-  "gta": ""
+  "gta": "",
+  "site": "urban",
+  "w": 100,
+  "d": 90,
+  "h": 40
  },
  {
   "district": "rural",
@@ -1109,7 +1661,11 @@
   "type": "Citrus packing house",
   "analog": "Citrus packing houses",
   "gameplay": "Truck jobs",
-  "gta": ""
+  "gta": "",
+  "site": "open",
+  "w": 360,
+  "d": 260,
+  "h": 60
  },
  {
   "district": "rural",
@@ -1117,7 +1673,11 @@
   "type": "Orange juice processing plant",
   "analog": "Juice processing plants",
   "gameplay": "Industrial set piece",
-  "gta": ""
+  "gta": "",
+  "site": "open",
+  "w": 360,
+  "d": 260,
+  "h": 60
  },
  {
   "district": "rural",
@@ -1125,7 +1685,11 @@
   "type": "Sugar mill with smokestacks",
   "analog": "Florida sugar mills",
   "gameplay": "Cane-burning season events",
-  "gta": "Ambrosia sugar refinery (VI, reported)"
+  "gta": "Ambrosia sugar refinery (VI, reported)",
+  "site": "open",
+  "w": 360,
+  "d": 260,
+  "h": 60
  },
  {
   "district": "rural",
@@ -1133,7 +1697,11 @@
   "type": "Open-pit phosphate mine and gypsum stack",
   "analog": "Florida phosphate mines",
   "gameplay": "Quarry chase, mining-truck jobs",
-  "gta": "Davis Quartz quarry (V)"
+  "gta": "Davis Quartz quarry (V)",
+  "site": "open",
+  "w": 1000,
+  "d": 800,
+  "h": 20
  },
  {
   "district": "rural",
@@ -1141,7 +1709,11 @@
   "type": "Livestock auction",
   "analog": "Cattle auction markets",
   "gameplay": "Ranch missions",
-  "gta": ""
+  "gta": "",
+  "site": "open",
+  "w": 100,
+  "d": 90,
+  "h": 40
  },
  {
   "district": "rural",
@@ -1149,7 +1721,11 @@
   "type": "Rodeo arena",
   "analog": "Florida rodeos",
   "gameplay": "Rodeo minigame",
-  "gta": ""
+  "gta": "",
+  "site": "open",
+  "w": 500,
+  "d": 420,
+  "h": 20
  },
  {
   "district": "rural",
@@ -1157,7 +1733,11 @@
   "type": "Fairgrounds with midway",
   "analog": "County fairgrounds",
   "gameplay": "Seasonal fair",
-  "gta": ""
+  "gta": "",
+  "site": "open",
+  "w": 500,
+  "d": 420,
+  "h": 20
  },
  {
   "district": "rural",
@@ -1165,7 +1745,11 @@
   "type": "Feed mill and grain silos",
   "analog": "Rural feed mills",
   "gameplay": "Climb, sniper spot",
-  "gta": "Grain silos (V)"
+  "gta": "Grain silos (V)",
+  "site": "open",
+  "w": 100,
+  "d": 90,
+  "h": 40
  },
  {
   "district": "rural",
@@ -1173,7 +1757,11 @@
   "type": "Spring-fed park with dive cave",
   "analog": "Florida first-magnitude springs",
   "gameplay": "Cave diving, treasure",
-  "gta": ""
+  "gta": "",
+  "site": "open",
+  "w": 100,
+  "d": 90,
+  "h": 40
  },
  {
   "district": "rural",
@@ -1181,7 +1769,11 @@
   "type": "Live mermaid show attraction",
   "analog": "Roadside mermaid shows",
   "gameplay": "Easter egg show",
-  "gta": ""
+  "gta": "",
+  "site": "open",
+  "w": 100,
+  "d": 90,
+  "h": 40
  },
  {
   "district": "rural",
@@ -1189,7 +1781,11 @@
   "type": "Carillon tower on the ridge",
   "analog": "Ridge-top carillon gardens",
   "gameplay": "Viewpoint, collectible",
-  "gta": "Galileo Observatory viewpoint (V)"
+  "gta": "Galileo Observatory viewpoint (V)",
+  "site": "open",
+  "w": 40,
+  "d": 40,
+  "h": 150
  },
  {
   "district": "rural",
@@ -1197,7 +1793,11 @@
   "type": "Major theme park",
   "analog": "Central Florida theme parks",
   "gameplay": "Rides, park heist",
-  "gta": ""
+  "gta": "",
+  "site": "open",
+  "w": 900,
+  "d": 800,
+  "h": 120
  },
  {
   "district": "rural",
@@ -1205,7 +1805,11 @@
   "type": "Small airfield with crop dusters",
   "analog": "Rural airfields",
   "gameplay": "Crop-dusting missions",
-  "gta": "Sandy Shores Airfield (V)"
+  "gta": "Sandy Shores Airfield (V)",
+  "site": "open",
+  "w": 1300,
+  "d": 260,
+  "h": 30
  },
  {
   "district": "rural",
@@ -1213,7 +1817,11 @@
   "type": "Skydiving centre",
   "analog": "Skydiving drop zones",
   "gameplay": "Parachute jumps",
-  "gta": "Parachuting (V)"
+  "gta": "Parachuting (V)",
+  "site": "open",
+  "w": 140,
+  "d": 120,
+  "h": 60
  },
  {
   "district": "rural",
@@ -1221,7 +1829,11 @@
   "type": "State prison",
   "analog": "Florida state prisons",
   "gameplay": "Breakout, story",
-  "gta": "Bolingbroke (V) / Leonida Penitentiary (VI)"
+  "gta": "Bolingbroke (V) / Leonida Penitentiary (VI)",
+  "site": "open",
+  "w": 520,
+  "d": 520,
+  "h": 40
  },
  {
   "district": "rural",
@@ -1229,7 +1841,11 @@
   "type": "County jail",
   "analog": "County jails",
   "gameplay": "Bail missions",
-  "gta": ""
+  "gta": "",
+  "site": "open",
+  "w": 100,
+  "d": 90,
+  "h": 40
  },
  {
   "district": "rural",
@@ -1237,7 +1853,11 @@
   "type": "Utility-scale solar farm",
   "analog": "Florida utility solar farms",
   "gameplay": "Sabotage mission",
-  "gta": "Ron Alternates Wind Farm (V)"
+  "gta": "Ron Alternates Wind Farm (V)",
+  "site": "open",
+  "w": 900,
+  "d": 600,
+  "h": 8
  },
  {
   "district": "rural",
@@ -1245,7 +1865,11 @@
   "type": "Gas-fired power plant",
   "analog": "Combined-cycle gas plants",
   "gameplay": "Blackout heist",
-  "gta": "Palmer-Taylor Power Station (V)"
+  "gta": "Palmer-Taylor Power Station (V)",
+  "site": "open",
+  "w": 420,
+  "d": 320,
+  "h": 120
  },
  {
   "district": "rural",
@@ -1253,7 +1877,11 @@
   "type": "Landfill with methane flare",
   "analog": "County landfills",
   "gameplay": "Body disposal jobs",
-  "gta": "Landfill (V)"
+  "gta": "Landfill (V)",
+  "site": "open",
+  "w": 650,
+  "d": 520,
+  "h": 30
  },
  {
   "district": "rural",
@@ -1261,7 +1889,11 @@
   "type": "Water treatment plant",
   "analog": "Municipal water plants",
   "gameplay": "Poisoning plot",
-  "gta": ""
+  "gta": "",
+  "site": "open",
+  "w": 360,
+  "d": 260,
+  "h": 60
  },
  {
   "district": "rural",
@@ -1269,7 +1901,11 @@
   "type": "Tree nursery greenhouses",
   "analog": "Plant nurseries",
   "gameplay": "Grow-op front",
-  "gta": ""
+  "gta": "",
+  "site": "open",
+  "w": 100,
+  "d": 90,
+  "h": 40
  },
  {
   "district": "rural",
@@ -1277,7 +1913,11 @@
   "type": "Dairy farm",
   "analog": "Florida dairy farms",
   "gameplay": "Farm missions",
-  "gta": "Grapeseed farms (V)"
+  "gta": "Grapeseed farms (V)",
+  "site": "open",
+  "w": 500,
+  "d": 420,
+  "h": 20
  },
  {
   "district": "rural",
@@ -1285,7 +1925,11 @@
   "type": "Thoroughbred horse farm",
   "analog": "Ocala-type horse farms",
   "gameplay": "Horse races link",
-  "gta": ""
+  "gta": "",
+  "site": "open",
+  "w": 500,
+  "d": 420,
+  "h": 20
  },
  {
   "district": "rural",
@@ -1293,7 +1937,11 @@
   "type": "Rocket launch pad and assembly building",
   "analog": "Space-coast launch complexes",
   "gameplay": "Launch heist",
-  "gta": ""
+  "gta": "",
+  "site": "shore",
+  "w": 500,
+  "d": 500,
+  "h": 220
  },
  {
   "district": "rural",
@@ -1301,7 +1949,11 @@
   "type": "Space centre visitor complex",
   "analog": "Space visitor complexes",
   "gameplay": "Museum, easter eggs",
-  "gta": ""
+  "gta": "",
+  "site": "open",
+  "w": 140,
+  "d": 120,
+  "h": 60
  },
  {
   "district": "rural",
@@ -1309,7 +1961,11 @@
   "type": "Coastal nuclear power plant",
   "analog": "Coastal Florida nuclear plants",
   "gameplay": "Meltdown-threat mission",
-  "gta": ""
+  "gta": "",
+  "site": "shore",
+  "w": 500,
+  "d": 420,
+  "h": 160
  },
  {
   "district": "base",
@@ -1317,7 +1973,11 @@
   "type": "Military air base",
   "analog": "Florida air force bases",
   "gameplay": "Steal a jet",
-  "gta": "Fort Zancudo (V)"
+  "gta": "Fort Zancudo (V)",
+  "site": "open",
+  "w": 1300,
+  "d": 260,
+  "h": 30
  },
  {
   "district": "base",
@@ -1325,7 +1985,11 @@
   "type": "Radar and missile-tracking site",
   "analog": "Military radar sites",
   "gameplay": "Sabotage",
-  "gta": ""
+  "gta": "",
+  "site": "open",
+  "w": 100,
+  "d": 90,
+  "h": 40
  },
  {
   "district": "base",
@@ -1333,7 +1997,11 @@
   "type": "Secret weapons lab",
   "analog": "Defence research labs",
   "gameplay": "Lab raid",
-  "gta": "Humane Labs (V)"
+  "gta": "Humane Labs (V)",
+  "site": "open",
+  "w": 100,
+  "d": 90,
+  "h": 40
  },
  {
   "district": "base",
@@ -1341,7 +2009,11 @@
   "type": "Barracks and parade ground",
   "analog": "Army installations",
   "gameplay": "Infiltration",
-  "gta": ""
+  "gta": "",
+  "site": "open",
+  "w": 100,
+  "d": 90,
+  "h": 40
  },
  {
   "district": "base",
@@ -1349,7 +2021,11 @@
   "type": "Guarded base gate",
   "analog": "Base entry control points",
   "gameplay": "Gate-crash",
-  "gta": ""
+  "gta": "",
+  "site": "open",
+  "w": 100,
+  "d": 90,
+  "h": 40
  },
  {
   "district": "base",
@@ -1357,7 +2033,11 @@
   "type": "Abandoned bunker complex",
   "analog": "Cold War bunkers",
   "gameplay": "Easter egg, gunrunning base",
-  "gta": "Bunkers (V Online)"
+  "gta": "Bunkers (V Online)",
+  "site": "open",
+  "w": 100,
+  "d": 90,
+  "h": 40
  },
  {
   "district": "wetlands",
@@ -1365,7 +2045,11 @@
   "type": "Spiral observation tower",
   "analog": "Everglades observation towers",
   "gameplay": "Viewpoint",
-  "gta": ""
+  "gta": "",
+  "site": "open",
+  "w": 40,
+  "d": 40,
+  "h": 150
  },
  {
   "district": "wetlands",
@@ -1373,7 +2057,11 @@
   "type": "Abandoned missile site",
   "analog": "Cold War Nike missile sites",
   "gameplay": "Easter egg",
-  "gta": ""
+  "gta": "",
+  "site": "open",
+  "w": 100,
+  "d": 90,
+  "h": 40
  },
  {
   "district": "wetlands",
@@ -1381,7 +2069,11 @@
   "type": "Airboat racing course",
   "analog": "Airboat race courses",
   "gameplay": "Races",
-  "gta": ""
+  "gta": "",
+  "site": "open",
+  "w": 100,
+  "d": 90,
+  "h": 40
  },
  {
   "district": "wetlands",
@@ -1389,7 +2081,11 @@
   "type": "Hunting camp",
   "analog": "Wetland hunting camps",
   "gameplay": "Hunting missions",
-  "gta": "Hunting (V)"
+  "gta": "Hunting (V)",
+  "site": "open",
+  "w": 100,
+  "d": 90,
+  "h": 40
  },
  {
   "district": "wetlands",
@@ -1397,7 +2093,11 @@
   "type": "Invasive-species research station",
   "analog": "Everglades research stations",
   "gameplay": "Python hunt",
-  "gta": ""
+  "gta": "",
+  "site": "open",
+  "w": 140,
+  "d": 120,
+  "h": 60
  },
  {
   "district": "wetlands",
@@ -1405,7 +2105,11 @@
   "type": "Water-control pump station and levee gates",
   "analog": "South Florida water-management pump stations",
   "gameplay": "Flood plot",
-  "gta": "Land Act Dam-type infrastructure (V)"
+  "gta": "Land Act Dam-type infrastructure (V)",
+  "site": "open",
+  "w": 140,
+  "d": 120,
+  "h": 60
  },
  {
   "district": "keys",
@@ -1413,7 +2117,11 @@
   "type": "Seven-mile-style bridge beside an old rail bridge",
   "analog": "Overseas highway bridges",
   "gameplay": "Bridge chase, jumps",
-  "gta": ""
+  "gta": "",
+  "site": "bridge",
+  "w": 60,
+  "d": 60,
+  "h": 20
  },
  {
   "district": "keys",
@@ -1421,7 +2129,11 @@
   "type": "Historic island old town",
   "analog": "Key West-type old towns",
   "gameplay": "Bars, story hub",
-  "gta": "Leonida Keys (VI)"
+  "gta": "Leonida Keys (VI)",
+  "site": "urban",
+  "w": 100,
+  "d": 90,
+  "h": 40
  },
  {
   "district": "keys",
@@ -1429,7 +2141,11 @@
   "type": "Nightly sunset celebration pier",
   "analog": "Sunset celebration piers",
   "gameplay": "Street performers event",
-  "gta": ""
+  "gta": "",
+  "site": "shore",
+  "w": 60,
+  "d": 360,
+  "h": 10
  },
  {
   "district": "keys",
@@ -1437,7 +2153,11 @@
   "type": "Southernmost-point marker",
   "analog": "Southernmost-point monuments",
   "gameplay": "Photo collectible",
-  "gta": ""
+  "gta": "",
+  "site": "urban",
+  "w": 100,
+  "d": 90,
+  "h": 40
  },
  {
   "district": "keys",
@@ -1445,7 +2165,11 @@
   "type": "Lighthouse museum",
   "analog": "Island lighthouse museums",
   "gameplay": "Collectible",
-  "gta": ""
+  "gta": "",
+  "site": "shore",
+  "w": 40,
+  "d": 40,
+  "h": 150
  },
  {
   "district": "keys",
@@ -1453,7 +2177,11 @@
   "type": "Writer's house with six-toed cats",
   "analog": "Literary house museums",
   "gameplay": "Easter egg",
-  "gta": ""
+  "gta": "",
+  "site": "urban",
+  "w": 100,
+  "d": 90,
+  "h": 40
  },
  {
   "district": "keys",
@@ -1461,7 +2189,11 @@
   "type": "Naval air station",
   "analog": "Island naval air stations",
   "gameplay": "Steal a helicopter",
-  "gta": ""
+  "gta": "",
+  "site": "shore",
+  "w": 140,
+  "d": 120,
+  "h": 60
  },
  {
   "district": "keys",
@@ -1469,7 +2201,11 @@
   "type": "Shipwreck treasure museum",
   "analog": "Shipwreck treasure museums",
   "gameplay": "Gold heist",
-  "gta": ""
+  "gta": "",
+  "site": "urban",
+  "w": 140,
+  "d": 120,
+  "h": 60
  },
  {
   "district": "keys",
@@ -1477,7 +2213,11 @@
   "type": "Marine mammal centre",
   "analog": "Keys dolphin centres",
   "gameplay": "Rescue missions",
-  "gta": ""
+  "gta": "",
+  "site": "shore",
+  "w": 140,
+  "d": 120,
+  "h": 60
  },
  {
   "district": "keys",
@@ -1485,7 +2225,11 @@
   "type": "Turtle rescue hospital",
   "analog": "Keys turtle hospitals",
   "gameplay": "Rescue missions",
-  "gta": ""
+  "gta": "",
+  "site": "shore",
+  "w": 240,
+  "d": 200,
+  "h": 70
  },
  {
   "district": "keys",
@@ -1493,7 +2237,11 @@
   "type": "Island brick fort far offshore",
   "analog": "Remote island forts",
   "gameplay": "Smuggler showdown",
-  "gta": ""
+  "gta": "",
+  "site": "islet",
+  "w": 100,
+  "d": 90,
+  "h": 40
  },
  {
   "district": "keys",
@@ -1501,7 +2249,11 @@
   "type": "Floating tiki bar",
   "analog": "Floating bars",
   "gameplay": "Easter egg",
-  "gta": ""
+  "gta": "",
+  "site": "urban",
+  "w": 100,
+  "d": 90,
+  "h": 40
  },
  {
   "district": "keys",
@@ -1509,7 +2261,11 @@
   "type": "Sport-fishing charter marina",
   "analog": "Keys charter marinas",
   "gameplay": "Deep-sea fishing",
-  "gta": "Boat yard (VI, reported)"
+  "gta": "Boat yard (VI, reported)",
+  "site": "shore",
+  "w": 100,
+  "d": 90,
+  "h": 40
  },
  {
   "district": "keys",
@@ -1517,7 +2273,11 @@
   "type": "Old wooden bat tower",
   "analog": "Keys bat tower",
   "gameplay": "Easter egg",
-  "gta": ""
+  "gta": "",
+  "site": "urban",
+  "w": 40,
+  "d": 40,
+  "h": 150
  },
  {
   "district": "islands",
@@ -1525,7 +2285,11 @@
   "type": "Private island mansion",
   "analog": "Private-island estates",
   "gameplay": "Drug-lord raid",
-  "gta": "Cayo Perico (V Online)"
+  "gta": "Cayo Perico (V Online)",
+  "site": "islet",
+  "w": 100,
+  "d": 90,
+  "h": 40
  },
  {
   "district": "islands",
@@ -1533,7 +2297,11 @@
   "type": "Offshore oil platform",
   "analog": "Gulf oil platforms",
   "gameplay": "Platform assault",
-  "gta": ""
+  "gta": "",
+  "site": "offshore",
+  "w": 160,
+  "d": 160,
+  "h": 90
  },
  {
   "district": "islands",
@@ -1541,7 +2309,11 @@
   "type": "Shipwreck dive reef",
   "analog": "Florida shipwreck reefs",
   "gameplay": "Diving, treasure",
-  "gta": "Sunken treasure (V)"
+  "gta": "Sunken treasure (V)",
+  "site": "offshore",
+  "w": 100,
+  "d": 90,
+  "h": 40
  },
  {
   "district": "islands",
@@ -1549,7 +2321,11 @@
   "type": "Anchored cruise ship",
   "analog": "Cruise ships",
   "gameplay": "Cruise ship mission",
-  "gta": ""
+  "gta": "",
+  "site": "offshore",
+  "w": 420,
+  "d": 80,
+  "h": 70
  },
  {
   "district": "islands",
@@ -1557,7 +2333,11 @@
   "type": "Lighthouse on a lonely cay",
   "analog": "Reef lighthouses",
   "gameplay": "Lookout",
-  "gta": ""
+  "gta": "",
+  "site": "islet",
+  "w": 40,
+  "d": 40,
+  "h": 150
  },
  {
   "district": "airport",
@@ -1565,15 +2345,23 @@
   "type": "Hardened hurricane command bunker",
   "analog": "County emergency operations centres",
   "gameplay": "Hurricane event HQ",
-  "gta": ""
+  "gta": "",
+  "site": "open",
+  "w": 140,
+  "d": 120,
+  "h": 60
  },
  {
-  "district": "northshore",
+  "district": "rural",
   "name": "Ridge Transmitter Farm",
   "type": "TV and radio mast farm",
   "analog": "Broadcast tower farms",
   "gameplay": "Climb, pirate radio",
-  "gta": ""
+  "gta": "",
+  "site": "open",
+  "w": 500,
+  "d": 420,
+  "h": 20
  },
  {
   "district": "downtown",
@@ -1581,7 +2369,11 @@
   "type": "Causeway toll plaza",
   "analog": "Causeway toll plazas",
   "gameplay": "Toll-booth heist",
-  "gta": ""
+  "gta": "",
+  "site": "urban",
+  "w": 100,
+  "d": 90,
+  "h": 40
  },
  {
   "district": "docks",
@@ -1589,7 +2381,11 @@
   "type": "Bascule drawbridge",
   "analog": "Miami River-type drawbridges",
   "gameplay": "Bridge-jump chase",
-  "gta": ""
+  "gta": "",
+  "site": "bridge",
+  "w": 100,
+  "d": 90,
+  "h": 40
  },
  {
   "district": "truckstop",
@@ -1597,6 +2393,10 @@
   "type": "Interstate rest area",
   "analog": "Interstate rest areas",
   "gameplay": "Meet-ups, easter eggs",
-  "gta": ""
+  "gta": "",
+  "site": "urban",
+  "w": 100,
+  "d": 90,
+  "h": 40
  }
 ]

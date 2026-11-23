@@ -8,6 +8,7 @@ local Hash = require("./Hash")
 local Streets = require("./Streets")
 local StreetStyles = require("./StreetStyles")
 local Roads = require("./Roads")
+local Landmarks = require("./Landmarks")
 
 local Rural = {}
 
@@ -24,7 +25,7 @@ local function ruralOk(x: number, z: number): boolean
 	if s.biome ~= "farm" and s.biome ~= "scrub" then
 		return false
 	end
-	return Districts.urban(x, z) <= 0
+	return Districts.urban(x, z) <= 0 and not Landmarks.blocked(x, z)
 end
 
 -- A road segment is usable if every 200 studs along it is dry rural land.
@@ -93,21 +94,36 @@ local function connectIslands(roads: { any }, net: { any })
 	end
 	for c in len do
 		if c ~= main then
-			local bestD, from, to = math.huge, nil, nil
+			-- nearest few target points; keep the first route that doesn't cross a landmark
+			local cands = {}
 			for k, p in pos do
 				if find(k) == c then
 					for q = 1, #mainPts, 7 do -- every 7th main vertex is plenty to find the nearest area
 						local m = mainPts[q]
-						local d = (m[1] - p[1]) ^ 2 + (m[2] - p[2]) ^ 2
-						if d < bestD then
-							bestD, from, to = d, p, m
-						end
+						table.insert(cands, { (m[1] - p[1]) ^ 2 + (m[2] - p[2]) ^ 2, p, m })
 					end
 				end
 			end
-			if from and to then
-				local route = Roads.route({ { from[1] / W, from[2] / W }, { to[1] / W, to[2] / W } }, "state")
+			table.sort(cands, function(a, b)
+				return a[1] < b[1]
+			end)
+			local chosen = nil
+			for t = 1, math.min(#cands, 60), 6 do -- spread the tries over different targets
+				local from, to = cands[t][2], cands[t][3]
+				local route = Roads.route({ { from[1] / W, from[2] / W }, { to[1] / W, to[2] / W } }, "connector")
 				route[1], route[2], route[#route - 1], route[#route] = from[1], from[2], to[1], to[2] -- exact junctions
+				local crosses = false
+				for i = 1, #route - 3, 2 do
+					crosses = crosses or Landmarks.crosses(route[i], route[i + 1], route[i + 2], route[i + 3])
+				end
+				chosen = chosen or route -- shortcut: if every try crosses a landmark the first is used; the audit flags it
+				if not crosses then
+					chosen = route
+					break
+				end
+			end
+			if chosen then
+				local route = chosen
 				for i = 1, #route - 3, 2 do
 					local wet = Terrain.sample((route[i] + route[i + 2]) / 2, (route[i + 1] + route[i + 3]) / 2).water ~= nil
 					table.insert(roads, { ax = route[i], az = route[i + 1], bx = route[i + 2], bz = route[i + 3], width = Config.COUNTY_W, kind = "county", bridge = wet })
@@ -120,9 +136,9 @@ end
 -- Rural roads grow with the style trained on real county road networks, joining the city network.
 function Rural.generate(roads: { any }, buildings: { any }, shared: Streets.Shared?)
 	local rng = Hash.rng(Config.SEED + 500)
-	local net = Streets.grow(StreetStyles.rural, ruralOk, W / 2, W / 2, W / 2, 0, Config.SEED + 503, 2500, shared, nil, Terrain.dryLink)
+	local net = Streets.grow(StreetStyles.rural, ruralOk, W / 2, W / 2, W / 2, 0, Config.SEED + 503, 2500, shared, nil, Landmarks.okLink)
 	-- loose county-road ends join the nearest road (state road, city edge, another county road)
-	for _, link in Streets.stitch(shared or Streets.newShared(), net, 900, Terrain.dryLink) do
+	for _, link in Streets.stitch(shared or Streets.newShared(), net, 900, Landmarks.okLink) do
 		table.insert(net, link)
 	end
 	local segs = {}

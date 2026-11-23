@@ -179,6 +179,59 @@ for d in W["districts"]:
     t = TARGET[role]
     say(f"  {d['id']:10s} ({role:9s}) " + "  ".join(f"{k[:8]} {s[k]:.2f}/{t[k]:.2f}" for k in KEYS))
 
+# 6a. Building uses vs the real Florida mix (metro, general-purpose styles), and markers
+say("\n## Building uses")
+RATES = json.load(open("tools/data/building_rates.json"))["business"]
+metro_uses = Counter(b.get("use") for b in B if b["style"] in ("midrise", "stucco", "deco") and b["district"] not in ("keytown",))
+tot = sum(metro_uses.values())
+real_tot = sum(r["urban_per_100k"] for r in RATES.values() if r["group"] not in ("Industry & logistics", "Utilities"))
+off = []
+for name, r in sorted(RATES.items(), key=lambda kv: -kv[1]["urban_per_100k"])[:12]:
+    if r["group"] in ("Industry & logistics", "Utilities"):
+        continue
+    real_share = r["urban_per_100k"] / real_tot
+    map_share = metro_uses[name] / max(tot, 1)
+    if not 0.5 < map_share / real_share < 2:
+        off.append(f"{name} {100 * map_share:.1f}% vs real {100 * real_share:.1f}%")
+check("building uses match the real mix", not off and tot > 0, f"top uses within 2x of real Florida shares{': ' + '; '.join(off) if off else ''}")
+missing_use = sum(1 for b in B if not b.get("use"))
+check("every building has a use", missing_use == 0, f"{missing_use} without a use")
+mk = Counter(b["marker"] for b in B if b.get("marker"))
+say(f"map markers: {dict(mk)}")
+
+# 6b. Landmarks: all placed, on the right ground, not cut by roads or buildings, reachable
+say("\n## Landmarks")
+LM = W.get("landmarks", [])
+check("all 200 landmarks placed", len(LM) == 200, f"{len(LM)} of 200 placed")
+sea_ok = {"offshore", "shore", "islet", "bridge"}  # piers and marinas touch water by design; islets are smaller than the audit grid
+
+
+def inside(l, x, z, shrink=0):
+    return abs(x - l["x"]) < l["w"] / 2 - shrink and abs(z - l["z"]) < l["d"] / 2 - shrink
+
+
+wet_lm = [l["name"] for l in LM if l["site"] not in sea_ok and water[min(n - 1, int(l["z"] / cell)), min(n - 1, int(l["x"] / cell))]]
+check("landmarks on land (except offshore ones)", not wet_lm, f"{len(wet_lm)} on water: {wet_lm[:5]}")
+cut = []
+for l in LM:
+    for r in seg_grid[(int(l["x"] // 128), int(l["z"] // 128))]:
+        if l["site"] != "bridge" and r["kind"] != "access" and inside(l, (r["ax"] + r["bx"]) / 2, (r["az"] + r["bz"]) / 2, 10):
+            cut.append(l["name"])
+            break
+check("no road through a landmark", not cut, f"{len(cut)} landmarks with a road through them: {cut[:5]}")
+on_lm = sum(1 for b in B for l in LM if abs(b["x"] - l["x"]) < 900 and inside(l, b["x"], b["z"], 5))
+check("no ordinary building inside a landmark", on_lm == 0, f"{on_lm} buildings inside landmark footprints")
+unreached = []
+for l in LM:
+    if l["site"] in ("offshore", "islet", "bridge"):
+        continue
+    reach = max(l["w"], l["d"]) / 2 + 200
+    if not any(math.dist((l["x"], l["z"]), ((r["ax"] + r["bx"]) / 2, (r["az"] + r["bz"]) / 2)) < reach
+               for r in ROADS if abs(r["ax"] - l["x"]) < reach and abs(r["az"] - l["z"]) < reach):
+        unreached.append(l["name"])
+check("landmarks reachable by road (boat/air for islets and offshore)", not unreached, f"{len(unreached)} with no road nearby: {unreached[:5]}")
+say(f"landmark sites: {dict(Counter(l['site'] for l in LM))}")
+
 # 7. Transit
 say("\n## Transit")
 st_far = 0

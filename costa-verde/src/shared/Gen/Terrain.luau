@@ -79,6 +79,8 @@ local function keys(u: number, v: number): number
 		local d = 1 - math.sqrt((along / len) ^ 2 + (across / wid) ^ 2)
 		best = math.max(best, d * wid)
 	end
+	local T = Config.TOWN_KEY
+	best = math.max(best, (1 - math.sqrt(((u - T[1]) / T[3]) ^ 2 + ((v - T[2]) / T[4]) ^ 2)) * T[4])
 	return best + 0.0012 * Noise.fbm(u * 300, v * 300, S + 21)
 end
 

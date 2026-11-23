@@ -9,6 +9,7 @@ local Terrain = require("./Terrain")
 local Districts = require("./Districts")
 local Streets = require("./Streets")
 local Hash = require("./Hash")
+local Landmarks = require("./Landmarks")
 
 local Roads = {}
 
@@ -43,6 +44,10 @@ local function costGrid(profile: string): { number }
 				v = P.mangrove
 			elseif Districts.urban((i + 0.5) * G, (j + 0.5) * G) > 0 then
 				v = P.urban
+			end
+			if P.landmark and (Landmarks.blocked((i + 0.5) * G, (j + 0.5) * G, G / 2) or Landmarks.blocked(i * G, j * G, 20)
+				or Landmarks.blocked((i + 1) * G, j * G, 20) or Landmarks.blocked(i * G, (j + 1) * G, 20) or Landmarks.blocked((i + 1) * G, (j + 1) * G, 20)) then
+				v = P.landmark -- connector roads (routed after landmarks exist) go around them
 			end
 			c[j * N + i + 1] = v
 		end
@@ -187,7 +192,7 @@ local function builtUp(x: number, z: number): boolean
 	if s.water or s.land < 20 then
 		return false
 	end
-	return s.shape == "barrier" or (s.shape == "main" and Districts.urban(x, z) > 0)
+	return s.shape == "barrier" or ((s.shape == "main" or s.shape == "key") and Districts.urban(x, z) > 0)
 end
 
 -- One grid line (vertical if `alongZ`) at coordinate `c`: kept where built up, short water gaps bridged.

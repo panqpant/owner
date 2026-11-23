@@ -31,7 +31,7 @@ function Districts.at(x: number, z: number, s: Terrain.Sample?): string
 	if sample.shape == "barrier" then
 		return "beach"
 	elseif sample.shape == "key" then
-		return "keys"
+		return if Districts.urban(x, z) > 0 then "keytown" else "keys"
 	elseif sample.shape == "islet" then
 		return "islets"
 	elseif sample.land <= 0 then
