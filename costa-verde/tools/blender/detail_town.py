@@ -476,22 +476,24 @@ def main_real():
     realism.PLANTS.update(realism.florida_plants())
     print("bed plants:", realism.plant_beds(beds, gy, rng, walk_outer.buffer(10)))
     print("fence plants:", realism.plants_on_fences(fences, gy, rng, realism.PLANTS))
-    realism.clutter(roads, asphalt, walk_outer, zone, gy, rng)
+    preset = next((a.split("=")[1] for a in sys.argv if a.startswith("--time=")), "day")
+    realism.clutter(roads, asphalt, walk_outer, zone, gy, rng, wet=preset in ("rain", "night", "dusk"))
     realism.real_trees(oaks, palms)
     terrain = bpy.data.objects["ground"]
     realism.grass(terrain, (CX - 260, CZ - 260, CX + 260, CZ + 260), lawn)
-    realism.sky_and_sun(32, 215, exposure=0.0)
+    realism.time_of_day(preset)
     # 1) street level on the sidewalk, mid-block, looking along the most central street
     L = _m.hypot(r["bx"] - r["ax"], r["bz"] - r["az"])
     ux, uz = (r["bx"] - r["ax"]) / L, (r["bz"] - r["az"]) / L
     ex, ez = r["ax"] + ux * L * 0.3 - uz * (r["width"] / 2 + 5), r["az"] + uz * L * 0.3 + ux * (r["width"] / 2 + 5)
     realism.real_camera((ex, -ez, gy + 7), (ex + ux * 120 + uz * 8, -(ez + uz * 120 - ux * 8), gy + 9), 30, focus=60, fstop=11)
-    render("real_street")
-    realism.lens("screenshots/real_street.png")
+    render(f"real_street_{preset}")
+    realism.lens(f"screenshots/real_street_{preset}.png")
     # 2) low aerial over the block
     realism.real_camera((CX + 240, -(CZ + 220), gy + 150), (CX - 10, -(CZ - 10), gy + 5), 35)
-    render("real_aerial")
-    realism.lens("screenshots/real_aerial.png")
+    if preset == "day":
+        render("real_aerial")
+        realism.lens("screenshots/real_aerial.png")
 
 
 def main():

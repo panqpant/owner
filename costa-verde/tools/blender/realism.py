@@ -626,9 +626,24 @@ def place(coll, x, z, y, rot=0.0, scale=1.0):
     return e
 
 
+LAMPS = []  # street-light heads (x, z, y) for the night presets
+COBRA = []
+
+
+def cobra_model():
+    coll = _collection("cobra_light")
+    bm = bmesh.new()
+    _cube(bm, (3.2, 0, 0), (6.6, 0.35, 0.35), 0)  # arm
+    _cube(bm, (6.6, 0, -0.35), (1.8, 0.9, 0.5), 0)  # head
+    _cube(bm, (6.6, 0, -0.62), (1.4, 0.7, 0.05), 1)  # lens
+    _obj("cobra_light", bm, [mat_simple("cobra_body", (150, 152, 150), 0.4, 0.6), mat_simple("cobra_lens", (255, 230, 190), 0.2, emit=(1.0, 0.8, 0.55))], coll)
+    return coll
+
+
 def street_life(roads, asphalt, junctions, buildings, zone, gy, rng):
-    """Parked cars, utility poles with wires, hydrants, stop signs, trash cans, mailboxes."""
+    """Parked cars, utility poles with wires and street lights, hydrants, stop signs, trash cans, mailboxes."""
     cars, props = car_models(), prop_models()
+    COBRA.append(cobra_model())
     jpts = [Point(j) for j in junctions]
     from shapely.prepared import prep
     road_area = prep(asphalt.buffer(2.5))
@@ -657,6 +672,9 @@ def street_life(roads, asphalt, junctions, buildings, zone, gy, rng):
             if zone[0] < x < zone[2] and zone[1] < z < zone[3] and off_road(x, z):
                 place(props["utility_pole"], x, z, gy + 1, ang + math.pi / 2)
                 poles.append((x, z, ang))
+                if len(poles) % 2 == 0:  # cobra-head street light on every other pole, arm over the road
+                    place(COBRA[0], x, z, gy + 27, math.atan2(nz, -nx))
+                    LAMPS.append((x - nx * 6.5, z - nz * 6.5, gy + 26.4))
             t += 55
         hx, hz = ax + ux * 25 + nx * (w / 2 + 1.5), az + uz * 25 + nz * (w / 2 + 1.5)
         if rng.random() < 0.5 and zone[0] < hx < zone[2] and zone[1] < hz < zone[3] and off_road(hx, hz):  # hydrant
@@ -954,7 +972,8 @@ def mat_window_interior():
     curtain = _mix(nt, (0.30, 0.18, 0.12), (0.18, 0.22, 0.28), sep.outputs["Blue"])
     c = _mix(nt, c, curtain, _rng(nt, sep.outputs["Red"], 0.82, 0.83, 0, 1))
     nt.links.new(c, b.inputs["Base Color"])
-    lit = _rng(nt, sep.outputs["Blue"], 0.86, 0.87, 0, 1.2)  # a few lit rooms
+    lit = _rng(nt, sep.outputs["Blue"], 0.86, 0.87, 0, 1.2)  # a few lit rooms (time presets change this)
+    lit.node.name = "lit_rooms"
     b.inputs["Emission Color"].default_value = (1.0, 0.78, 0.5, 1)
     nt.links.new(lit, b.inputs["Emission Strength"])
     b.inputs["Roughness"].default_value = 0.03
@@ -1201,7 +1220,7 @@ def _decals(name, polys, y, mat):
     _slab(name, unary_union(polys) if polys else Polygon(), y - 0.02, y, mat)
 
 
-def clutter(roads, asphalt, walk_outer, zone, gy, rng):
+def clutter(roads, asphalt, walk_outer, zone, gy, rng, wet=False):
     """Manholes, storm drains at the curbs, tyre wear, tar-sealed cracks, puddles, litter, weeds in the cracks,
     fallen palm fronds."""
     clip = sbox(*zone)
@@ -1233,10 +1252,13 @@ def clutter(roads, asphalt, walk_outer, zone, gy, rng):
                 a += rng.uniform(-0.8, 0.8)
                 x, z = x + math.cos(a) * 2.5, z + math.sin(a) * 2.5
             tar.append(LineString(pts).buffer(0.18))
-        if rng.random() < 0.35:  # a puddle in a low spot near the gutter
-            t = rng.uniform(0.2, 0.8) * L
-            cx, cz = ax + ux * t + nx * (w / 2 - 3), az + uz * t + nz * (w / 2 - 3)
-            puddles.append(unary_union([Point(cx + rng.uniform(-3, 3), cz + rng.uniform(-1.5, 1.5)).buffer(rng.uniform(1, 2.6), 10) for _ in range(5)]))
+        for _ in range(3 if wet else 1):
+            if rng.random() < (0.9 if wet else 0.35):  # puddles in low spots near the gutters
+                t = rng.uniform(0.1, 0.9) * L
+                side = rng.choice((-1, 1))
+                cx, cz = ax + ux * t + nx * (w / 2 - 3) * side, az + uz * t + nz * (w / 2 - 3) * side
+                k = 1.8 if wet else 1.0
+                puddles.append(unary_union([Point(cx + rng.uniform(-3, 3) * k, cz + rng.uniform(-1.5, 1.5)).buffer(rng.uniform(1, 2.6) * k, 10) for _ in range(5)]))
     road = asphalt.intersection(clip)
     _decals("manholes", [g.intersection(road) for g in manholes], gy + 0.53, mat_simple("manhole", (52, 50, 46), 0.4, 0.8))
     _decals("drains", drains, gy + 0.53, mat_simple("drain", (20, 20, 20), 0.5, 0.6))
@@ -1341,3 +1363,84 @@ def plants_on_fences(fence_lines, gy, rng, plants):
                     n += 1
                 t += rng.uniform(8, 16)
     return n
+
+
+# ---------------------------------------------------------------- 2. time of day and weather
+
+def _wet(level):
+    """Water film on hard surfaces: darker, glossy, with a clear coat that reflects."""
+    for name, dark, rough in (("photo_asphalt", 0.55, 0.08), ("real_asphalt", 0.55, 0.08), ("photo_concrete", 0.7, 0.2),
+                              ("real_concrete", 0.7, 0.2), ("photo_roof_flat", 0.7, 0.25), ("stall_paint", 0.8, 0.15)):
+        m = bpy.data.materials.get(name)
+        if not m:
+            continue
+        nt = m.node_tree
+        b = nt.nodes["Principled BSDF"]
+        for ln in list(b.inputs["Roughness"].links):
+            nt.links.remove(ln)
+        b.inputs["Roughness"].default_value = rough
+        b.inputs["Coat Weight"].default_value = 0.8 * level
+        b.inputs["Coat Roughness"].default_value = 0.02
+        src = b.inputs["Base Color"].links[0].from_socket if b.inputs["Base Color"].links else None
+        if src:
+            mx = _n(nt, "ShaderNodeMix", data_type="RGBA", blend_type="MULTIPLY")
+            mx.inputs["Factor"].default_value = 1.0
+            mx.inputs["B"].default_value = (dark, dark, dark, 1)
+            nt.links.new(src, mx.inputs["A"])
+            nt.links.new(mx.outputs["Result"], b.inputs["Base Color"])
+
+
+def _lights_on(lit_share, lamp_energy, lamp_col):
+    """Street lights as real spot lights, a share of windows lit, glowing shop signs."""
+    for x, z, y in LAMPS:
+        ld = bpy.data.lights.new("streetlight", "SPOT")
+        ld.energy, ld.color = lamp_energy, lamp_col
+        ld.spot_size, ld.spot_blend = math.radians(125), 0.6
+        ld.shadow_soft_size = 0.6
+        o = bpy.data.objects.new("streetlight", ld)
+        o.location = (x, -z, y)
+        bpy.context.collection.objects.link(o)
+    m = bpy.data.materials.get("real_glass_interior")
+    if m:
+        r = m.node_tree.nodes.get("lit_rooms")
+        if r:
+            r.inputs["From Min"].default_value = 1 - lit_share
+            r.inputs["From Max"].default_value = 1 - lit_share + 0.01
+            r.inputs["To Max"].default_value = 3.0
+    sm = bpy.data.materials.get("sign_letters")
+    if sm:
+        b = sm.node_tree.nodes["Principled BSDF"]
+        b.inputs["Emission Color"].default_value = (1.0, 0.92, 0.75, 1)
+        b.inputs["Emission Strength"].default_value = 6
+
+
+PRESETS = {  # sun elevation, azimuth, sun strength, sun colour, sky strength, exposure, wet, lit windows, street lights
+    "day": (32, 215, 5.5, (1.0, 0.93, 0.82), 0.35, 0.0, 0, 0, 0),
+    "golden": (8, 250, 4.5, (1.0, 0.68, 0.42), 0.5, 0.4, 0, 0.05, 0),
+    "rain": (40, 200, 1.6, (0.85, 0.9, 1.0), 0.9, 0.3, 1.0, 0.08, 0),
+    "dusk": (0.5, 260, 1.2, (1.0, 0.5, 0.3), 0.6, 1.2, 0.3, 0.25, 9000),
+    "night": (-12, 260, 0.0, (1, 1, 1), 0.04, 2.0, 0.4, 0.35, 16000),
+}
+
+
+def time_of_day(preset):
+    elev, azim, sun_e, sun_c, sky_s, expo, wet, lit, lamps = PRESETS[preset]
+    sky_and_sun(max(elev, -5), azim, exposure=expo)
+    s = bpy.context.scene
+    bg = s.world.node_tree.nodes["Background"]
+    bg.inputs["Strength"].default_value = sky_s
+    if preset == "rain":  # overcast: a flat cloud deck dims and greys the sky
+        sk = [n for n in s.world.node_tree.nodes if n.type == "TEX_SKY"][0]
+        sk.aerosol_density = 6.0
+    if preset == "night":
+        bg.inputs["Color"].default_value = (0.006, 0.01, 0.025, 1)
+        for ln in list(bg.inputs["Color"].links):
+            s.world.node_tree.links.remove(ln)
+    sun = [o for o in bpy.data.objects if o.type == "LIGHT" and o.data.type == "SUN"][-1]
+    sun.data.energy, sun.data.color = sun_e, sun_c
+    if wet:
+        _wet(wet)
+    if lamps:
+        _lights_on(lit, lamps, (1.0, 0.78, 0.5) if preset == "dusk" else (1.0, 0.85, 0.65))
+    elif lit:
+        _lights_on(lit, 0, (1, 1, 1))
