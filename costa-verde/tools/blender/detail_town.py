@@ -768,7 +768,8 @@ def main_real(build_only=False):
     T["pieces"] = [p for p in T["pieces"] if p["g"] not in keep and not (p["shape"] == "box" and abs(p["s"][1] - 1.2) < 0.01 and in_zone(p["p"][0], p["p"][2]))]
     hero_spots = [it for it in T["items"] if in_zone(it[1], it[2]) and it[0] in ("PalmCoconut", "PalmCabbage", "LiveOak")]
     T["items"] = [it for it in T["items"] if it not in hero_spots]
-    build_terrain(T)
+    if not build_only:  # Roblox has its own terrain and background plants (TerrainBuilder, Vegetation)
+        build_terrain(T)
     gy = ground(CX, CZ)
     objs = [building(i, b) for i, b in detailed]
     realism.realify(objs, gy)
@@ -791,9 +792,9 @@ def main_real(build_only=False):
     preset = next((a.split("=")[1] for a in sys.argv if a.startswith("--time=")), "day")
     realism.clutter(roads, asphalt, walk_outer, zone, gy, rng, wet=preset in ("rain", "night", "dusk"))
     realism.real_trees(oaks, palms)
-    terrain = bpy.data.objects["ground"]
-    if build_only:  # scene for export_block_env.py: no grass strands, lights or cameras
+    if build_only:  # scene for export_block_env.py: no terrain, grass strands, lights or cameras
         return detailed, gy
+    terrain = bpy.data.objects["ground"]
     realism.grass(terrain, (CX - 220, CZ - 220, CX + 220, CZ + 220), lawn)
     Lr = _m.hypot(r["bx"] - r["ax"], r["bz"] - r["az"])
     realism.time_of_day(preset, ((r["bx"] - r["ax"]) / Lr, (r["bz"] - r["az"]) / Lr))

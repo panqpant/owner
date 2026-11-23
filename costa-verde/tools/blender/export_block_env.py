@@ -29,7 +29,7 @@ SURFACES = {
     "paint_yellow": ("SmoothPlastic", (222, 180, 50)), "mulch": ("Ground", (92, 66, 48)), "dirt": ("Ground", (150, 130, 100)),
     "fences": ("WoodPlanks", (170, 140, 104)), "manholes": ("Metal", (70, 68, 64)), "drains": ("Metal", (30, 30, 30)),
     "tar_snakes": ("SmoothPlastic", (12, 12, 12)), "puddles": ("Glass", (30, 34, 38)), "wires": ("SmoothPlastic", (20, 20, 20)),
-    "frond": ("Fabric", (140, 110, 70)),
+    "frond": ("Fabric", (140, 110, 70)), "sign": ("SmoothPlastic", (244, 240, 228)),
 }
 
 
@@ -79,60 +79,49 @@ def tiles(o):
 
 
 def realize(coll):
-    """Instance a collection at the origin with particles made real; returns one joined mesh object."""
+    """One mesh for a collection, read straight from the evaluated scene: modifiers applied, particle leaves
+    included, materials kept. No temporary objects or operators, so it stays fast and light on memory."""
+    for o in coll.all_objects:
+        for ps in getattr(o, "particle_systems", []):
+            if ps.settings.count > 6000:
+                ps.settings.count = 6000  # shortcut: fewer leaves than the render so one tree fits a Roblox mesh; LODs later
     root = bpy.data.objects.new("tmp_" + coll.name, None)
     root.instance_type, root.instance_collection = "COLLECTION", coll
     bpy.context.collection.objects.link(root)
-    bpy.ops.object.select_all(action="DESELECT")
-    root.select_set(True)
-    bpy.context.view_layer.objects.active = root
-    bpy.ops.object.duplicates_make_real(use_base_parent=False, use_hierarchy=False)
-    made = [o for o in bpy.context.selected_objects if o.type in ("MESH", "CURVE")]
-    for o in list(made):  # leaf cards on particle emitters become real geometry
-        for md in list(o.modifiers):
-            if md.type == "PARTICLE_SYSTEM":
-                st = md.particle_system.settings
-                if st.count > 6000:
-                    st.count = 6000  # shortcut: fewer leaves than the render so one tree fits a Roblox mesh; raise via LOD later
-                bpy.ops.object.select_all(action="DESELECT")
-                o.select_set(True)
-                bpy.context.view_layer.objects.active = o
-                bpy.ops.object.duplicates_make_real()
-                made += [p for p in bpy.context.selected_objects if p is not o and p.type == "MESH"]
-                if not o.show_instancer_for_render:
-                    made.remove(o)
-                    o.hide_render = True
-                o.modifiers.remove(md)
+    dg = bpy.context.evaluated_depsgraph_get()
+    mats, bm = [], bmesh.new()
+    for inst in dg.object_instances:
+        if not inst.is_instance or inst.parent is None or inst.parent.original != root:
+            continue
+        ob = inst.object
+        src = ob.original
+        if ob.type not in ("MESH", "CURVE", "FONT") or src.hide_render:
+            continue
+        if src.particle_systems and not src.show_instancer_for_render:  # hidden leaf emitter
+            continue
+        me = bpy.data.meshes.new_from_object(ob, preserve_all_data_layers=True, depsgraph=dg)
+        me.transform(inst.matrix_world)
+        remap = []
+        for m in me.materials:
+            if m not in mats:
+                mats.append(m)
+            remap.append(mats.index(m))
+        for poly in me.polygons:
+            poly.material_index = remap[poly.material_index] if remap else 0
+        bm.from_mesh(me)
+        bpy.data.meshes.remove(me)
     bpy.data.objects.remove(root)
-    meshes = []
-    for o in made:
-        if o.type == "CURVE":
-            bpy.ops.object.select_all(action="DESELECT")
-            o.select_set(True)
-            bpy.context.view_layer.objects.active = o
-            bpy.ops.object.convert(target="MESH")
-            o = bpy.context.view_layer.objects.active
-        if o.type == "MESH" and not o.hide_render:
-            meshes.append(o)
-    bpy.ops.object.select_all(action="DESELECT")
-    for o in meshes:
-        o.select_set(True)
-        bpy.context.view_layer.objects.active = o
-        for md in list(o.modifiers):  # bake displacement / bevel / boolean into the mesh
-            try:
-                bpy.ops.object.modifier_apply(modifier=md.name)
-            except RuntimeError:
-                o.modifiers.remove(md)
-    if not meshes:
+    if not bm.faces:
+        bm.free()
         return None
-    for o in meshes:
-        o.select_set(True)
-    bpy.context.view_layer.objects.active = meshes[0]
-    if len(meshes) > 1:
-        bpy.ops.object.join()
-    m = bpy.context.view_layer.objects.active
-    m.name = "m_" + coll.name
-    return m
+    me = bpy.data.meshes.new("m_" + coll.name)
+    bm.to_mesh(me)
+    bm.free()
+    for m in mats:
+        me.materials.append(m)
+    o = bpy.data.objects.new("m_" + coll.name, me)
+    bpy.context.collection.objects.link(o)
+    return o
 
 
 def leaf_png():
@@ -147,14 +136,33 @@ def main():
     os.makedirs(OUT, exist_ok=True)
     dt.main_real(build_only=True)
     manifest = {"surfaces": [], "models": {}, "placements": []}
-    # surfaces
-    frond = [o for o in bpy.data.objects if o.name.startswith("frond") and o.type == "MESH"]
-    if len(frond) > 1:
+    import time
+    t0 = time.time()
+    # placements first, then strip everything not exported so each Blender operation works on a near-empty scene
+    instances = [o for o in bpy.data.objects if o.type == "EMPTY" and o.instance_collection]
+    for o in instances:
+        manifest["placements"].append({"model": "m_" + o.instance_collection.name, "pos": rb(o.location),
+                                       "yaw": round(o.rotation_euler.z, 4), "scale": round(o.scale.x, 3)})
+    colls = {o.instance_collection for o in instances}
+    for o in list(bpy.data.objects):
+        if o.type == "EMPTY" or (o.type == "MESH" and o.name.startswith("b") and o.name[1:2].isdigit()):
+            bpy.data.objects.remove(o)
+    print(f"setup + strip {time.time() - t0:.0f}s", flush=True)
+    # surfaces (signs and fallen fronds joined into one mesh each)
+    for prefix in ("frond", "sign"):
+        grp = [o for o in bpy.data.objects if o.name.startswith(prefix) and o.type in ("MESH", "FONT", "CURVE")]
+        if not grp:
+            continue
         bpy.ops.object.select_all(action="DESELECT")
-        for o in frond:
+        for o in grp:
             o.select_set(True)
-        bpy.context.view_layer.objects.active = frond[0]
-        bpy.ops.object.join()
+        bpy.context.view_layer.objects.active = grp[0]
+        if any(o.type != "MESH" for o in grp):
+            bpy.ops.object.convert(target="MESH")
+            grp = list(bpy.context.selected_objects)
+        if len(grp) > 1:
+            bpy.ops.object.join()
+        bpy.context.view_layer.objects.active.name = prefix
     wires = bpy.data.objects.get("wires")
     if wires:
         bpy.ops.object.select_all(action="DESELECT")
@@ -171,12 +179,19 @@ def main():
             centre = sum(bb, Vector()) / 8
             mat, col = SURFACES[key]
             manifest["surfaces"].append({"name": t.name, "center": rb(centre), "material": mat, "color": col, "tris": tris(t)})
-    # models + placements
-    instances = [o for o in bpy.data.objects if o.type == "EMPTY" and o.instance_collection and not o.name.startswith("tmp_")]
-    for coll in {o.instance_collection for o in instances}:
+    print(f"surfaces {time.time() - t0:.0f}s", flush=True)
+    # models
+    for coll in colls:
         m = realize(coll)
         if m is None:
             continue
+        if tris(m) > LIMIT:  # reduce anything over Roblox's limit just under it, keeping the shape
+            dec = m.modifiers.new("fit", "DECIMATE")
+            dec.ratio = LIMIT / tris(m)
+            dg = bpy.context.evaluated_depsgraph_get()
+            me = bpy.data.meshes.new_from_object(m.evaluated_get(dg), preserve_all_data_layers=True, depsgraph=dg)
+            m.modifiers.remove(dec)
+            m.data = me
         bb = [m.matrix_world @ Vector(v) for v in m.bound_box]
         c = sum(bb, Vector()) / 8
         leafy = any(mt and "leaf_card" in mt.name for mt in m.data.materials)
@@ -184,9 +199,7 @@ def main():
         manifest["models"][m.name] = {"offset": [round(c.x, 3), round(c.z, 3), round(-c.y, 3)], "tris": tris(m), "leaf": leafy,
                                       "over_limit": tris(m) > 20000}
         bpy.data.objects.remove(m)
-    for o in instances:
-        manifest["placements"].append({"model": "m_" + o.instance_collection.name, "pos": rb(o.location),
-                                       "yaw": round(o.rotation_euler.z, 4), "scale": round(o.scale.x, 3)})
+    print(f"models {time.time() - t0:.0f}s", flush=True)
     leaf_png()
     json.dump(manifest, open(f"{OUT}/manifest.json", "w"), indent=1)
     with open("src/shared/BlockEnvManifest.luau", "w") as f:
