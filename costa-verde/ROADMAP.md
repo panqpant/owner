@@ -68,6 +68,13 @@ statistics. No real place is copied.
   roads as parts or meshes, buildings as placeholders, streaming setup.
 - First test: you press Play in Studio and send screenshots.
 
+## Detailed test block in Roblox (prepared, needs Studio)
+- `python tools/blender/export_block_roblox.py` exports every building of the test block: one FBX each (opaque, glass,
+  lamp parts) plus a baked colour+AO texture, and `src/shared/BlockManifest.luau` (positions, room lights).
+- Studio: 3D-import `build/roblox_block/*.fbx` into ReplicatedStorage.BlockAssets; bulk-upload the PNGs and paste the
+  ids into `src/shared/BlockTextures.luau`; command bar `require(game.ReplicatedStorage.Shared.BlockImporter).place()`.
+  Room lights switch on at night from ServerScriptService.Server.BlockLights.
+
 ## Phase D: Blender asset kits
 - Started: `tools/blender/detail_town.py` models every building in a test block (old town at 27740, 23180) as a
   custom detailed mesh from its real footprint and style (windows with frames, sills and shutters, shopfronts,

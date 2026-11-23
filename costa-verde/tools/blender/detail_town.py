@@ -852,7 +852,8 @@ def main():
     render("detail_street")
 
 
-if "--real" in sys.argv:
-    main_real()
-else:
-    main()
+if __name__ == "__main__":
+    if "--real" in sys.argv:
+        main_real()
+    else:
+        main()
