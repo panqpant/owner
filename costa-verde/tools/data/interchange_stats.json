@@ -1,0 +1,73 @@
+{
+ "miami": {
+  "urban": true,
+  "counts": {
+   "system": 7,
+   "diamond": 33,
+   "clover": 2,
+   "parclo": 15
+  }
+ },
+ "broward": {
+  "urban": true,
+  "counts": {
+   "parclo": 16,
+   "diamond": 27,
+   "system": 1
+  }
+ },
+ "tampa": {
+  "urban": true,
+  "counts": {
+   "diamond": 35,
+   "parclo": 8,
+   "clover": 1,
+   "system": 1
+  }
+ },
+ "orlando": {
+  "urban": true,
+  "counts": {
+   "parclo": 15,
+   "diamond": 57,
+   "system": 7,
+   "spui": 1
+  }
+ },
+ "jacksonville": {
+  "urban": true,
+  "counts": {
+   "diamond": 49,
+   "system": 6,
+   "parclo": 16
+  }
+ },
+ "rural_i75": {
+  "urban": false,
+  "counts": {
+   "diamond": 21,
+   "spui": 1,
+   "parclo": 4
+  }
+ },
+ "rural_i10": {
+  "urban": false,
+  "counts": {
+   "diamond": 20,
+   "parclo": 2,
+   "spui": 2
+  }
+ },
+ "urban_mix": {
+  "system": 0.07407407407407407,
+  "diamond": 0.6767676767676768,
+  "clover": 0.010101010101010102,
+  "parclo": 0.2356902356902357,
+  "spui": 0.003367003367003367
+ },
+ "rural_mix": {
+  "diamond": 0.82,
+  "spui": 0.06,
+  "parclo": 0.12
+ }
+}

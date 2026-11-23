@@ -158,6 +158,11 @@ function Terrain.sample(x: number, z: number): Sample
 	local WL = Config.WETLANDS
 	local wd = math.sqrt(((u - WL[1]) / WL[3]) ^ 2 + ((v - WL[2]) / WL[4]) ^ 2)
 	local wet = if shape == "main" then clamp01((1 - wd * (1 + 0.4 * Noise.fbm(u * 6, v * 6, S + 50))) * 3) else 0
+	-- towns in the wetlands stand on raised, drained ground (like real Everglades towns)
+	for _, c in Config.URBAN.cores do
+		local t = clamp01((1 - math.sqrt((u - c[1]) ^ 2 + (v - c[2]) ^ 2) / (c[3] * 1.2)) * 3)
+		wet *= 1 - t
+	end
 	local coastW = clamp01(1 - math.max(landStuds, 0) / 6000)
 	local farmMask = clamp01((north + 0.35 * Noise.fbm(u * 10, v * 10, S + 11) - 0.2) * 3)
 	-- Regional elevation changes slowly (10+ km in the real data), so heights use smooth weights;

@@ -13,6 +13,7 @@ export type District = {
 	maxH: number?,
 	style: string?,
 	parkChance: number?,
+	landscape: boolean?, -- open-country district: never claims land inside a built-up town area
 	special: boolean?, -- placed by terrain feature (barrier island, keys), not by distance
 }
 
@@ -46,7 +47,7 @@ Config.WETLANDS = { 0.4, 0.64, 0.24, 0.17 } -- centre u, v, radius u, radius v
 
 -- Metro sprawl: cores whose union is built up; hard western levee line like real wetland edges.
 Config.URBAN = {
-	cores = { { 0.72, 0.5, 0.11 }, { 0.75, 0.33, 0.09 }, { 0.71, 0.64, 0.08 }, { 0.15, 0.41, 0.05 }, { 0.3, 0.7, 0.014 }, { 0.47, 0.33, 0.014 } },
+	cores = { { 0.72, 0.5, 0.11 }, { 0.75, 0.33, 0.09 }, { 0.71, 0.64, 0.08 }, { 0.15, 0.41, 0.05 }, { 0.3, 0.7, 0.022 }, { 0.47, 0.33, 0.022 } },
 	levee = 0.6, -- metro stops at this u (south of v = 0.3)
 }
 
@@ -65,9 +66,9 @@ Config.DISTRICTS = {
 	-- Gulf coast town (west)
 	{ id = "gulftown", name = "Pelican Bay", u = 0.15, v = 0.41, radius = 0.05, urban = true, minH = 16, maxH = 45, style = "stucco", parkChance = 0.1 },
 	-- Interior
-	{ id = "wetlands", name = "Sawgrass Wetlands", u = 0.36, v = 0.66, radius = 0.19, urban = false },
+	{ id = "wetlands", name = "Sawgrass Wetlands", u = 0.36, v = 0.66, radius = 0.19, urban = false, landscape = true },
 	{ id = "swamptown", name = "Gator Hollow", u = 0.3, v = 0.7, radius = 0.02, urban = true, minH = 10, maxH = 18, style = "shack", parkChance = 0.2 },
-	{ id = "rural", name = "Citrus County", u = 0.38, v = 0.18, radius = 0.25, urban = false },
+	{ id = "rural", name = "Citrus County", u = 0.38, v = 0.18, radius = 0.25, urban = false, landscape = true },
 	{ id = "truckstop", name = "Mile 88", u = 0.47, v = 0.33, radius = 0.014, urban = true, minH = 12, maxH = 20, style = "shack", parkChance = 0.1 },
 	{ id = "base", name = "Fort Calusa (restricted)", u = 0.17, v = 0.15, radius = 0.045, urban = false },
 	-- Keys
@@ -77,12 +78,18 @@ Config.DISTRICTS = {
 -- Major roads (Roads.luau). Freeways and state roads are routed by A* through these waypoints
 -- (normalized u, v); COST weights the terrain per profile (water and lakes mean bridges).
 Config.ROADS = {
-	FREEWAY_W = 64, BOULEVARD_W = 56, ARTERIAL_W = 44, STATE_W = 30,
+	FREEWAY_W = 64, BOULEVARD_W = 56, ARTERIAL_W = 44, STATE_W = 30, RAMP_W = 22,
 	ARTERIAL_SPACING = 1200, -- one continuous major-road grid over every built-up area
 	BRIDGE_GAP = 400, -- arterials bridge water gaps up to this long
 	CAUSEWAY_EVERY = 3, CAUSEWAY_GAP = 1700, -- every 3rd east-west arterial crosses the bay to the beach
 	SEED_STEP = 120, -- candidate side-street starts along majors (the trained seedEvery picks from these)
 	MAJOR_STITCH = 1500, -- loose major-road ends join the nearest other major within this reach
+	-- Interchange types measured on 347 real Florida interchanges (tools/interchange_stats.py), excluding
+	-- freeway-to-freeway systems, which are placed wherever two freeways cross.
+	INTERCHANGE_MIX = {
+		urban = { clover = 0.011, diamond = 0.731, parclo = 0.255, spui = 0.004 },
+		rural = { diamond = 0.820, parclo = 0.120, spui = 0.060 },
+	},
 	COST = {
 		freeway = { water = 12, lake = 60, wetland = 2.5, mangrove = 4, urban = 1 },
 		state = { water = 25, lake = 80, wetland = 3, mangrove = 6, urban = 1.2 },

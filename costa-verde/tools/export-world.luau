@@ -9,7 +9,7 @@ local hm = Gen.heightmap(Gen.Config.CELL)
 local city = Gen.City.generate()
 local settlements = Gen.Rural.generate(city.roads, city.buildings, city.shared)
 local pois = Gen.Rural.pois()
-local tracks, stations = Gen.Transit.generate(settlements)
+local tracks, stations = Gen.Transit.generate(settlements, city.roads)
 
 local districts = {}
 for _, d in Gen.Config.DISTRICTS do

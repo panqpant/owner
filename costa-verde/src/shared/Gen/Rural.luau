@@ -80,8 +80,14 @@ local function connectIslands(roads: { any }, net: { any })
 		end
 	end
 	local mainPts = {}
+	local onFreeway: { [string]: boolean } = {}
+	for _, r in all do
+		if r.kind == "freeway" or r.kind == "ramp" then
+			onFreeway[key(r.ax, r.az)], onFreeway[key(r.bx, r.bz)] = true, true
+		end
+	end
 	for k, p in pos do
-		if find(k) == main then
+		if find(k) == main and not onFreeway[k] then -- connectors join surface roads, never a freeway mid-span
 			table.insert(mainPts, p)
 		end
 	end

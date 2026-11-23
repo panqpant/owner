@@ -81,6 +81,16 @@ say(f"dead ends by kind: {dict(by_kind)}")
 major_ends = sum(by_kind[k] for k in ("freeway", "boulevard", "arterial", "state"))
 inland = EXACT["inland_ends"]
 check("major roads don't just stop", len(inland) <= 5, f"{major_ends} loose major-road ends: {EXACT['coastal_ends']} at the coast or map edge, {len(inland)} inland {[(e['kind'], round(e['x']), round(e['z'])) for e in inland]}")
+SURFACE = {"street", "collector", "arterial", "boulevard", "county", "drive"}
+fw_deg = Counter()
+for r in ROADS:
+    if r["kind"] == "freeway":
+        fw_deg[key(r["ax"], r["az"])] += 1
+        fw_deg[key(r["bx"], r["bz"])] += 1
+# a freeway's own end may meet surface roads (real freeways terminate at junctions); mid-span may not
+at_grade = sum(1 for v, d in deg.items() if fw_deg[v] >= 2 and kind_at[v] & SURFACE)
+check("freeways are grade-separated", at_grade == 0, f"{at_grade} places where a surface road meets a freeway mid-span at grade (should only connect via ramps)")
+say(f"interchange ramps: {sum(1 for r in ROADS if r['kind'] == 'ramp')} segments")
 city_ends = by_kind["street"] + by_kind["collector"]
 city_j = sum(1 for v, d in deg.items() if d != 2 and kind_at[v] & {"street", "collector"})
 check("city dead ends like real cities", city_ends / max(city_j, 1) < 0.30, f"{100 * city_ends / max(city_j, 1):.0f}% of city street junctions are dead ends (real US: 12-27%, mostly cul-de-sacs)")

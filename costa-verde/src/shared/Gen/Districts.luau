@@ -39,8 +39,9 @@ function Districts.at(x: number, z: number, s: Terrain.Sample?): string
 	end
 	local u, v = x / Config.SIZE, z / Config.SIZE
 	local bestId, bestScore = "rural", math.huge
+	local town = Districts.urban(x, z) > 0
 	for i, d in Config.DISTRICTS do
-		if not d.special then
+		if not d.special and not (town and d.landscape) then
 			local score = math.sqrt((u - d.u) ^ 2 + (v - d.v) ^ 2) / d.radius * (1 + 0.3 * Noise.fbm(u * 30, v * 30, Config.SEED + i * 7))
 			if score < bestScore then
 				bestId, bestScore = d.id, score

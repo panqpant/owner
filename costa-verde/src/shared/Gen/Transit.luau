@@ -47,9 +47,32 @@ local function gridPath(anchors: { { number } }): ({ number }, { { number } })
 	return pts, stops
 end
 
-function Transit.generate(settlements: { { x: number, z: number, name: string } }): ({ Track }, { Station })
+-- `roads`: the generated road segments; a station needs a road within reach (people have to get there).
+function Transit.generate(settlements: { { x: number, z: number, name: string } }, roads: { { ax: number, az: number, bx: number, bz: number } }): ({ Track }, { Station })
 	local tracks: { Track } = {}
 	local stations: { Station } = {}
+	local near: { [number]: { { number } } } = {}
+	for _, rd in roads do
+		for _, p in { { rd.ax, rd.az }, { (rd.ax + rd.bx) / 2, (rd.az + rd.bz) / 2 }, { rd.bx, rd.bz } } do
+			local k = math.floor(p[1] / 128) * 4096 + math.floor(p[2] / 128)
+			near[k] = near[k] or {}
+			table.insert(near[k], p)
+		end
+	end
+	local REACH = 150
+	local function reachable(x: number, z: number): boolean
+		local gx, gz = math.floor(x / 128), math.floor(z / 128)
+		for i = -2, 2 do
+			for j = -2, 2 do
+				for _, p in near[(gx + i) * 4096 + gz + j] or {} do
+					if (p[1] - x) ^ 2 + (p[2] - z) ^ 2 < REACH * REACH then
+						return true
+					end
+				end
+			end
+		end
+		return false
+	end
 	local function nameAt(x: number, z: number, line: string, count: number): string
 		for _, st in settlements do
 			if (st.x - x) ^ 2 + (st.z - z) ^ 2 < 600 ^ 2 then
@@ -74,6 +97,9 @@ function Transit.generate(settlements: { { x: number, z: number, name: string } 
 		local count = 0
 		if metro then
 			for _, p in stops do
+				if not reachable(p[1], p[2]) then
+					continue -- grid crossing with no road (e.g. over a lake): no station
+				end
 				count += 1
 				table.insert(stations, { x = p[1], z = p[2], y = Terrain.sample(p[1], p[2]).h, line = line.name, name = nameAt(p[1], p[2], line.name, count) })
 			end
@@ -88,7 +114,7 @@ function Transit.generate(settlements: { { x: number, z: number, name: string } 
 				for _, st in settlements do
 					town = town or (st.x - x) ^ 2 + (st.z - z) ^ 2 < 600 ^ 2
 				end
-				if town and not s.water and since >= line.spacing then
+				if town and not s.water and since >= line.spacing and reachable(x, z) then
 					since = 0
 					count += 1
 					table.insert(stations, { x = x, z = z, y = s.h, line = line.name, name = nameAt(x, z, line.name, count) })

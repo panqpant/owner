@@ -8,6 +8,7 @@ local Config = require("./Config")
 local Terrain = require("./Terrain")
 local Districts = require("./Districts")
 local Streets = require("./Streets")
+local Hash = require("./Hash")
 
 local Roads = {}
 
@@ -228,8 +229,10 @@ local function gridLine(c: number, alongZ: boolean, maxGap: number, kind: string
 	flush()
 end
 
--- Planarize: wherever two majors cross, insert the same junction vertex into both.
-local function planarize(majors: { Major })
+-- Planarize: wherever two majors cross, insert the same junction vertex into both, except where a
+-- freeway crosses a surface road: that is grade-separated (an overpass) and returned for interchanges.
+local function planarize(majors: { Major }): { { number } }
+	local crossings: { { number } } = {}
 	local CELL = 256
 	local grid: { [number]: { { number } } } = {}
 	for ri, m in majors do
@@ -262,7 +265,11 @@ local function planarize(majors: { Major })
 					if math.abs(den) > 1e-6 then
 						local t = ((x3 - x1) * (z4 - z3) - (z3 - z1) * (x4 - x3)) / den
 						local u = ((x3 - x1) * (z2 - z1) - (z3 - z1) * (x2 - x1)) / den
-						if t > 1e-6 and t < 1 - 1e-6 and u > 1e-6 and u < 1 - 1e-6 then
+						local fa, fb = majors[ra].kind == "freeway", majors[rb].kind == "freeway"
+						if t > 1e-6 and t < 1 - 1e-6 and u > 1e-6 and u < 1 - 1e-6 and (fa or fb) then
+							-- grade-separated: freeway over a surface road, or freeway over freeway (system)
+							table.insert(crossings, { x1 + (x2 - x1) * t, z1 + (z2 - z1) * t, if fa then ra else rb, if fa then rb else ra, if fa and fb then 1 else 0 })
+						elseif t > 1e-6 and t < 1 - 1e-6 and u > 1e-6 and u < 1 - 1e-6 then
 							local x, z = x1 + (x2 - x1) * t, z1 + (z2 - z1) * t
 							for _, ins in { { ra, ia, t }, { rb, ib, u } } do
 								inserts[ins[1]] = inserts[ins[1]] or {}
@@ -298,6 +305,124 @@ local function planarize(majors: { Major })
 			end
 		end
 		m.pts, m.bridge = out, br
+	end
+	return crossings
+end
+
+-- Interchange at each grade-separated crossing. The type is picked from the mix measured on real
+-- Florida freeways (tools/interchange_stats.py, Config.ROADS.INTERCHANGE_MIX): urban or rural by where
+-- it is; freeway-over-freeway crossings get a system interchange (cloverleaf geometry).
+local function interchanges(majors: { Major }, crossings: { { number } })
+	local function nearestIndex(p: { number }, x: number, z: number): number
+		local best, bi = math.huge, 1
+		for i = 1, #p - 1, 2 do
+			local d = (p[i] - x) ^ 2 + (p[i + 1] - z) ^ 2
+			if d < best then
+				best, bi = d, i
+			end
+		end
+		return bi
+	end
+	local function ramp(pts: { number })
+		table.insert(majors, { kind = "ramp", width = R.RAMP_W, pts = pts, bridge = bridges(pts) })
+	end
+	local function pick(mix: { [string]: number }, x: number, z: number): string
+		local roll, acc, last = Hash.float(math.round(x), math.round(z), Config.SEED + 700), 0, "diamond"
+		for _, kind in { "diamond", "parclo", "clover", "spui" } do
+			acc += mix[kind] or 0
+			last = kind
+			if roll < acc then
+				return kind
+			end
+		end
+		return last
+	end
+	local done: { [string]: boolean } = {}
+	for _, c in crossings do
+		local x, z = c[1], c[2]
+		local k = math.round(x / 50) .. "," .. math.round(z / 50) -- one interchange per crossing
+		if not done[k] then
+			done[k] = true
+			local fp, op = majors[c[3]].pts, majors[c[4]].pts
+			local fi, oi = nearestIndex(fp, x, z), nearestIndex(op, x, z)
+			local urban = Districts.urban(x, z) > 0
+			local kind = if c[5] == 1 then "clover" else pick(if urban then R.INTERCHANGE_MIX.urban else R.INTERCHANGE_MIX.rural, x, z)
+			local function vertex(p: { number }, i: number): (number?, number?)
+				if i >= 1 and i < #p then
+					return p[i], p[i + 1]
+				end
+				return nil, nil
+			end
+			-- outer ramp in quadrant (s, t): freeway vertex `fo` steps along, surface vertex `oo` steps along
+			local function outer(s: number, t: number, fo: number, oo: number)
+				local px, pz = vertex(fp, fi + s * fo * 2)
+				local ax, az = vertex(op, oi + t * oo * 2)
+				if px and ax then
+					local cx, cz = px + ax - x, pz + az - z -- quadrant corner: the ramp bows outward
+					local pts = {}
+					for q = 0, 8 do
+						local u = q / 8
+						table.insert(pts, (1 - u) ^ 2 * px + 2 * (1 - u) * u * cx + u * u * ax)
+						table.insert(pts, (1 - u) ^ 2 * pz + 2 * (1 - u) * u * cz + u * u * (az :: number))
+					end
+					ramp(pts)
+				end
+			end
+			-- loop ramp in quadrant (s, t): leaves the freeway, turns ~270 degrees, joins the crossing road
+			local function loop(s: number, t: number)
+				local px, pz = vertex(fp, fi + s * 3 * 2)
+				local ax, az = vertex(op, oi + t * 3 * 2)
+				if px and ax then
+					local fdx, fdz = (px - x), (pz - z)
+					local odx, odz = (ax - x), (az :: number - z)
+					local cx, cz = x + (fdx + odx) * 0.75, z + (fdz + odz) * 0.75 -- loop centre inside the quadrant
+					local a0 = math.atan2(pz - cz, px - cx)
+					local a1 = math.atan2(az :: number - cz, ax - cx)
+					local d = (a1 - a0) % (2 * math.pi)
+					-- turn whichever way round makes the loop closest to 270 degrees
+					local alt = d - 2 * math.pi
+					local sweep = if math.abs(math.abs(d) - 1.5 * math.pi) <= math.abs(math.abs(alt) - 1.5 * math.pi) then d else alt
+					local r0 = math.sqrt((px - cx) ^ 2 + (pz - cz) ^ 2)
+					local r1 = math.sqrt((ax - cx) ^ 2 + (az :: number - cz) ^ 2)
+					local pts = {}
+					for q = 0, 14 do
+						local u = q / 14
+						local a = a0 + sweep * u
+						local rr = r0 + (r1 - r0) * u
+						table.insert(pts, cx + math.cos(a) * rr)
+						table.insert(pts, cz + math.sin(a) * rr)
+					end
+					pts[1], pts[2], pts[#pts - 1], pts[#pts] = px, pz, ax, az :: number -- exact junctions
+					ramp(pts)
+				end
+			end
+			if kind == "diamond" then
+				for _, s in { -1, 1 } do
+					for _, t in { -1, 1 } do
+						outer(s, t, 7, 4)
+					end
+				end
+			elseif kind == "spui" then -- all four ramps meet the crossing road at one signalised point
+				for _, s in { -1, 1 } do
+					for _, t in { -1, 1 } do
+						outer(s, t, 7, 0)
+					end
+				end
+			elseif kind == "parclo" then -- loops on one side of the crossing road, outer ramps on the other
+				local side = if Hash.float(math.round(x), math.round(z), Config.SEED + 701) < 0.5 then 1 else -1
+				for _, s in { -1, 1 } do
+					loop(s, side)
+					outer(s, -side, 7, 4)
+				end
+			else -- clover (and freeway-to-freeway systems): four loops plus four outer ramps
+				for _, s in { -1, 1 } do
+					for _, t in { -1, 1 } do
+						loop(s, t)
+						outer(s, t, 10, 7)
+					end
+				end
+			end
+		end
 	end
 end
 
@@ -356,7 +481,9 @@ function Roads.majors(): { Major }
 	local shared = Streets.newShared()
 	local asRoads = {}
 	for _, m in out do
-		Streets.addExternal(shared, m.pts)
+		if m.kind ~= "freeway" then -- nothing joins a freeway at grade
+			Streets.addExternal(shared, m.pts)
+		end
 		table.insert(asRoads, { kind = m.kind, pts = m.pts })
 	end
 	local function passable(ax: number, az: number, bx: number, bz: number): boolean
@@ -402,7 +529,7 @@ function Roads.majors(): { Major }
 		local kind = if from.kind == "freeway" then "state" else from.kind -- freeway ends continue as surface roads
 		table.insert(out, { kind = kind, width = if kind == "state" then R.STATE_W else from.width, pts = pts, bridge = bridges(pts) })
 	end
-	planarize(out)
+	interchanges(out, planarize(out))
 	return out
 end
 

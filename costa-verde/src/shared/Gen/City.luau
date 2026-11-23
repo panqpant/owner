@@ -88,9 +88,10 @@ function City.generate(): { roads: { Road }, buildings: { Building }, parks: { P
 	local SEED_STEP = Config.ROADS.SEED_STEP
 	local seedBucket: { [number]: { { number } } } = {} -- superblock -> candidate seed points on majors
 	for _, m in majors do
-		local id = Streets.addExternal(shared, m.pts)
 		addRoad(m.pts, m.width, m.kind, m.bridge)
-		if m.kind ~= "freeway" then -- no side streets straight onto a freeway
+		-- freeways and ramps are grade-separated: no street, driveway or lot joins them
+		if m.kind ~= "freeway" and m.kind ~= "ramp" then
+			local id = Streets.addExternal(shared, m.pts)
 			for _, c in Streets.frontSeeds(m.pts, id, SEED_STEP) do
 				if not m.bridge[c[7]] then
 					-- a point on a superblock edge belongs to the cells on both sides
@@ -115,9 +116,9 @@ function City.generate(): { roads: { Road }, buildings: { Building }, parks: { P
 			local x0, z0 = i * SP, j * SP
 			local counts: { [string]: number } = {}
 			local best: Config.District? = nil
-			for a = 1, 3 do
-				for b = 1, 3 do
-					local d = urbanDistrict(x0 + a * SP / 4, z0 + b * SP / 4)
+			for a = 1, 5 do -- 5x5 samples: small towns (Gator Hollow, Mile 88) are only a few hundred studs across
+				for b = 1, 5 do
+					local d = urbanDistrict(x0 + a * SP / 6, z0 + b * SP / 6)
 					if d then
 						counts[d.id] = (counts[d.id] or 0) + 1
 						if not best or counts[d.id] > counts[best.id] then
@@ -224,7 +225,7 @@ function City.generate(): { roads: { Road }, buildings: { Building }, parks: { P
 		end
 	end
 	for _, m in majors do
-		if m.kind ~= "freeway" then
+		if m.kind ~= "freeway" and m.kind ~= "ramp" then
 			frontage(m.pts, m.width)
 		end
 	end

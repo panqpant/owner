@@ -39,18 +39,20 @@ for p in world["parks"]:
     x, z, w = p["x"] * k, p["z"] * k, p["w"] * k / 2
     d.rectangle([x - w, z - w, x + w, z + w], fill={"lake": (25, 45, 50), "golf": (110, 160, 80), "park": (60, 110, 50)}[p["kind"]])
 # Road hierarchy: draw minor first, majors on top; freeways get a casing.
-ORDER = ["drive", "county", "street", "collector", "runway", "state", "arterial", "boulevard", "freeway"]
+ORDER = ["drive", "county", "street", "collector", "runway", "state", "arterial", "boulevard", "ramp", "freeway"]
 COL = {"street": (70, 70, 76), "collector": (55, 55, 62), "arterial": (235, 200, 120), "boulevard": (245, 170, 90),
-       "state": (225, 190, 110), "freeway": (230, 120, 60), "runway": (150, 150, 150), "county": (150, 135, 105), "drive": (165, 150, 120)}
+       "state": (225, 190, 110), "ramp": (230, 150, 90), "freeway": (230, 120, 60), "runway": (150, 150, 150), "county": (150, 135, 105), "drive": (165, 150, 120)}
+def road_width(r):
+    return max(1, int(r["width"] * k * (2.2 if r["kind"] in ("freeway", "boulevard", "arterial", "state", "ramp") else 1.6)))
+
+
 for kind in ORDER:
-    for r in world["roads"]:
-        if r["kind"] != kind:
-            continue
-        pts = [r["ax"] * k, r["az"] * k, r["bx"] * k, r["bz"] * k]
-        w = max(1, int(r["width"] * k * (2.2 if kind in ("freeway", "boulevard", "arterial", "state") else 1.6)))
-        if kind == "freeway":
-            d.line(pts, fill=(60, 40, 30), width=w + 3)
-        d.line(pts, fill=(205, 205, 210) if r["bridge"] else COL[kind], width=w)
+    group = [r for r in world["roads"] if r["kind"] == kind]
+    if kind == "freeway":  # casing first for the whole freeway, then the fill, so segments don't hatch
+        for r in group:
+            d.line([r["ax"] * k, r["az"] * k, r["bx"] * k, r["bz"] * k], fill=(60, 40, 30), width=road_width(r) + 3)
+    for r in group:
+        d.line([r["ax"] * k, r["az"] * k, r["bx"] * k, r["bz"] * k], fill=(205, 205, 210) if r["bridge"] else COL[kind], width=road_width(r))
 STYLE = {"tower": (205, 215, 230), "midrise": (190, 190, 180), "deco": (250, 190, 200), "stucco": (240, 220, 170), "warehouse": (170, 150, 130),
          "house": (235, 235, 225), "campus": (200, 120, 100), "shack": (150, 120, 90), "farmhouse": (240, 240, 230),
          "barn": (170, 40, 35), "silo": (200, 200, 205), "store": (90, 140, 200), "gas": (230, 200, 40), "church": (255, 255, 255),
