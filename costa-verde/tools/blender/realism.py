@@ -685,6 +685,7 @@ def place(coll, x, z, y, rot=0.0, scale=1.0):
 
 
 LAMPS = []  # street-light heads (x, z, y) for the night presets
+HERO_SPOTS = {}  # park paths and paved lots, for the hero cameras
 COBRA = []
 
 
@@ -1161,6 +1162,7 @@ def landcover(detailed, street_area, zone, gy, rng, palms, oaks):
     me.from_pydata(verts, [], faces)
     me.materials.append(fence_mat)
     bpy.context.collection.objects.link(bpy.data.objects.new("fences", me))
+    HERO_SPOTS["paths"], HERO_SPOTS["paved"] = paths, paved
     return unary_union(lawn), unary_union(mulch), fences
 
 

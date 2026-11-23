@@ -489,6 +489,50 @@ def streets(zone_roads):
     return m.finish()
 
 
+def hero_shots(detailed, gy, preset):
+    """Four fixed eye-level views (6.5 studs, ~1.7 m) to judge realism where players stand; one contact sheet."""
+    import math as _m
+    from PIL import Image
+
+    def local_cam(b, eye, look):  # building-local (x along the street, z away from it) -> world camera
+        c, sn = _m.cos(_m.radians(b["rot"])), _m.sin(_m.radians(b["rot"]))
+        w = lambda lx, lz: (b["x"] + c * lx - sn * lz, b["z"] + s_ * 0 + sn * lx + c * lz)  # noqa: E731
+        ex, ez = w(eye[0], eye[1])
+        tx, tz = w(look[0], look[1])
+        return (ex, -ez, gy + 6.5), (tx, -tz, gy + look[2])
+    s_ = 0
+    near = lambda style: min((b for _, b in detailed if b["style"] == style), key=lambda b: _m.hypot(b["x"] - CX, b["z"] - CZ))  # noqa: E731
+    shots = []
+    shop, house = near("stucco"), near("house")
+    shots.append(local_cam(shop, (-18, -shop["d"] / 2 - 48), (4, -shop["d"] / 2, 7)))
+    shots.append(local_cam(house, (16, -house["d"] / 2 - 40), (-2, 0, 7)))
+    paths = realism.HERO_SPOTS.get("paths") or []
+    if paths:
+        pth = max(paths, key=lambda g: g.area)
+        ring = pth.exterior
+        p0, p1 = ring.interpolate(0.1, normalized=True), ring.interpolate(0.18, normalized=True)
+        shots.append(((p0.x, -p0.y, gy + 6.5), (p1.x, -p1.y, gy + 5)))
+    paved = [g for g in (realism.HERO_SPOTS.get("paved") or []) if not g.is_empty]
+    if paved:
+        lot = max(paved, key=lambda g: g.area)
+        c0 = lot.representative_point()
+        x0, z0, x1, z1 = lot.bounds
+        shots.append(((x0 + 4, -(z0 + 4), gy + 6.5), (c0.x, -c0.y, gy + 6)))
+    names = []
+    for k, (pos, tgt) in enumerate(shots):
+        realism.real_camera(pos, tgt, 30, focus=50, fstop=11)
+        name = f"hero_{k + 1}_{preset}"
+        render(name)
+        realism.lens(f"screenshots/{name}.png")
+        names.append(f"screenshots/{name}.png")
+    ims = [Image.open(n).resize((640, 360)) for n in names]
+    sheet = Image.new("RGB", (1280, 360 * ((len(ims) + 1) // 2)))
+    for i, im in enumerate(ims):
+        sheet.paste(im, ((i % 2) * 640, (i // 2) * 360))
+    sheet.save(f"screenshots/hero_{preset}.png")
+    print("wrote", f"screenshots/hero_{preset}.png")
+
+
 def main_real():
     """Hyper-real render of the block (realism.py): real materials, bevels, proper streets, street life."""
     import math as _m
@@ -501,7 +545,7 @@ def main_real():
     s.cycles.samples = 96
     s.cycles.use_denoising = True
     if "--quick" in sys.argv:
-        s.render.resolution_x, s.render.resolution_y, s.cycles.samples = 1280, 720, 24
+        s.render.resolution_x, s.render.resolution_y, s.cycles.samples = (960, 540, 20) if "--hero" in sys.argv else (1280, 720, 24)
     zone = (CX - R, CZ - R, CX + R, CZ + R)
     in_zone = lambda x, z: zone[0] < x < zone[2] and zone[1] < z < zone[3]  # noqa: E731
     detailed, keep = [], set()
@@ -539,6 +583,9 @@ def main_real():
     realism.grass(terrain, (CX - 260, CZ - 260, CX + 260, CZ + 260), lawn)
     Lr = _m.hypot(r["bx"] - r["ax"], r["bz"] - r["az"])
     realism.time_of_day(preset, ((r["bx"] - r["ax"]) / Lr, (r["bz"] - r["az"]) / Lr))
+    if "--hero" in sys.argv:
+        hero_shots(detailed, gy, preset)
+        return
     # 1) street level on the sidewalk, mid-block, looking along the most central street
     L = _m.hypot(r["bx"] - r["ax"], r["bz"] - r["az"])
     ux, uz = (r["bx"] - r["ax"]) / L, (r["bz"] - r["az"]) / L
