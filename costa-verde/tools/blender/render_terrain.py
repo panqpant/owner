@@ -62,7 +62,7 @@ def build(c):
         j = min(nz - 1, max(0, int((z - z0) / res)))
         return c["h"][j * nx + i]
     rv, rf = [], []
-    for ax, az, bx, bz, wdt, bridge in c.get("roads", []):
+    for ax, az, bx, bz, wdt, bridge, _kind in ([] if c.get("pieces") else c.get("roads", [])):  # greybox has the real roads
         L = math.hypot(bx - ax, bz - az) or 1
         px, pz = -(bz - az) / L * wdt / 2, (bx - ax) / L * wdt / 2
         ha, hb = (max(gh(ax, az), 2) + 6, max(gh(bx, bz), 2) + 6) if bridge else (gh(ax, az) + 0.4, gh(bx, bz) + 0.4)
@@ -77,6 +77,40 @@ def build(c):
     m.use_nodes = True
     m.node_tree.nodes["Principled BSDF"].inputs["Base Color"].default_value = (0.09, 0.09, 0.09, 1)
     rm.materials.append(m)
+    # greybox pieces (WorldBuilder.luau): Roblox parts and wedges, Roblox space (x, y up, z) -> Blender (x, -z, y)
+    if c.get("pieces"):
+        pv, pf, pcol = [], [], []
+        for pc in c["pieces"]:
+            p, r, u, b, sz = pc["p"], pc["r"], pc["u"], pc["b"], pc["s"]
+            def corner(i, j, k):
+                v = [p[n] + r[n] * sz[0] / 2 * i + u[n] * sz[1] / 2 * j + b[n] * sz[2] / 2 * k for n in range(3)]
+                return (v[0], -v[2], v[1])
+            n0 = len(pv)
+            if pc["shape"] == "box":
+                pv += [corner(i, j, k) for i in (-1, 1) for j in (-1, 1) for k in (-1, 1)]
+                faces = [(0, 1, 3, 2), (4, 6, 7, 5), (0, 4, 5, 1), (2, 3, 7, 6), (0, 2, 6, 4), (1, 5, 7, 3)]
+            else:  # wedge: bottom full, top edge at +Z
+                pv += [corner(-1, -1, -1), corner(1, -1, -1), corner(1, -1, 1), corner(-1, -1, 1), corner(-1, 1, 1), corner(1, 1, 1)]
+                faces = [(0, 1, 2, 3), (3, 2, 5, 4), (0, 3, 4), (1, 5, 2), (0, 4, 5, 1)]
+            for f in faces:
+                pf.append(tuple(n0 + q for q in f))
+                pcol.append(pc["c"])
+        gm = bpy.data.meshes.new("greybox")
+        gm.from_pydata(pv, [], pf)
+        ca = gm.color_attributes.new("col", "FLOAT_COLOR", "CORNER")
+        for poly, cc in zip(gm.polygons, pcol):
+            lc = lin(cc)
+            for li in poly.loop_indices:
+                ca.data[li].color = (*lc, 1)
+        go = bpy.data.objects.new("greybox", gm)
+        bpy.context.collection.objects.link(go)
+        m = bpy.data.materials.new("greybox")
+        m.use_nodes = True
+        a = m.node_tree.nodes.new("ShaderNodeAttribute")
+        a.attribute_name = "col"
+        m.node_tree.links.new(a.outputs["Color"], m.node_tree.nodes["Principled BSDF"].inputs["Base Color"])
+        m.node_tree.nodes["Principled BSDF"].inputs["Roughness"].default_value = 0.7
+        gm.materials.append(m)
     # vegetation and shore props: instances of the exported models (hidden source collections)
     if c.get("items"):
         src = {}
@@ -106,7 +140,7 @@ def build(c):
     wm.materials.append(m)
 
 
-for name in sys.argv[1:] or ["keys", "wetland", "beach", "country"]:
+for name in sys.argv[1:] or ["keys", "wetland", "beach", "country", "downtown"]:
     c = json.load(open(f"build/terrain_{name}.json"))
     s = reset()
     s.cycles.samples = 32
@@ -119,7 +153,7 @@ for name in sys.argv[1:] or ["keys", "wetland", "beach", "country"]:
     camera(P(cx + half * 0.55, cz + half * 0.75, 320), P(cx - half * 0.05, cz - half * 0.1, 0), 24)
     render(f"terrain_{name}")
     # close-up along a rural road, low like a player's view, to show ditches, verges and canals
-    rural = [r for r in c.get("roads", []) if r[4] <= 30 and not r[5] and math.hypot(r[2] - r[0], r[3] - r[1]) > 20
+    rural = [r for r in c.get("roads", []) if r[6] in ("street", "county", "collector") and not r[5] and math.hypot(r[2] - r[0], r[3] - r[1]) > 20
              and abs(r[0] - cx) < half * 0.6 and abs(r[1] - cz) < half * 0.6]
     if rural:
         ax, az, bx, bz = rural[len(rural) // 2][:4]

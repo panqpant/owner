@@ -11,12 +11,14 @@ local world = serde.decode("json", fs.readFile("build/world.json"))
 local ridx = TB.roadIndex(world.roads)
 local Vegetation = require("../src/shared/Vegetation")
 local bidx = Vegetation.buildingIndex(world.buildings)
+local WorldBuilder = require("../src/shared/WorldBuilder")
 local D = {}
 for _, d in world.districts do
 	D[d.id] = d
 end
 local AREAS = { -- name, centre, size (studs)
 	{ "keys", D.keytown.x, D.keytown.z, 2560 },
+	{ "downtown", D.downtown.x, D.downtown.z, 2560 },
 	{ "wetland", D.swamptown.x, D.swamptown.z, 2560 },
 	{ "beach", D.beach.x, D.beach.z, 2560 },
 	{ "country", Gen.Config.SIZE * 0.40625, Gen.Config.SIZE * 0.40625, 2560 },
@@ -27,6 +29,8 @@ for _, a in AREAS do
 	local c = TB.columns(x0, z0, a[4], a[4], ridx)
 	c.x0, c.z0, c.res = x0, z0, 4
 	c.items = Vegetation.place(c, x0, z0, ridx, bidx)
+	c.pieces = WorldBuilder.pieces(world, { x0 = x0, z0 = z0, w = a[4], d = a[4] })
+	print(a[1], #c.pieces, "greybox pieces")
 	local per = {}
 	for _, it in c.items do
 		per[it[1]] = (per[it[1]] or 0) + 1
@@ -35,7 +39,7 @@ for _, a in AREAS do
 	c.roads = {} -- grey road strips for the preview (parts in Roblox); drives are dirt terrain
 	for _, r in world.roads do
 		if r.kind ~= "drive" and math.max(r.ax, r.bx) > x0 and math.min(r.ax, r.bx) < x0 + a[4] and math.max(r.az, r.bz) > z0 and math.min(r.az, r.bz) < z0 + a[4] then
-			table.insert(c.roads, { r.ax, r.az, r.bx, r.bz, r.width, r.bridge })
+			table.insert(c.roads, { r.ax, r.az, r.bx, r.bz, r.width, r.bridge, r.kind })
 		end
 	end
 	fs.writeFile("build/terrain_" .. a[1] .. ".json", serde.encode("json", c))

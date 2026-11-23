@@ -437,7 +437,8 @@ function City.generate(): { roads: { Road }, buildings: { Building }, parks: { P
 				local minH, maxH = ld.minH :: number, ld.maxH :: number
 				table.insert(buildings, {
 					x = x, z = z, y = s.h, w = w, d = dep,
-					h = math.floor(minH + (maxH - minH) * tt),
+					-- slenderness cap: real buildings are rarely taller than ~7x their narrow side
+					h = math.floor(math.min(minH + (maxH - minH) * tt, math.max(minH, 7 * math.min(w, dep)))),
 					rot = ang + (if c.side == 1 then 0 else 180),
 					style = style, district = ld.id, variant = rng:int(1, 8),
 				})

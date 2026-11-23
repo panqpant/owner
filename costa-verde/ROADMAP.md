@@ -53,8 +53,12 @@ statistics. No real place is copied.
   sawgrass, sea oats, dock, piling, buoy, riprap) by biome, clear of roads and buildings.
 - To build in Studio: sync with Rojo; import assets/roblox/*.fbx with the 3D Importer into a folder
   ReplicatedStorage.Assets (keep the file names); then in the command bar, in edit mode:
-  `require(game.ReplicatedStorage.Shared.TerrainBuilder).build()` and
-  `require(game.ReplicatedStorage.Shared.Vegetation).build()`; save the place.
+  `require(game.ReplicatedStorage.Shared.TerrainBuilder).build()`,
+  `require(game.ReplicatedStorage.Shared.Vegetation).build()` and
+  `require(game.ReplicatedStorage.Shared.WorldBuilder).build()`; save the place.
+- Greybox ready: `src/shared/WorldBuilder.luau` builds roads (bridges, freeway viaducts with pillars, ramps),
+  rail and the elevated metro, every building at its real footprint and height with pitched house roofs, and
+  landmark site plans; buildings are atomic streaming models; streaming is switched on.
 - Preview without Studio: `lune run tools/export-terrain.luau` then `python tools/blender/render_terrain.py`.
 - Server script that runs the generator: terrain voxels in chunks (WriteVoxels), water at each lake's level,
   roads as parts or meshes, buildings as placeholders, streaming setup.
