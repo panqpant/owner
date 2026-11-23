@@ -22,6 +22,43 @@ def lin(c):  # sRGB 0-255 -> linear
     return tuple(((v / 255 + 0.055) / 1.055) ** 2.4 if v / 255 > 0.04045 else v / 255 / 12.92 for v in c)
 
 
+def greybox(pieces, name, alpha):
+    pv, pf, pcol = [], [], []
+    for pc in pieces:
+        p, r, u, b, sz = pc["p"], pc["r"], pc["u"], pc["b"], pc["s"]
+        def corner(i, j, k):
+            v = [p[n] + r[n] * sz[0] / 2 * i + u[n] * sz[1] / 2 * j + b[n] * sz[2] / 2 * k for n in range(3)]
+            return (v[0], -v[2], v[1])
+        n0 = len(pv)
+        if pc["shape"] == "box":
+            pv += [corner(i, j, k) for i in (-1, 1) for j in (-1, 1) for k in (-1, 1)]
+            faces = [(0, 1, 3, 2), (4, 6, 7, 5), (0, 4, 5, 1), (2, 3, 7, 6), (0, 2, 6, 4), (1, 5, 7, 3)]
+        else:  # wedge: bottom full, top edge at +Z
+            pv += [corner(-1, -1, -1), corner(1, -1, -1), corner(1, -1, 1), corner(-1, -1, 1), corner(-1, 1, 1), corner(1, 1, 1)]
+            faces = [(0, 1, 2, 3), (3, 2, 5, 4), (0, 3, 4), (1, 5, 2), (0, 4, 5, 1)]
+        for f in faces:
+            pf.append(tuple(n0 + q for q in f))
+            pcol.append(pc["c"])
+    gm = bpy.data.meshes.new(name)
+    gm.from_pydata(pv, [], pf)
+    ca = gm.color_attributes.new("col", "FLOAT_COLOR", "CORNER")
+    for poly, cc in zip(gm.polygons, pcol):
+        lc = lin(cc)
+        for li in poly.loop_indices:
+            ca.data[li].color = (*lc, 1)
+    go = bpy.data.objects.new(name, gm)
+    bpy.context.collection.objects.link(go)
+    m = bpy.data.materials.new(name)
+    m.use_nodes = True
+    a = m.node_tree.nodes.new("ShaderNodeAttribute")
+    a.attribute_name = "col"
+    m.node_tree.links.new(a.outputs["Color"], m.node_tree.nodes["Principled BSDF"].inputs["Base Color"])
+    m.node_tree.nodes["Principled BSDF"].inputs["Roughness"].default_value = 0.7
+    if alpha < 1:
+        m.node_tree.nodes["Principled BSDF"].inputs["Alpha"].default_value = alpha
+    gm.materials.append(m)
+
+
 def build(c):
     nx, nz, res, x0, z0 = c["nx"], c["nz"], c["res"], c["x0"], c["z0"]
     me = bpy.data.meshes.new("ground")
@@ -79,38 +116,8 @@ def build(c):
     rm.materials.append(m)
     # greybox pieces (WorldBuilder.luau): Roblox parts and wedges, Roblox space (x, y up, z) -> Blender (x, -z, y)
     if c.get("pieces"):
-        pv, pf, pcol = [], [], []
-        for pc in c["pieces"]:
-            p, r, u, b, sz = pc["p"], pc["r"], pc["u"], pc["b"], pc["s"]
-            def corner(i, j, k):
-                v = [p[n] + r[n] * sz[0] / 2 * i + u[n] * sz[1] / 2 * j + b[n] * sz[2] / 2 * k for n in range(3)]
-                return (v[0], -v[2], v[1])
-            n0 = len(pv)
-            if pc["shape"] == "box":
-                pv += [corner(i, j, k) for i in (-1, 1) for j in (-1, 1) for k in (-1, 1)]
-                faces = [(0, 1, 3, 2), (4, 6, 7, 5), (0, 4, 5, 1), (2, 3, 7, 6), (0, 2, 6, 4), (1, 5, 7, 3)]
-            else:  # wedge: bottom full, top edge at +Z
-                pv += [corner(-1, -1, -1), corner(1, -1, -1), corner(1, -1, 1), corner(-1, -1, 1), corner(-1, 1, 1), corner(1, 1, 1)]
-                faces = [(0, 1, 2, 3), (3, 2, 5, 4), (0, 3, 4), (1, 5, 2), (0, 4, 5, 1)]
-            for f in faces:
-                pf.append(tuple(n0 + q for q in f))
-                pcol.append(pc["c"])
-        gm = bpy.data.meshes.new("greybox")
-        gm.from_pydata(pv, [], pf)
-        ca = gm.color_attributes.new("col", "FLOAT_COLOR", "CORNER")
-        for poly, cc in zip(gm.polygons, pcol):
-            lc = lin(cc)
-            for li in poly.loop_indices:
-                ca.data[li].color = (*lc, 1)
-        go = bpy.data.objects.new("greybox", gm)
-        bpy.context.collection.objects.link(go)
-        m = bpy.data.materials.new("greybox")
-        m.use_nodes = True
-        a = m.node_tree.nodes.new("ShaderNodeAttribute")
-        a.attribute_name = "col"
-        m.node_tree.links.new(a.outputs["Color"], m.node_tree.nodes["Principled BSDF"].inputs["Base Color"])
-        m.node_tree.nodes["Principled BSDF"].inputs["Roughness"].default_value = 0.7
-        gm.materials.append(m)
+        greybox([p for p in c["pieces"] if not p.get("t")], "greybox", 1)
+        greybox([p for p in c["pieces"] if p.get("t")], "watertint", 0.5)
     # vegetation and shore props: instances of the exported models (hidden source collections)
     if c.get("items"):
         src = {}

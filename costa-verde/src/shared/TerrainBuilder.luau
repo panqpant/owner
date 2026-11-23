@@ -87,7 +87,7 @@ end
 -- h, water (false = dry), material, plus nx, nz. Heights are bilinear between 16-stud samples plus fine
 -- relief off-road (none in town, so streets stay flat). `roads` (SegIndex with kind tags) adds the
 -- earthworks and wear that follow roads: ditches / canals, worn verges, dirt tracks.
-function TerrainBuilder.columns(x0: number, z0: number, w: number, d: number, roads: any?)
+function TerrainBuilder.columns(x0: number, z0: number, w: number, d: number, roads: any?, buildings: any?)
 	local sx0, sz0 = x0 // SAMPLE - 2, z0 // SAMPLE - 2
 	local sw, sd = math.ceil(w / SAMPLE) + 5, math.ceil(d / SAMPLE) + 5
 	local S, built, style = {}, {}, {}
@@ -149,7 +149,14 @@ function TerrainBuilder.columns(x0: number, z0: number, w: number, d: number, ro
 			if not built[k] and not S[k].water then
 				h += (vnoise(x, z, 14, 13) - 0.5) * 0.8 -- small bumps, hummocks, furrows
 			end
-			if wall[k] and h > wall[k] - 1 then
+			-- backyard canals: in about a third of suburban neighbourhoods (1200-stud blocks), ground well
+			-- away from streets and houses is dug out as a water channel (South Florida canal suburbs)
+			if built[k] and style[k] == "house" and roads and buildings and Hash.int(x // 1200, z // 1200, Config.SEED + 77) % 100 < 35
+				and roads.nearest(x, z, 26) > 24 and buildings.clear(x, z, 9) then
+				water = h - 1.5
+				h -= 7
+				tag = "canal"
+			elseif wall[k] and h > wall[k] - 1 then
 				h, tag = wall[k] + 2.5, "seawall" -- vertical concrete edge, not a beach
 			elseif roads and not built[k] and not S[k].water then
 				local e, kind = roads.nearest(x, z, 16)
@@ -215,6 +222,15 @@ function TerrainBuilder.columns(x0: number, z0: number, w: number, d: number, ro
 	return { nx = nx, nz = nz, h = H, water = Wt, material = M, biome = Bi }
 end
 
+-- Building footprints as circles (for canal and plant clearance).
+function TerrainBuilder.buildingIndex(buildings: { any }): any
+	local idx = SegIndex.new()
+	for _, b in buildings do
+		idx.add(b.x, b.z, b.x, b.z, math.max(b.w, b.d) / 2)
+	end
+	return idx
+end
+
 -- Road index for `columns`, from the generator's road list ({ ax, az, bx, bz, width, kind }).
 function TerrainBuilder.roadIndex(roads: { any }): any
 	local idx = SegIndex.new()
@@ -238,14 +254,15 @@ end
 
 -- Roblox: write the whole map (or a sub-area) into workspace.Terrain in 256-stud chunks.
 -- `roads`: the generator's road list; if omitted the road network is generated here (one-off, slow).
-function TerrainBuilder.build(area: { x0: number, z0: number, w: number, d: number }?, roads: { any }?)
+function TerrainBuilder.build(area: { x0: number, z0: number, w: number, d: number }?, world: any?)
 	local a = area or { x0 = 0, z0 = 0, w = Config.SIZE, d = Config.SIZE }
-	if not roads then
+	local wd = world
+	if not wd then
 		local city = Gen.City.generate()
 		Gen.Rural.generate(city.roads, city.buildings, city.shared)
-		roads = city.roads
+		wd = city
 	end
-	local ridx = TerrainBuilder.roadIndex(roads :: { any })
+	local ridx, bidx = TerrainBuilder.roadIndex(wd.roads), TerrainBuilder.buildingIndex(wd.buildings)
 	local terrain = (workspace :: any).Terrain
 	for name, c in TerrainBuilder.PALETTE do
 		terrain:SetMaterialColor((Enum.Material :: any)[name], Color3.fromRGB(c[1], c[2], c[3]))
@@ -260,7 +277,7 @@ function TerrainBuilder.build(area: { x0: number, z0: number, w: number, d: numb
 	local t0 = os.clock()
 	for cz = a.z0, a.z0 + a.d - 1, CH do
 		for cx = a.x0, a.x0 + a.w - 1, CH do
-			local c = TerrainBuilder.columns(cx, cz, CH, CH, ridx)
+			local c = TerrainBuilder.columns(cx, cz, CH, CH, ridx, bidx)
 			local top = BOTTOM
 			for k = 1, #c.h do
 				top = math.max(top, c.h[k], c.water[k] or -math.huge)

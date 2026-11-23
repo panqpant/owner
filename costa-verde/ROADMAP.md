@@ -55,7 +55,11 @@ statistics. No real place is copied.
   ReplicatedStorage.Assets (keep the file names); then in the command bar, in edit mode:
   `require(game.ReplicatedStorage.Shared.TerrainBuilder).build()`,
   `require(game.ReplicatedStorage.Shared.Vegetation).build()` and
-  `require(game.ReplicatedStorage.Shared.WorldBuilder).build()`; save the place.
+  `require(game.ReplicatedStorage.Shared.WorldBuilder).build()` and
+  `require(game.ReplicatedStorage.Shared.LightingPreset).apply()`; save the place. The day/night cycle runs
+  from ServerScriptService.Server.DayNight.
+- Water variety: murky tint on swamp and lake water, foam on beach surf (Roblox has one global water style).
+- Backyard canals in about a third of suburban neighbourhoods; big buildings slide up to a block to fit.
 - Greybox ready: `src/shared/WorldBuilder.luau` builds roads (bridges, freeway viaducts with pillars, ramps),
   rail and the elevated metro, every building at its real footprint and height with pitched house roofs, and
   landmark site plans; buildings are atomic streaming models; streaming is switched on.

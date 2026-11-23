@@ -13,7 +13,7 @@ local WorldBuilder = {}
 
 -- A piece: shape "box" | "wedge" (Roblox WedgePart: full height at +Z, slope down to -Z), centre p,
 -- axes r (X), u (Y), b (Z) in Roblox space (Y up, generator x/z), size s, colour c (sRGB), group (chunk key).
-export type Piece = { shape: string, p: { number }, r: { number }, u: { number }, b: { number }, s: { number }, c: { number }, g: string, m: string? }
+export type Piece = { shape: string, p: { number }, r: { number }, u: { number }, b: { number }, s: { number }, c: { number }, g: string, t: number? }
 
 local GREY = {
 	street = { 70, 70, 74 }, collector = { 66, 66, 70 }, arterial = { 78, 78, 82 }, boulevard = { 82, 82, 86 }, state = { 76, 76, 80 },
@@ -294,6 +294,45 @@ function WorldBuilder.pieces(world: any, area: { x0: number, z0: number, w: numb
 			end
 		end
 	end
+	-- water variety (Roblox has one global water style): murky tint on swamp and lake water, white foam
+	-- where the sea meets a beach. Scanned every 16 studs, merged into strips along x.
+	local x0, z0 = if area then area.x0 else 0, if area then area.z0 else 0
+	local x1, z1 = if area then area.x0 + area.w else Gen.Config.SIZE, if area then area.z0 + area.d else Gen.Config.SIZE
+	local STEP = 16
+	for z = z0 + STEP / 2, z1, STEP do
+		local runKind, runStart, runLevel = nil :: string?, 0, 0
+		local function flush(xEnd: number)
+			if runKind then
+				local col = if runKind == "murk" then { 92, 88, 52 } else { 245, 245, 240 }
+				local tr = if runKind == "murk" then 0.35 else 0.55
+				table.insert(out, { shape = "box", p = { (runStart + xEnd) / 2, runLevel + 0.08, z }, r = { 1, 0, 0 }, u = { 0, 1, 0 }, b = { 0, 0, 1 },
+					s = { xEnd - runStart, 0.15, STEP }, c = col, g = chunkKey(runStart, z), t = tr })
+			end
+			runKind = nil
+		end
+		for x = x0 + STEP / 2, x1, STEP do
+			local s = Terrain.sample(x, z)
+			local kind: string? = nil
+			if s.water and s.h < s.water - 0.3 then
+				if s.biome == "lake" or s.wet > 0.3 or s.biome == "mangrove" or s.biome == "wetland" then
+					kind = "murk"
+				elseif s.water == 0 and s.h > -3 then -- the sea in the surf zone next to a beach
+					local n = Terrain.sample(x + STEP, z)
+					local n2 = Terrain.sample(x - STEP, z)
+					if n.biome == "beach" or n2.biome == "beach" then
+						kind = "foam"
+					end
+				end
+			end
+			if kind ~= runKind or (kind and math.abs((s.water or 0) - runLevel) > 0.01) then
+				flush(x - STEP / 2)
+				if kind then
+					runKind, runStart, runLevel = kind, x - STEP / 2, s.water :: number
+				end
+			end
+		end
+		flush(x1)
+	end
 	-- buildings: each part from 4 studs below ground (no gaps on slopes) up to its height
 	for bi, b in world.buildings do
 		if inArea(b.x, b.z) then
@@ -367,6 +406,9 @@ function WorldBuilder.build(world: any?)
 			Vector3.new(pc.u[1], pc.u[2], pc.u[3]), Vector3.new(pc.b[1], pc.b[2], pc.b[3]))
 		part.Color = Color3.fromRGB(pc.c[1], pc.c[2], pc.c[3])
 		part.TopSurface, part.BottomSurface = Enum.SurfaceType.Smooth, Enum.SurfaceType.Smooth
+		if pc.t then -- water tint / foam: see-through, nothing collides with it
+			part.Transparency, part.CanCollide, part.CanQuery, part.CastShadow = pc.t, false, false, false
+		end
 		local grp = groups[pc.g]
 		if not grp then
 			if string.sub(pc.g, 1, 1) == "b" or string.sub(pc.g, 1, 1) == "l" then

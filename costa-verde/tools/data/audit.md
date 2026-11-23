@@ -19,25 +19,25 @@ interchange ramps: 2208 segments
 - [PASS] no roads driving through water: 0.02 km of road over water without a bridge (exact terrain); by kind (studs) {'county': 40}
 
 ## Buildings
-- [PASS] buildings not on roads: 3 of 12528 buildings (0.02%) overlap a road
+- [PASS] buildings not on roads: 4 of 12369 buildings (0.03%) overlap a road
 - [PASS] every building has a real shape: 0 without parts, 0 part corners outside their lot
-- [PASS] building shapes clear of roads: 2 buildings (0.02%) with a part corner on a road
-building types: 25 kinds; top: {'shopfronts': 2984, 'ranch': 1383, 'l_ranch': 1226, 'courtyard': 1097, 'colonial': 1059, 'duplex': 724, 'art deco': 662, 'midrise': 542, 'townhouses': 534, 'Fast food': 468, 'tower': 391, 'split_level': 357}
+- [PASS] building shapes clear of roads: 3 buildings (0.02%) with a part corner on a road
+building types: 25 kinds; top: {'shopfronts': 2979, 'ranch': 1416, 'l_ranch': 1198, 'courtyard': 1098, 'colonial': 1009, 'duplex': 745, 'art deco': 635, 'townhouses': 536, 'midrise': 499, 'Fast food': 425, 'split_level': 406, 'tower': 363}
 
 ## Building footprints vs real (FEMA USA Structures)
 | style | n | area m² p10/p50/p90 gen (real) | long×short m p50 | plain boxes | end-on | setback m p50 | gap m p50 |
 |---|---|---|---|---|---|---|---|
-| campus | 387 | 67/365/2272 (92/698/3238) | 29×16 (41×20) | 0.54 (0.42) | 0.49 (0.45) | 11 (21) | 5.2 (7.5) |
-| deco | 762 | 64/220/863 (76/271/1253) | 19×12 (23×14) | 0.44 (0.40) | 0.49 (0.53) | 11 (18) | 3.3 (3.8) |
-| house | 6503 | 120/264/429 (156/288/426) | 19×15 (20×16) | 0.57 (0.51) | 0.49 (0.47) | 13 (16) | 3.2 (4.8) |
-| midrise | 607 | 63/191/1240 (74/240/2197) | 19×12 (22×12) | 0.56 (0.55) | 0.51 (0.58) | 12 (13) | 2.9 (4.9) |
-| shack | 490 | 55/152/482 (67/174/556) | 16×10 (17×11) | 0.64 (0.68) | 0.54 (0.56) | 13 (16) | 3.6 (6.0) |
-| stucco | 2989 | 63/185/644 (76/195/667) | 18×11 (19×11) | 0.65 (0.60) | 0.61 (0.73) | 13 (15) | 2.7 (3.7) |
-| tower | 447 | 66/342/2721 (86/822/5842) | 26×14 (42×24) | 0.44 (0.38) | 0.51 (0.53) | 12 (11) | 5.6 (9.5) |
-| warehouse | 58 | 81/534/3391 (92/1452/7033) | 36×19 (56×27) | 0.31 (0.34) | 0.50 (0.40) | 13 (33) | 8.3 (7.8) |
+| campus | 347 | 68/450/2854 (92/698/3238) | 32×18 (41×20) | 0.49 (0.42) | 0.51 (0.45) | 11 (21) | 4.7 (7.5) |
+| deco | 733 | 62/223/1193 (76/271/1253) | 20×13 (23×14) | 0.39 (0.40) | 0.49 (0.53) | 11 (18) | 3.1 (3.8) |
+| house | 6526 | 121/263/429 (156/288/426) | 19×15 (20×16) | 0.58 (0.51) | 0.49 (0.47) | 13 (16) | 3.1 (4.8) |
+| midrise | 564 | 58/198/1728 (74/240/2197) | 19×12 (22×12) | 0.59 (0.55) | 0.48 (0.58) | 11 (13) | 2.7 (4.9) |
+| shack | 486 | 55/153/450 (67/174/556) | 16×10 (17×11) | 0.65 (0.68) | 0.55 (0.56) | 13 (16) | 3.6 (6.0) |
+| stucco | 2965 | 63/185/660 (76/195/667) | 18×11 (19×11) | 0.65 (0.60) | 0.61 (0.73) | 13 (15) | 2.6 (3.7) |
+| tower | 404 | 66/394/3606 (86/822/5842) | 26×15 (42×24) | 0.43 (0.38) | 0.51 (0.53) | 11 (11) | 5.7 (9.5) |
+| warehouse | 59 | 68/1098/4310 (92/1452/7033) | 39×23 (56×27) | 0.31 (0.34) | 0.56 (0.40) | 11 (33) | 6.1 (7.8) |
 - [FAIL] footprints match real buildings: size, spread, shape, orientation, setback and gap within range of the real data; off: ['campus', 'tower', 'warehouse']
 - [PASS] buildings not overlapping: 0 overlapping pairs
-buildings by district: {'northshore': 2972, 'palmgrove': 2286, 'gulftown': 2110, 'westside': 1245, 'beach': 762, 'calle': 729, 'midtown': 607, 'downtown': 447, 'university': 387, 'swamptown': 270, 'rural': 264, 'truckstop': 220, 'keytown': 150, 'docks': 58, 'hamlet': 21}
+buildings by district: {'northshore': 2976, 'palmgrove': 2299, 'gulftown': 2081, 'westside': 1251, 'beach': 733, 'calle': 727, 'midtown': 564, 'downtown': 404, 'university': 347, 'swamptown': 266, 'rural': 264, 'truckstop': 220, 'keytown': 157, 'docks': 59, 'hamlet': 21}
 
 ## Street patterns vs real data (2.4 km windows at district centres)
   downtown   (tower    ) density_ 11.21/12.48  block_me 200.02/260.85  straight 0.94/0.98  dead_end 0.08/0.16  t_frac 0.50/0.44  cross_fr 0.42/0.40  orientat 1.00/0.83
@@ -53,7 +53,7 @@ buildings by district: {'northshore': 2972, 'palmgrove': 2286, 'gulftown': 2110,
 ## Building uses
 - [PASS] building uses match the real mix: top uses within 2x of real Florida shares
 - [PASS] every building has a use: 0 without a use
-map markers: {'food': 10, 'fire': 3, 'convenience': 12, 'gas': 15, 'clothing': 10, 'gun_store': 8, 'car_dealer': 4, 'mod_shop': 5, 'jewelry': 2, 'bar': 6, 'liquor': 5, 'arcade': 5, 'bank': 4, 'barber': 6, 'police': 6, 'tattoo': 5, 'pawn': 3, 'gym': 3, 'boat_dealer': 3}
+map markers: {'car_dealer': 4, 'clothing': 10, 'pawn': 3, 'gas': 15, 'convenience': 12, 'barber': 6, 'bank': 4, 'gym': 3, 'tattoo': 5, 'food': 10, 'bar': 6, 'police': 6, 'arcade': 3, 'fire': 3, 'gun_store': 8, 'liquor': 5, 'mod_shop': 5, 'jewelry': 2, 'boat_dealer': 3}
 
 ## Landmarks
 - [PASS] all 200 landmarks placed: 200 of 200 placed

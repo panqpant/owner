@@ -5,7 +5,6 @@
 -- Studio (after TerrainBuilder.build): require(game.ReplicatedStorage.Shared.Vegetation).build()
 local Gen = require("./Gen")
 local TerrainBuilder = require("./TerrainBuilder")
-local SegIndex = require("./Gen/SegIndex")
 
 local Config, Hash = Gen.Config, Gen.Hash
 
@@ -113,14 +112,7 @@ function Vegetation.place(c: any, x0: number, z0: number, roads: any?, buildings
 	return out
 end
 
--- Building footprints as circles in a SegIndex (for clearance checks).
-function Vegetation.buildingIndex(buildings: { any }): any
-	local idx = SegIndex.new()
-	for _, b in buildings do
-		idx.add(b.x, b.z, b.x, b.z, math.max(b.w, b.d) / 2)
-	end
-	return idx
-end
+Vegetation.buildingIndex = TerrainBuilder.buildingIndex
 
 -- Roblox: colour the imported template MeshParts from their material names (the importer keeps them).
 local function prepare(template: Instance)
@@ -156,7 +148,7 @@ function Vegetation.build(area: { x0: number, z0: number, w: number, d: number }
 	local o, n, t0 = TerrainBuilder.OFFSET, 0, os.clock()
 	for cz = a.z0, a.z0 + a.d - 1, 256 do
 		for cx = a.x0, a.x0 + a.w - 1, 256 do
-			local c = TerrainBuilder.columns(cx, cz, 256, 256, ridx)
+			local c = TerrainBuilder.columns(cx, cz, 256, 256, ridx, bidx)
 			local items = Vegetation.place(c, cx, cz, ridx, bidx)
 			if #items > 0 then
 				local chunk = Instance.new("Model")

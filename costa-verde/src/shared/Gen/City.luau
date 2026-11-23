@@ -391,13 +391,23 @@ function City.generate(): { roads: { Road }, buildings: { Building }, parks: { P
 	table.sort(cands, function(p, q)
 		return p.w * p.d > q.w * q.d
 	end)
+	-- { area scale, slide along the street, turn sideways, build to the sidewalk }; big footprints also
+	-- slide up to a block's length to find a frontage clear of side streets before they shrink
+	local SMALL = { { 1, 0 }, { 1, 15 }, { 1, -15 }, { 1, 30 }, { 1, 0, true }, { 1, 0, false, true }, { 1, 0, true, true },
+		{ 1, 20, true, true }, { 0.6, 0 }, { 0.6, 0, true, true }, { 0.35, 0 } }
+	local BIG = table.clone(SMALL)
+	for _, sl in { 60, -60, 100, -100, 150, -150 } do
+		table.insert(BIG, 9, { 1, sl, false, true })
+		table.insert(BIG, 9, { 1, sl, true, true })
+	end
+	local TRIES = SMALL
 	for _, c in cands do
+		TRIES = if c.w * c.d > 6000 then BIG else SMALL
 		local ang = math.deg(math.atan2(c.dz, c.dx))
 		local w, dep, x, z, ld = 0, 0, 0, 0, nil :: Config.District?
 		local ok = false
 		-- { area scale, slide along the street, turn sideways, build to the sidewalk }
-		for _, try in { { 1, 0 }, { 1, 15 }, { 1, -15 }, { 1, 30 }, { 1, 0, true }, { 1, 0, false, true }, { 1, 0, true, true },
-			{ 1, 20, true, true }, { 0.6, 0 }, { 0.6, 0, true, true }, { 0.35, 0 } } do
+		for _, try in TRIES do
 			local k = math.sqrt(try[1])
 			w, dep = c.w * k, c.d * k
 			if try[3] then

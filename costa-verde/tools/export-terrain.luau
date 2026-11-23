@@ -19,6 +19,7 @@ end
 local AREAS = { -- name, centre, size (studs)
 	{ "keys", D.keytown.x, D.keytown.z, 2560 },
 	{ "downtown", D.downtown.x, D.downtown.z, 2560 },
+	{ "suburb", D.palmgrove.x, D.palmgrove.z, 2560 },
 	{ "wetland", D.swamptown.x, D.swamptown.z, 2560 },
 	{ "beach", D.beach.x, D.beach.z, 2560 },
 	{ "country", Gen.Config.SIZE * 0.40625, Gen.Config.SIZE * 0.40625, 2560 },
@@ -26,7 +27,7 @@ local AREAS = { -- name, centre, size (studs)
 for _, a in AREAS do
 	local t0 = os.clock()
 	local x0, z0 = math.floor((a[2] - a[4] / 2) / 16) * 16, math.floor((a[3] - a[4] / 2) / 16) * 16
-	local c = TB.columns(x0, z0, a[4], a[4], ridx)
+	local c = TB.columns(x0, z0, a[4], a[4], ridx, bidx)
 	c.x0, c.z0, c.res = x0, z0, 4
 	c.items = Vegetation.place(c, x0, z0, ridx, bidx)
 	c.pieces = WorldBuilder.pieces(world, { x0 = x0, z0 = z0, w = a[4], d = a[4] })
