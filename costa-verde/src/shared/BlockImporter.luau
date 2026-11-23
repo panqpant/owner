@@ -3,7 +3,7 @@
 -- Setup in Studio:
 --   1. 3D-import assets/roblox/block/*.fbx into a Folder ReplicatedStorage.BlockAssets (keep the names, e.g. b674).
 --   2. Bulk-upload assets/roblox/block/*.jpg and paste each id into BlockTextures.luau (b674 = "rbxassetid://...").
---   3. Street level: 3D-import build/roblox_block/env/*.fbx into ReplicatedStorage.BlockEnvAssets; upload env/leaf.png
+--   3. Street level: 3D-import assets/roblox/block/env/*.fbx into ReplicatedStorage.BlockEnvAssets; upload assets/roblox/block/env/leaf.png
 --      and paste its id as BlockTextures.leaf.
 --   4. Command bar: require(game.ReplicatedStorage.Shared.BlockImporter).place()   then save the place.
 -- Night lights run from ServerScriptService.Server.BlockLights.
