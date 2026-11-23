@@ -374,92 +374,132 @@ CAR_COLOURS = [((236, 236, 232), 25), ((24, 24, 26), 20), ((128, 130, 132), 16),
                ((150, 30, 28), 10), ((60, 70, 60), 3), ((200, 170, 120), 2)]
 
 
-# Side profiles (x along the car, z up; studs at ~3 per metre): bottom edge carries the wheel-arch notches.
-# Each: points, glass segment indices (windscreen / rear window), belt line, wheelbase half, width.
-CAR_PROFILES = {
-    "sedan": ([(-7.1, 1.0), (-7.2, 2.3), (-6.7, 3.05), (-4.2, 3.2), (-2.6, 4.55), (1.4, 4.6), (3.5, 3.2), (6.6, 2.95), (7.15, 2.3), (7.0, 1.0)], [3, 5], 3.1, 4.4, 5.6),
-    "suv": ([(-7.3, 1.2), (-7.4, 3.6), (-6.9, 3.8), (-6.5, 5.7), (2.9, 5.8), (4.5, 3.8), (7.1, 3.5), (7.4, 2.5), (7.3, 1.2)], [2, 4], 3.7, 4.6, 6.0),
-    "pickup": ([(-8.4, 1.3), (-8.5, 3.5), (-1.7, 3.5), (-1.5, 5.5), (2.6, 5.5), (4.2, 3.7), (8.1, 3.3), (8.4, 2.3), (8.3, 1.3)], [2, 4], 3.6, 5.2, 6.1),
-    "van": ([(-8.1, 1.2), (-8.2, 6.2), (-7.7, 6.6), (5.0, 6.6), (6.8, 4.0), (8.1, 3.3), (8.2, 1.2)], [4], 4.0, 5.0, 6.2),
+# Smooth cars: lofted rounded cross-sections + subdivision, cabin as its own loft (glass between pillars),
+# wheel arches cut by a boolean. Dimensions in studs (~3 per metre). x along the car (+x = front).
+CAR_SPECS = {  # length, width, body top (hood..tail), cabin x0..x1 (rear..front), roof z, belt z, wheelbase half, wheel r
+    "sedan": dict(L=14.4, W=5.6, hood=3.0, tail=3.2, cab=(-4.4, 3.6), roof=4.6, belt=3.2, wb=4.4, wr=1.3),
+    "suv": dict(L=14.8, W=6.0, hood=3.7, tail=3.9, cab=(-6.8, 4.4), roof=5.9, belt=3.9, wb=4.6, wr=1.45),
+    "pickup": dict(L=16.8, W=6.1, hood=3.7, tail=3.6, cab=(-1.6, 4.2), roof=5.6, belt=3.8, wb=5.2, wr=1.45),
+    "van": dict(L=16.4, W=6.2, hood=3.6, tail=4.1, cab=(-7.9, 4.8), roof=6.8, belt=4.0, wb=5.0, wr=1.35),
 }
 
 
-def _car_body(kind, paint, glass, plastic, light_f, light_r, plate, tyre, rim):
-    pts, glass_segs, belt, wb, W = CAR_PROFILES[kind]
-    # wheel arches: notch the bottom edge of the profile with half-circles
-    bottom = []
-    for cx in (-wb, wb):
-        arc = [(cx + math.cos(t) * 1.75, 1.0 + math.sin(t) * 1.75) for t in [math.pi * k / 8 for k in range(9)]]
-        bottom.append(arc)
-    prof = list(pts)
-    x_first, x_last = prof[0][0], prof[-1][0]
-    under = [(x_last, 1.0)] + bottom[1][::1] + bottom[0][::1] + [(x_first, 1.0)]
-    under = [p for p in under if x_first <= p[0] <= x_last]
-    outline = prof + under[1:-1]
+def _loft(bm, stations, ring_fn, mi_fn):
+    """Rings of points at each station joined into quads; ends capped. ring_fn(x) -> list of (y, z)."""
+    rings = []
+    for x in stations:
+        rings.append([bm.verts.new((x, y, z)) for y, z in ring_fn(x)])
+    n = len(rings[0])
+    for i in range(len(rings) - 1):
+        for j in range(n):
+            f = bm.faces.new((rings[i][j], rings[i][(j + 1) % n], rings[i + 1][(j + 1) % n], rings[i + 1][j]))
+            f.material_index = mi_fn(i, j, n)
+    for r, rev in ((rings[0], True), (rings[-1], False)):
+        f = bm.faces.new(r[::-1] if rev else r)
+        f.material_index = mi_fn(-1, 0, n)
+
+
+def _superellipse(cy, cz, ry, rz, k=16, p=4.0, top_only=False):
+    pts = []
+    for i in range(k):
+        t = 2 * math.pi * i / k
+        c, s_ = math.cos(t), math.sin(t)
+        y = cy + ry * math.copysign(abs(c) ** (2 / p), c)
+        z = cz + rz * math.copysign(abs(s_) ** (2 / p), s_)
+        pts.append((y, z))
+    return pts
+
+
+def _car_mesh(kind):
+    sp = CAR_SPECS[kind]
+    L, W = sp["L"], sp["W"]
+    half = L / 2
     bm = bmesh.new()
-    left = [bm.verts.new((x, -W / 2, z)) for x, z in outline]
-    right = [bm.verts.new((x, W / 2, z)) for x, z in outline]
-    n = len(outline)
-    fl = bm.faces.new(left[::-1])
-    fr = bm.faces.new(right)
-    for f in (fl, fr):
-        f.material_index = 0
-    for i in range(n):
-        j = (i + 1) % n
-        f = bm.faces.new((left[i], left[j], right[j], right[i]))
-        f.material_index = 1 if i in glass_segs else 0
-    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
-    # side windows: cabin outline above the belt line, split by a B-pillar
-    cabin = [(x, z) for x, z in pts if z > belt + 0.05]
-    if len(cabin) >= 2:
-        x0, x1 = min(x for x, _ in cabin) + 0.6, max(x for x, _ in cabin) - 0.6
-        top = max(z for _, z in cabin) - 0.35
-        mid = (x0 + x1) / 2
-        for side in (-1, 1):
-            y = side * (W / 2 + 0.03)
-            for (a, b) in ((x0, mid - 0.3), (mid + 0.3, x1)):
-                vs = [bm.verts.new((a, y, belt + 0.2)), bm.verts.new((b, y, belt + 0.2)), bm.verts.new((b, y, top)), bm.verts.new((a, y, top))]
-                f = bm.faces.new(vs if side > 0 else vs[::-1])
-                f.material_index = 1
-    L0, L1 = pts[0][0], pts[-1][0]
-    front_z = next(z for x, z in pts[::-1] if z > 2.0)
-    _cube(bm, (L1 - 0.1, 0, 1.55), (0.6, W * 0.96, 1.0), 2)  # front bumper
-    _cube(bm, (L0 + 0.1, 0, 1.55), (0.6, W * 0.96, 1.0), 2)  # rear bumper
-    _cube(bm, (L1 + 0.05, 0, 2.35), (0.2, W * 0.45, 0.7), 2)  # grille
-    for side in (-1, 1):
-        _cube(bm, (L1 - 0.05, side * W * 0.36, min(front_z, 2.7)), (0.25, W * 0.2, 0.45), 3)  # headlights
-        _cube(bm, (L0 - 0.05, side * W * 0.38, belt - 0.6), (0.2, W * 0.18, 0.55), 4)  # taillights
-        _cube(bm, (pts[3][0] if kind != "van" else 5.2, side * (W / 2 + 0.35), belt + 0.4), (0.5, 0.5, 0.35), 0)  # mirrors
-    _cube(bm, (L0 - 0.08, 0, 2.2), (0.08, 1.6, 0.7), 5)  # plate
-    for cx in (-wb, wb):
-        for side in (-1, 1):
-            _cyl(bm, (cx, side * (W / 2 - 0.45), 1.3), 1.3, 1.3, 0.95, 20, 6, "Y")  # tyre
-            _cyl(bm, (cx, side * (W / 2 + 0.03), 1.3), 0.85, 0.85, 0.12, 16, 7, "Y")  # rim face
-            for k in range(5):  # spokes
-                a = 2 * math.pi * k / 5
-                _cube(bm, (cx + math.cos(a) * 0.45, side * (W / 2 + 0.1), 1.3 + math.sin(a) * 0.45), (0.18, 0.06, 0.18), 6)
+
+    def body_top(x):  # hood at the front, tail at the back, smooth blend, rounded down at both ends
+        t = (x + half) / L
+        top = sp["tail"] + (sp["hood"] - sp["tail"]) * (3 * t * t - 2 * t ** 3)
+        end = 1 - (abs(x) / half) ** 10
+        return 1.0 + (top - 1.0) * (0.8 + 0.2 * end)
+
+    def body_ring(x):
+        e = max(0.05, 1 - (abs(x) / half) ** 12) ** 0.5  # crisp nose / tail in plan
+        top = body_top(x)
+        return _superellipse(0, (top + 1.0) / 2, W / 2 * (0.9 + 0.1 * e), (top - 1.0) / 2, 20, 5.5)  # flat sides, tight corners
+    stations = [-half + L * i / 25 for i in range(26)]
+    _loft(bm, stations, body_ring, lambda i, j, n: 0)
+    cx0, cx1 = sp["cab"]
+    roof, belt = sp["roof"], sp["belt"]
+    rake_f, rake_r = (2.4, 1.6) if kind != "van" else (1.6, 0.3)
+
+    def cab_ring(x):
+        rise = min(1.0, (cx1 - x) / rake_f, (x - cx0) / rake_r) if kind != "pickup" else min(1.0, (cx1 - x) / rake_f, (x - cx0) / 0.4)
+        h = belt - 0.3 + (roof - belt + 0.3) * max(0.05, rise)
+        return _superellipse(0, (h + belt - 0.3) / 2, W / 2 * 0.84, (h - belt + 0.3) / 2, 16, 4.5)
+    cst = [cx0 + (cx1 - cx0) * i / 15 for i in range(16)]
+    pillars = {0, 1, 7, 8, 14, 15}  # C, B and A pillars stay painted
+
+    def cab_mi(i, j, n):
+        if i < 0:
+            return 0
+        top = n // 4 - 2 <= j <= n // 4 + 2  # ring index around the top of the superellipse (z max near k/4)
+        return 0 if top or i in pillars else 1
+    _loft(bm, cst, cab_ring, cab_mi)
     return bm
 
 
+def _car_parts(kind, coll, mats):
+    """Separate small parts: wheels, lights, grille, bumpers, mirrors, plate."""
+    sp = CAR_SPECS[kind]
+    L, W, wb, wr = sp["L"], sp["W"], sp["wb"], sp["wr"]
+    bm = bmesh.new()
+    for cx in (-wb, wb):
+        for side in (-1, 1):
+            _cyl(bm, (cx, side * (W / 2 - 0.6), wr), wr, wr, 1.1, 28, 0, "Y")  # tyre
+            _cyl(bm, (cx, side * (W / 2 - 0.05), wr), wr * 0.68, wr * 0.68, 0.06, 24, 1, "Y")  # rim face
+            _cyl(bm, (cx, side * (W / 2 + 0.0), wr), wr * 0.2, wr * 0.2, 0.08, 12, 4, "Y")  # hub
+    h = L / 2
+    front_top = 1.0 + (sp["hood"] - 1.0) * 0.8
+    rear_top = 1.0 + (sp["tail"] - 1.0) * 0.8
+    for side in (-1, 1):  # lights and mirrors sit into the bodywork
+        _cube(bm, (h - 0.55, side * W * 0.3, front_top - 0.45), (0.5, W * 0.2, 0.42), 2)  # headlight
+        _cube(bm, (-h + 0.5, side * W * 0.32, rear_top - 0.6), (0.45, W * 0.18, 0.5), 3)  # taillight
+        _cube(bm, (sp["cab"][1] - 1.4, side * (W / 2 * 0.86 + 0.25), sp["belt"] + 0.1), (0.6, 0.5, 0.4), 5)  # mirror, on the door at the A-pillar
+    _cube(bm, (h - 0.45, 0, front_top - 0.9), (0.4, W * 0.42, 0.7), 4)  # grille
+    _cube(bm, (h - 0.35, 0, 1.3), (0.6, W * 0.88, 0.6), 4)  # bumpers
+    _cube(bm, (-h + 0.35, 0, 1.35), (0.6, W * 0.88, 0.6), 4)
+    _cube(bm, (-h + 0.08, 0, 2.2), (0.06, 1.6, 0.7), 6)  # plate
+    o = _obj(coll.name + "_parts", bm, [mats["tyre"], mats["rim"], mats["head"], mats["tail"], mats["plastic"], mats["paint"], mats["plate"]], coll)
+    return o
+
+
 def car_models():
-    """Sedan, SUV, pickup and van with real silhouettes, each in a few real-world colours."""
-    glass, tyre, rim = mat_glass(), mat_simple("tyre", (22, 22, 22), 0.85), mat_simple("rim", (170, 172, 176), 0.25, 0.9)
-    plastic = mat_simple("trim_plastic", (28, 28, 30), 0.6)
-    light_f, light_r = mat_simple("headlight", (240, 240, 230), 0.1, emit=(0.6, 0.6, 0.55)), mat_simple("taillight", (160, 20, 20), 0.2)
-    plate = mat_simple("plate", (236, 236, 228), 0.4)
+    """Sedan, SUV, pickup and van: smooth lofted bodies with glass cabins, arches, wheels and lights."""
+    glass = mat_glass()
+    base = {"tyre": mat_simple("tyre", (22, 22, 22), 0.85), "rim": mat_simple("rim", (170, 172, 176), 0.25, 0.9),
+            "plastic": mat_simple("trim_plastic", (28, 28, 30), 0.6), "plate": mat_simple("plate", (236, 236, 228), 0.4),
+            "head": mat_simple("headlight", (240, 240, 230), 0.1, emit=(0.6, 0.6, 0.55)), "tail": mat_simple("taillight", (160, 20, 20), 0.2)}
     models = []
     rng = random.Random(4)
-    for kind in CAR_PROFILES:
+    for kind in CAR_SPECS:
+        sp = CAR_SPECS[kind]
         for v in range(3):
             col = rng.choices([c for c, _ in CAR_COLOURS], [w for _, w in CAR_COLOURS])[0]
             paint = mat_simple(f"paint_{kind}{v}", col, 0.18, 0.6)
             paint.node_tree.nodes["Principled BSDF"].inputs["Coat Weight"].default_value = 1.0
             coll = _collection(f"car_{kind}_{v}")
-            bm = _car_body(kind, paint, glass, plastic, light_f, light_r, plate, tyre, rim)
-            o = _obj(f"car_{kind}_{v}", bm, [paint, glass, plastic, light_f, light_r, plate, tyre, rim], coll)
-            bev = o.modifiers.new("b", "BEVEL")
-            bev.width, bev.segments, bev.limit_method = 0.3, 3, "ANGLE"
-            bev.harden_normals = True
+            body = _obj(f"car_{kind}_{v}", _car_mesh(kind), [paint, glass], coll)
+            sub = body.modifiers.new("smooth", "SUBSURF")
+            sub.levels, sub.render_levels = 1, 1
+            cut = bmesh.new()  # wheel-arch cutters (hidden), applied as a boolean
+            for cx in (-sp["wb"], sp["wb"]):
+                _cyl(cut, (cx, 0, sp["wr"]), sp["wr"] + 0.35, sp["wr"] + 0.35, sp["W"] + 2, 24, 0, "Y")
+            cutter = _obj(f"car_{kind}_{v}_arches", cut, [], coll)
+            cutter.hide_render = True
+            cutter.display_type = "WIRE"
+            bo = body.modifiers.new("arches", "BOOLEAN")
+            bo.operation, bo.object, bo.solver = "DIFFERENCE", cutter, "EXACT"
+            _car_parts(kind, coll, dict(base, paint=paint))
             models.append(coll)
     return models
 
