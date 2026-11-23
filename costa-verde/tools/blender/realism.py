@@ -434,16 +434,18 @@ def _car_mesh(kind):
         for ax in (-sp["wb"] + off, sp["wb"] + off):  # fenders swell out over each wheel
             hw += 0.12 * math.exp(-((x - ax) / (sp["wr"] * 1.4)) ** 2)
         lo = clear + 0.3
+        bz = min(belt, ztop - 0.25)  # shoulder never above the hood / trunk edge, or the surface folds over itself
         half = [  # (y, z) from bottom centre up to roof centre
-            (0.0, lo), (hw - 0.5, lo), (hw - 0.08, lo + 0.5), (hw, lo + (belt - lo) * 0.42),  # rocker, door bulge
-            (hw - 0.05, belt - 0.4), (hw - 0.16, belt - 0.05),  # soft shoulder, beltline
+            (0.0, lo), (hw - 0.5, lo), (hw - 0.08, lo + 0.5), (hw, lo + (bz - lo) * 0.42),  # rocker, door bulge
+            (hw - 0.05, bz - 0.4 * (bz - lo) / max(belt - lo, 1e-6)), (hw - 0.16, bz - 0.05),  # soft shoulder, beltline
         ]
         if gh > 0.02:  # greenhouse: glass tucks inward (tumblehome) up to the roof
             z_top = ztop
             half += [(hw * (0.92 - 0.06 * gh), belt + 0.1), (hw * (0.92 - 0.2 * gh), belt + (z_top - belt) * 0.8),
                      (hw * (0.86 - 0.3 * gh), z_top - 0.05), (0.0, z_top + 0.05)]
-        else:  # hood / trunk lid: upper points fold onto a gently crowned panel
-            half += [(hw * 0.9, ztop - 0.06), (hw * 0.66, ztop + 0.02), (hw * 0.34, ztop + 0.07), (0.0, ztop + 0.09)]
+        else:  # hood / trunk lid: a gently crowned panel rising from the shoulder (always above it)
+            half += [(hw * 0.9, max(ztop - 0.06, bz + 0.05)), (hw * 0.66, max(ztop + 0.02, bz + 0.1)),
+                     (hw * 0.34, max(ztop + 0.07, bz + 0.14)), (0.0, max(ztop + 0.09, bz + 0.16))]
         ring = [(-y, z) for y, z in half[::-1][:-1]] + half[1:]  # mirror into a full loop (centre points shared)
         edge = min(t - t0, 1 - t) / max(1 - t0, 1e-6)  # 0 at the very nose / tail
         if edge < 0.06:  # round the fascia in side view: pull the end rings in toward their centre
@@ -496,6 +498,7 @@ def _car_parts(kind, coll, mats):
     zt = lambda t: _interp(sp["top"], t) * H  # noqa: E731
     h = L / 2
     hood_z, tail_z = zt(0.995), zt(0.01 if kind != "pickup" else 0.36)
+    nose_z = 0.9 * zt(0.985) + 0.1 * (clear + 0.3)  # top of the rounded fascia
     for cx in (-wb + L * (sp["wbc"] - 0.5), wb + L * (sp["wbc"] - 0.5)):
         for side in (-1, 1):
             yo = side * (W / 2 - 0.55)
@@ -510,17 +513,18 @@ def _car_parts(kind, coll, mats):
             _cyl(bm, (cx, side * (W / 2 + 0.02), wr), wr * 0.16, wr * 0.16, 0.08, 16, 6, "Y")  # hub with chrome cap
     for side in (-1, 1):
         # headlight cluster: slim, swept back along the fender; DRL strip above
-        _cube(bm, (h - 0.2, side * W * 0.3, hood_z - 0.55), (0.6, W * 0.17, 0.26), 2)  # headlight cluster
-        _cube(bm, (h - 0.15, side * W * 0.3, hood_z - 0.38), (0.5, W * 0.19, 0.06), 2)  # LED strip
-        _cube(bm, (h - 0.15, side * W * 0.34, clear + 0.95), (0.2, 0.32, 0.12), 4)  # fog-lamp bezel
-        _cube(bm, (h - 0.06, side * W * 0.34, clear + 0.95), (0.06, 0.22, 0.07), 2)  # fog lamp
+        _cube(bm, (h - 0.02, side * W * 0.24, nose_z - 0.35), (0.14, W * 0.14, 0.24), 2)  # headlight cluster on the fascia
+        _cube(bm, (h - 0.01, side * W * 0.22, nose_z - 0.18), (0.12, W * 0.18, 0.05), 2)  # LED strip
+        _cube(bm, (h - 0.03, side * W * 0.26, clear + 0.95), (0.12, 0.32, 0.12), 4)  # fog-lamp bezel
+        _cube(bm, (h + 0.02, side * W * 0.26, clear + 0.95), (0.05, 0.22, 0.07), 2)  # fog lamp
         _cube(bm, (L * 0.28, side * (W / 2 + 0.06), sp["belt"] * H - 0.25), (0.45, 0.05, 0.1), 3)  # side indicator
         # tail lamps wrapping the corners
-        _cube(bm, (-h + 0.35, side * W * 0.38, tail_z - 0.55), (0.5, W * 0.16, 0.3), 3)
+        _cube(bm, (-h + 0.02, side * W * 0.25, tail_z - 0.5), (0.14, W * 0.14, 0.28), 3)
         # mirror on a stalk at the base of the A-pillar
         cab_front = next(t for t in [i / 200 for i in range(200, -1, -1)] if zt(t) > sp["belt"] * H + 0.4) * L - h
-        _cube(bm, (cab_front - 0.6, side * (W / 2 * 0.86), sp["belt"] * H + 0.05), (0.25, 0.35, 0.12), 4)
-        _cube(bm, (cab_front - 0.7, side * (W / 2 * 0.86 + 0.45), sp["belt"] * H + 0.35), (0.45, 0.5, 0.42), 5)
+        _cube(bm, (cab_front - 0.55, side * (W / 2 * 0.9 + 0.15), sp["belt"] * H + 0.1), (0.2, 0.32, 0.1), 4)  # stalk
+        mv = _cube(bm, (cab_front - 0.6, side * (W / 2 * 0.9 + 0.45), sp["belt"] * H + 0.32), (0.32, 0.42, 0.34), 5)  # housing
+        bmesh.ops.rotate(bm, verts=mv, cent=(cab_front - 0.6, side * (W / 2 * 0.9 + 0.45), sp["belt"] * H + 0.32), matrix=Matrix.Rotation(-0.25 * side, 3, "Z"))
         for xd in (0.12, 0.45):  # door handles
             _cube(bm, (cab_front - 1.5 - xd * L * 0.35, side * (W / 2 + 0.02), sp["belt"] * H - 0.45), (0.8, 0.05, 0.13),
                   4 if "flush" in ex else 6)
@@ -530,12 +534,14 @@ def _car_parts(kind, coll, mats):
     if "flush" not in ex:  # grille: frame + dark mesh, lower intake
         gw = W * (0.66 if "truckgrille" in ex else 0.46)
         gh = 1.2 if "truckgrille" in ex else 0.6
-        _cube(bm, (h - 0.3, 0, hood_z - 0.75 - gh / 2), (0.45, gw, gh), 6 if "truckgrille" in ex else 4)
+        gh = min(gh, (nose_z - clear - 0.3) * 0.42)
+        gz = nose_z - 0.35 - gh / 2 - 0.25
+        _cube(bm, (h - 0.03, 0, gz), (0.14, gw, gh), 6 if "truckgrille" in ex else 4)
         for k in range(int(gw / 0.35)):
-            _cube(bm, (h - 0.06, -gw / 2 + 0.17 + k * 0.35, hood_z - 0.75 - gh / 2), (0.1, 0.06, gh * 0.9), 4)
+            _cube(bm, (h + 0.03, -gw / 2 + 0.17 + k * 0.35, gz), (0.06, 0.06, gh * 0.9), 4)
     else:
         _cube(bm, (h - 0.25, 0, hood_z - 0.3), (0.08, W * 0.82, 0.05), 2)  # EV: one light bar across the nose
-    _cube(bm, (h - 0.25, 0, clear + 0.75), (0.4, W * 0.48, 0.35), 4)  # lower intake
+    _cube(bm, (h - 0.03, 0, clear + 0.75), (0.12, W * 0.48, 0.35), 4)  # lower intake
     _cube(bm, (h - 0.05, 0, clear + 1.3), (0.05, 1.3, 0.45), 6)  # front plate
     _cube(bm, (-h + 0.25, 0, tail_z - 0.5), (0.1, W * 0.84, 0.08), 3)  # full-width tail light bar
     _cube(bm, (-h + 0.2, 0, clear + 0.55), (0.25, W * 0.6, 0.3), 4)  # rear diffuser
@@ -551,12 +557,15 @@ def _car_parts(kind, coll, mats):
         for side in (-1, 1):
             y = side * (W / 2 + 0.015)
             _cube(bm, ((c0 + c1) / 2, side * (W / 2 * 0.93), sp["belt"] * H + 0.02), (c1 - c0 - 0.6, 0.1, 0.07), 6)  # chrome belt trim
+            off = L * (sp["wbc"] - 0.5)
+            ra, fa = -wb + off + wr + 0.5, wb + off - wr - 0.5  # between the arches
             for xd in (c1 - 0.3, (c0 + c1) / 2, c0 + 0.6 if kind not in ("pickup",) else (c0 + c1) / 2 - 2.6):  # door shut lines
-                _cube(bm, (xd, y, (clear + 0.9 + sp["belt"] * H) / 2), (0.05, 0.03, sp["belt"] * H - clear - 1.0), 4)
-            _cube(bm, ((c0 + c1) / 2, y, clear + 0.95), (c1 - c0, 0.03, 0.05), 4)  # sill line
+                if ra < xd < fa:
+                    _cube(bm, (xd, y, (clear + 0.9 + sp["belt"] * H) / 2), (0.05, 0.03, sp["belt"] * H - clear - 1.0), 4)
+            _cube(bm, ((ra + fa) / 2, y, clear + 0.95), (fa - ra, 0.03, 0.05), 4)  # sill line
     if "rails" in ex:
         for side in (-1, 1):
-            _cube(bm, (-L * 0.08, side * W * 0.33, H + 0.12), (L * 0.42, 0.15, 0.15), 4)
+            _cube(bm, (-L * 0.08, side * W * 0.3, H - 0.06), (L * 0.42, 0.15, 0.15), 4)
     if "fin" in ex:
         _cube(bm, (-L * 0.2, 0, H + 0.12), (0.7, 0.12, 0.25), 4)  # shark-fin antenna
     if "sunroof" in ex:
