@@ -138,8 +138,13 @@ function Rural.generate(roads: { any }, buildings: { any }, shared: Streets.Shar
 	local rng = Hash.rng(Config.SEED + 500)
 	local net = Streets.grow(StreetStyles.rural, ruralOk, W / 2, W / 2, W / 2, 0, Config.SEED + 503, 2500, shared, nil, Landmarks.okLink)
 	-- loose county-road ends join the nearest road (state road, city edge, another county road)
-	for _, link in Streets.stitch(shared or Streets.newShared(), net, 900, Landmarks.okLink) do
-		table.insert(net, link)
+	-- two passes like the major roads: ahead first, then any direction for ends that found nothing
+	local sh = shared or Streets.newShared()
+	for _, anyDir in { false, true } do
+		for _, link in Streets.stitch(sh, net, 1800, Landmarks.okLink, anyDir) do
+			Streets.addExternal(sh, link.pts)
+			table.insert(net, link)
+		end
 	end
 	local segs = {}
 	local uses: { [number]: number } = {}

@@ -100,17 +100,16 @@ Config.ROADS = {
 		connector = { water = 25, lake = 80, wetland = 3, mangrove = 6, urban = 1.2, landmark = 500 },
 	},
 	FREEWAYS = {
-		{ { 0.7, 0.07 }, { 0.71, 0.3 }, { 0.715, 0.45 }, { 0.712, 0.52 }, { 0.7, 0.62 }, { 0.64, 0.74 }, { 0.6, 0.81 } }, -- I-1 coast spine through downtown
+		{ { 0.72, 0.1 }, { 0.71, 0.3 }, { 0.715, 0.45 }, { 0.712, 0.52 }, { 0.7, 0.62 }, { 0.64, 0.74 }, { 0.6, 0.81 } }, -- I-1 coast spine through downtown
 		{ { 0.712, 0.47 }, { 0.6, 0.44 }, { 0.47, 0.33 }, { 0.3, 0.37 }, { 0.15, 0.41 } }, -- cross-state to Pelican Bay
-		{ { 0.47, 0.33 }, { 0.45, 0.16 }, { 0.42, 0.07 } }, -- north to Citrus County
+		{ { 0.47, 0.33 }, { 0.45, 0.16 }, { 0.44, 0.095 } }, -- north to Citrus County, ends on the north road
 		{ { 0.712, 0.52 }, { 0.8, 0.5 } }, -- downtown causeway to Coral Strand
-		{ { 0.68, 0.6 }, { 0.5, 0.64 }, { 0.3, 0.7 } }, -- wetlands expressway to Gator Hollow
+		{ { 0.7, 0.62 }, { 0.5, 0.64 }, { 0.3, 0.7 }, { 0.22, 0.52 }, { 0.22, 0.4 } }, -- wetlands expressway coast to coast via Gator Hollow, joins the cross-state freeway
 		{ { 0.6, 0.81 }, { 0.58, 0.87 }, { 0.5, 0.925 }, { 0.4, 0.945 }, { 0.3, 0.948 }, { 0.2, 0.94 } }, -- overseas highway down the Keys
 	},
 	STATE = {
-		{ { 0.15, 0.41 }, { 0.16, 0.25 }, { 0.17, 0.15 } }, -- Pelican Bay to Fort Calusa
-		{ { 0.15, 0.41 }, { 0.2, 0.55 }, { 0.3, 0.7 } }, -- Gulf coast road to Gator Hollow
-		{ { 0.12, 0.1 }, { 0.3, 0.09 }, { 0.5, 0.09 }, { 0.7, 0.1 } }, -- north shore road
+		-- Pelican Bay, past Fort Calusa and along the north coast to the coast freeway: one continuous road
+		{ { 0.15, 0.41 }, { 0.16, 0.25 }, { 0.17, 0.15 }, { 0.25, 0.1 }, { 0.44, 0.095 }, { 0.6, 0.095 }, { 0.72, 0.1 } },
 		{ { 0.3, 0.2 }, { 0.47, 0.33 }, { 0.62, 0.3 }, { 0.74, 0.3 } }, -- ridge road through the lake district
 		{ { 0.3, 0.09 }, { 0.3, 0.37 } }, -- county line road
 	},

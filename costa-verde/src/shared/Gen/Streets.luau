@@ -35,11 +35,15 @@ local function key(x: number, z: number): number
 	return (math.floor(x / CELL) + 32768) * 65536 + (math.floor(z / CELL) + 32768)
 end
 
--- Register an existing road (flat x, z, ...) so streets can join it; returns its id.
-function Streets.addExternal(shared: Shared, pts: { number }): number
+-- Register an existing road (flat x, z, ...) so streets can join it; returns its id. `skip(x, z)`:
+-- points nothing may join (e.g. where the road meets a freeway).
+function Streets.addExternal(shared: Shared, pts: { number }, skip: ((number, number) -> boolean)?): number
 	shared.nid += 1
 	local id = shared.nid
 	for i = 1, #pts - 1, 2 do
+		if skip and skip(pts[i], pts[i + 1]) then
+			continue
+		end
 		local k = key(pts[i], pts[i + 1])
 		shared.grid[k] = shared.grid[k] or {}
 		table.insert(shared.grid[k], { pts[i], pts[i + 1], id })

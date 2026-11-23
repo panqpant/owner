@@ -79,16 +79,22 @@ by_kind = Counter(next(iter(kind_at[v])) for v in ends)
 junctions = sum(1 for d in deg.values() if d != 2)
 say(f"dead ends by kind: {dict(by_kind)}")
 major_ends = sum(by_kind[k] for k in ("freeway", "boulevard", "arterial", "state"))
-inland = EXACT["inland_ends"]
-check("major roads don't just stop", len(inland) <= 5, f"{major_ends} loose major-road ends: {EXACT['coastal_ends']} at the coast or map edge, {len(inland)} inland {[(e['kind'], round(e['x']), round(e['z'])) for e in inland]}")
+ends_all = EXACT["inland_ends"]  # every loose major-road end (exact check)
+bad_ends = [e for e in ends_all if e["district"] != "keytown"]  # the overseas highway ends in Key Marisol's streets
+check("major roads don't just stop", not bad_ends, f"{len(ends_all)} loose major-road ends, {len(bad_ends)} outside Key Marisol: {[(e['kind'], e['district'], round(e['x']), round(e['z'])) for e in bad_ends][:8]}")
+rural_ends = by_kind["county"]
+county_j = sum(1 for v, d in deg.items() if d != 2 and "county" in kind_at[v])
+say(f"rural county-road dead ends: {rural_ends} of {county_j} county junctions/ends ({100 * rural_ends / max(county_j, 1):.0f}%; real rural networks: 34%)")
 SURFACE = {"street", "collector", "arterial", "boulevard", "county", "drive"}
-fw_deg = Counter()
+# a freeway's own end may meet surface roads (real freeways terminate at junctions); mid-span (the same
+# freeway on both sides of the point) may not
+fw_rid = Counter()
 for r in ROADS:
     if r["kind"] == "freeway":
-        fw_deg[key(r["ax"], r["az"])] += 1
-        fw_deg[key(r["bx"], r["bz"])] += 1
-# a freeway's own end may meet surface roads (real freeways terminate at junctions); mid-span may not
-at_grade = sum(1 for v, d in deg.items() if fw_deg[v] >= 2 and kind_at[v] & SURFACE)
+        fw_rid[(key(r["ax"], r["az"]), r.get("rid"))] += 1
+        fw_rid[(key(r["bx"], r["bz"]), r.get("rid"))] += 1
+through_pts = {v for (v, rid), n in fw_rid.items() if n >= 2}
+at_grade = sum(1 for v in through_pts if kind_at[v] & SURFACE)
 check("freeways are grade-separated", at_grade == 0, f"{at_grade} places where a surface road meets a freeway mid-span at grade (should only connect via ramps)")
 say(f"interchange ramps: {sum(1 for r in ROADS if r['kind'] == 'ramp')} segments")
 city_ends = by_kind["street"] + by_kind["collector"]

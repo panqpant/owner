@@ -186,6 +186,21 @@ local function bridges(pts: { number }): { boolean }
 	return out
 end
 
+-- Predicate: is (x, z) a point of some freeway? Nothing may join a road there.
+function Roads.freewayPoints(majors: { Major }): (number, number) -> boolean
+	local set: { [string]: boolean } = {}
+	for _, m in majors do
+		if m.kind == "freeway" then
+			for i = 1, #m.pts - 1, 2 do
+				set[math.round(m.pts[i] * 2) .. "," .. math.round(m.pts[i + 1] * 2)] = true
+			end
+		end
+	end
+	return function(x: number, z: number): boolean
+		return set[math.round(x * 2) .. "," .. math.round(z * 2)] == true
+	end
+end
+
 -- Arterial grid ----------------------------------------------------------------------------------
 local function builtUp(x: number, z: number): boolean
 	local s = Terrain.sample(x, z)
@@ -466,6 +481,90 @@ function Roads.majors(): { Major }
 		local pts = Roads.route(s, "state")
 		table.insert(out, { kind = "state", width = R.STATE_W, pts = pts, bridge = bridges(pts) })
 	end
+	-- Freeway and state-road ends finish on another highway (real highways end at a junction), not in a field.
+	for _, m in out do
+		for _, atStart in { true, false } do
+			local p = m.pts
+			local ex, ez = if atStart then p[1] else p[#p - 1], if atStart then p[2] else p[#p]
+			local best, bx, bz = 2500 ^ 2, nil, nil
+			for _, o in out do
+				-- a state road never joins a freeway mid-span (that would be an at-grade crossing)
+				if o ~= m and not (m.kind ~= "freeway" and o.kind == "freeway") then
+					for k = 1, #o.pts - 1, 2 do
+						local d = (o.pts[k] - ex) ^ 2 + (o.pts[k + 1] - ez) ^ 2
+						if d < best then
+							best, bx, bz = d, o.pts[k], o.pts[k + 1]
+						end
+					end
+				end
+			end
+			if bx and best > 1 then
+				local n = math.max(1, math.ceil(math.sqrt(best) / STEP))
+				local ext = {}
+				for k = 1, n do
+					table.insert(ext, ex + (bx - ex) * k / n)
+					table.insert(ext, ez + ((bz :: number) - ez) * k / n)
+				end
+				if atStart then -- prepend, reversed
+					local rev = {}
+					for k = #ext - 1, 1, -2 do
+						table.insert(rev, ext[k])
+						table.insert(rev, ext[k + 1])
+					end
+					table.move(p, 1, #p, #rev + 1, rev)
+					m.pts = rev
+				else
+					table.move(ext, 1, #ext, #p + 1, p)
+				end
+				m.bridge = bridges(m.pts)
+			end
+		end
+	end
+	-- A freeway's last stretch inside a town becomes a surface boulevard (real freeways turn into city
+	-- streets as they enter town), so the town grid meets it at ordinary junctions.
+	for idx = #out, 1, -1 do
+		local m = out[idx]
+		if m.kind == "freeway" then
+			for _, atEnd in { true, false } do
+				local p = m.pts
+				local ex, ez = if atEnd then p[#p - 1] else p[1], if atEnd then p[#p] else p[2]
+				local onFreeway = false -- an end that joins another freeway is a freeway junction: keep it
+				for _, o in out do
+					if o ~= m and o.kind == "freeway" then
+						for k = 1, #o.pts - 1, 2 do
+							onFreeway = onFreeway or (math.abs(o.pts[k] - ex) < 0.5 and math.abs(o.pts[k + 1] - ez) < 0.5)
+						end
+					end
+				end
+				local nseg = if onFreeway then 0 else #p // 2 - 1
+				local cut = 0
+				for step = 1, math.min(nseg - 1, 50) do -- up to 2,000 studs
+					local i = if atEnd then #p - 1 - step * 2 else 1 + step * 2
+					if builtUp(p[i], p[i + 1]) then
+						cut = step
+					else
+						break
+					end
+				end
+				if cut > 0 then
+					local tail = {}
+					if atEnd then
+						table.move(p, #p - 1 - cut * 2, #p, 1, tail)
+						for _ = 1, cut * 2 do
+							table.remove(p)
+						end
+					else
+						table.move(p, 1, 2 + cut * 2, 1, tail)
+						for _ = 1, cut * 2 do
+							table.remove(p, 1)
+						end
+					end
+					m.bridge = bridges(p)
+					table.insert(out, { kind = "boulevard", width = R.BOULEVARD_W, pts = tail, bridge = bridges(tail) })
+				end
+			end
+		end
+	end
 	local SP = R.ARTERIAL_SPACING
 	for k = 1, math.floor(W / SP) do
 		local c = k * SP
@@ -485,11 +584,12 @@ function Roads.majors(): { Major }
 	-- so arterials and boulevards run into the network instead of stopping at the edge of town.
 	local shared = Streets.newShared()
 	local asRoads = {}
+	local onFreeway = Roads.freewayPoints(out)
 	for _, m in out do
-		if m.kind ~= "freeway" then -- nothing joins a freeway at grade
-			Streets.addExternal(shared, m.pts)
+		if m.kind ~= "freeway" then -- nothing joins a freeway at grade; freeway ends were joined above
+			Streets.addExternal(shared, m.pts, onFreeway)
+			table.insert(asRoads, { kind = m.kind, pts = m.pts })
 		end
-		table.insert(asRoads, { kind = m.kind, pts = m.pts })
 	end
 	local function passable(ax: number, az: number, bx: number, bz: number): boolean
 		local n = math.ceil(math.sqrt((bx - ax) ^ 2 + (bz - az) ^ 2) / STEP)
@@ -531,10 +631,48 @@ function Roads.majors(): { Major }
 			table.insert(pts, a[1] + (a[3] - a[1]) * k / n)
 			table.insert(pts, a[2] + (a[4] - a[2]) * k / n)
 		end
-		local kind = if from.kind == "freeway" then "state" else from.kind -- freeway ends continue as surface roads
-		table.insert(out, { kind = kind, width = if kind == "state" then R.STATE_W else from.width, pts = pts, bridge = bridges(pts) })
+		local kind = from.kind
+		table.insert(out, { kind = kind, width = from.width, pts = pts, bridge = bridges(pts) })
 	end
 	interchanges(out, planarize(out))
+	-- Arterial stubs that run out to nowhere (onto a lake point) are trimmed back to their last junction.
+	local uses: { [string]: number } = {}
+	local function key(x: number, z: number): string
+		return math.round(x * 2) .. "," .. math.round(z * 2)
+	end
+	for _, m in out do
+		for i = 1, #m.pts - 1, 2 do
+			local k = key(m.pts[i], m.pts[i + 1])
+			uses[k] = (uses[k] or 0) + (if i == 1 or i == #m.pts - 1 then 1 else 2)
+		end
+	end
+	for _, m in out do
+		if m.kind == "arterial" or m.kind == "boulevard" then
+			for _, fromEnd in { true, false } do
+				local p = m.pts
+				local n = #p // 2
+				if uses[key(if fromEnd then p[#p - 1] else p[1], if fromEnd then p[#p] else p[2])] == 1 then
+					-- walk inward to the first vertex another road also uses
+					for step = 1, math.min(n - 2, R.ARTERIAL_SPACING // STEP) do
+						local i = if fromEnd then #p - 1 - step * 2 else 1 + step * 2
+						if uses[key(p[i], p[i + 1])] > 2 then
+							if fromEnd then
+								for _ = 1, step * 2 do
+									table.remove(p)
+								end
+							else
+								for _ = 1, step * 2 do
+									table.remove(p, 1)
+								end
+							end
+							m.bridge = bridges(p)
+							break
+						end
+					end
+				end
+			end
+		end
+	end
 	return out
 end
 

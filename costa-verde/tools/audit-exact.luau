@@ -42,11 +42,11 @@ for k, d in deg do
 			local s = T.sample(x + math.cos(a * math.pi / 4) * 250, z + math.sin(a * math.pi / 4) * 250)
 			nearWater = nearWater or s.water ~= nil
 		end
+		local district = Gen.Districts.at(x, z)
 		if nearWater or x < 400 or z < 400 or x > W.size - 400 or z > W.size - 400 then
 			coastal += 1
-		else
-			table.insert(inland, { kind = info[1], x = x, z = z })
 		end
+		table.insert(inland, { kind = info[1], x = x, z = z, district = district, coast = nearWater })
 	end
 end
 fs.writeFile("build/audit_exact.json", serde.encode("json", { unbridged_studs = wet, coastal_ends = coastal, inland_ends = inland }))

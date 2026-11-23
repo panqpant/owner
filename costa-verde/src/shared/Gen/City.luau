@@ -77,24 +77,25 @@ function City.generate(): { roads: { Road }, buildings: { Building }, parks: { P
 	local segs = segIndex()
 	local rng = Hash.rng(Config.SEED + 1)
 
-	local function addRoad(pts: { number }, width: number, kind: string, bridge: { boolean }?)
+	local function addRoad(pts: { number }, width: number, kind: string, bridge: { boolean }?, rid: number?)
 		for i = 1, #pts - 3, 2 do
-			table.insert(roads, { ax = pts[i], az = pts[i + 1], bx = pts[i + 2], bz = pts[i + 3], width = width, kind = kind, bridge = if bridge then bridge[(i + 1) // 2] else false })
+			table.insert(roads, { ax = pts[i], az = pts[i + 1], bx = pts[i + 2], bz = pts[i + 3], width = width, kind = kind, bridge = if bridge then bridge[(i + 1) // 2] else false, rid = rid })
 			segs.add(pts[i], pts[i + 1], pts[i + 2], pts[i + 3], width / 2)
 		end
 	end
 
 	-- 1. Major network; register it so local streets join it.
 	local majors = Roads.majors()
+	local onFreeway = Roads.freewayPoints(majors)
 	local SEED_STEP = Config.ROADS.SEED_STEP
 	local seedBucket: { [number]: { { number } } } = {} -- superblock -> candidate seed points on majors
-	for _, m in majors do
-		addRoad(m.pts, m.width, m.kind, m.bridge)
+	for mi, m in majors do
+		addRoad(m.pts, m.width, m.kind, m.bridge, mi) -- rid: which major road a segment belongs to
 		-- freeways and ramps are grade-separated: no street, driveway or lot joins them
 		if m.kind ~= "freeway" and m.kind ~= "ramp" then
-			local id = Streets.addExternal(shared, m.pts)
+			local id = Streets.addExternal(shared, m.pts, onFreeway)
 			for _, c in Streets.frontSeeds(m.pts, id, SEED_STEP) do
-				if not m.bridge[c[7]] then
+				if not m.bridge[c[7]] and not onFreeway(c[1], c[2]) then
 					-- a point on a superblock edge belongs to the cells on both sides
 					local done: { [number]: boolean } = {}
 					for _, o in { { 1, 1 }, { -1, -1 }, { 1, -1 }, { -1, 1 } } do
@@ -116,6 +117,9 @@ function City.generate(): { roads: { Road }, buildings: { Building }, parks: { P
 	for _, m in majors do
 		if m.kind ~= "freeway" and m.kind ~= "ramp" then
 			for i = 1, #m.pts - 1, 2 do
+				if onFreeway(m.pts[i], m.pts[i + 1]) then
+					continue -- never link onto a freeway point
+				end
 				local k = (m.pts[i] // 512) * 4096 + m.pts[i + 1] // 512
 				majorPts[k] = majorPts[k] or {}
 				table.insert(majorPts[k], { m.pts[i], m.pts[i + 1] })
@@ -252,6 +256,23 @@ function City.generate(): { roads: { Road }, buildings: { Building }, parks: { P
 		end
 	end
 	for _, link in Streets.stitch(shared, allLocal, 300, Landmarks.okLink) do
+		if onFreeway(link.pts[1], link.pts[2]) or onFreeway(link.pts[3], link.pts[4]) then
+			continue -- a freeway's end is never a street junction
+		end
+		Streets.addExternal(shared, link.pts)
+		addRoad(link.pts, Config.ROAD_W, "street")
+	end
+	-- Major roads that still end loose (e.g. at a lake shore) join the nearest street, any direction.
+	local surfaceMajors = {}
+	for _, m in majors do
+		if m.kind ~= "freeway" and m.kind ~= "ramp" then
+			table.insert(surfaceMajors, { kind = m.kind, pts = m.pts })
+		end
+	end
+	for _, link in Streets.stitch(shared, surfaceMajors, 600, Landmarks.okLink, true) do
+		if onFreeway(link.pts[1], link.pts[2]) or onFreeway(link.pts[3], link.pts[4]) then
+			continue -- a freeway's end is never a street junction
+		end
 		Streets.addExternal(shared, link.pts)
 		addRoad(link.pts, Config.ROAD_W, "street")
 	end
@@ -331,6 +352,33 @@ function City.generate(): { roads: { Road }, buildings: { Building }, parks: { P
 	for _, ln in localNets do
 		for _, r in ln.net do
 			frontage(r.pts, Config.ROAD_W)
+		end
+	end
+
+	-- Grade separation, last word: where a freeway passes through a point (the same freeway on both sides),
+	-- no surface segment may touch it; any that does (a stray link) is dropped. Freeway ends may meet roads.
+	local through: { [string]: number } = {}
+	local function vk(x: number, z: number): string
+		return math.round(x * 2) .. "," .. math.round(z * 2)
+	end
+	for _, r in roads do
+		if r.kind == "freeway" then
+			for _, p in { { r.ax, r.az }, { r.bx, r.bz } } do
+				local k = vk(p[1], p[2]) .. "#" .. r.rid
+				through[k] = (through[k] or 0) + 1
+			end
+		end
+	end
+	local passThrough: { [string]: boolean } = {}
+	for k, n in through do
+		if n >= 2 then
+			passThrough[string.split(k, "#")[1]] = true
+		end
+	end
+	for i = #roads, 1, -1 do
+		local r = roads[i]
+		if r.kind ~= "freeway" and r.kind ~= "ramp" and (passThrough[vk(r.ax, r.az)] or passThrough[vk(r.bx, r.bz)]) then
+			table.remove(roads, i)
 		end
 	end
 
