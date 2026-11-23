@@ -8,12 +8,14 @@ local Gen = require("./Gen")
 local TerrainBuilder = require("./TerrainBuilder")
 
 local Terrain = Gen.Terrain
+local Facades = require("./FacadeTextures")
 
 local WorldBuilder = {}
 
 -- A piece: shape "box" | "wedge" (Roblox WedgePart: full height at +Z, slope down to -Z), centre p,
 -- axes r (X), u (Y), b (Z) in Roblox space (Y up, generator x/z), size s, colour c (sRGB), group (chunk key).
-export type Piece = { shape: string, p: { number }, r: { number }, u: { number }, b: { number }, s: { number }, c: { number }, g: string, t: number? }
+export type Piece = { shape: string, p: { number }, r: { number }, u: { number }, b: { number }, s: { number }, c: { number }, g: string, t: number?,
+	m: string?, tex: string? }
 
 local GREY = {
 	street = { 70, 70, 74 }, collector = { 66, 66, 70 }, arterial = { 78, 78, 82 }, boulevard = { 82, 82, 86 }, state = { 76, 76, 80 },
@@ -22,6 +24,52 @@ local GREY = {
 }
 local SURFACE = { lot = { 96, 96, 98 }, field = { 92, 140, 70 }, stands = { 180, 180, 178 }, runway = { 56, 56, 58 }, deck = { 140, 120, 96 },
 	tank = { 225, 225, 225 }, water = { 60, 150, 190 }, panel = { 50, 60, 90 }, wall = { 120, 120, 120 }, pit = { 170, 150, 115 } }
+-- Building looks per style: Roblox material, Florida colour palette (one picked per building), facade
+-- texture by part height. Pastel stucco and Art Deco, glass towers, brick campus, corrugated warehouses.
+local PASTEL = { { 242, 200, 168 }, { 196, 226, 206 }, { 246, 228, 160 }, { 240, 170, 150 }, { 180, 212, 230 }, { 244, 236, 214 }, { 236, 236, 230 } }
+local LOOK: { [string]: { m: string, cols: { { number } }, tex: (h: number) -> string? } } = {
+	tower = { m = "Glass", cols = { { 96, 130, 150 }, { 120, 150, 160 }, { 150, 172, 178 }, { 200, 206, 206 } }, tex = function(h)
+		return if h > 60 then "glass_curtain" else "ribbon"
+	end },
+	midrise = { m = "Concrete", cols = { { 226, 222, 210 }, { 210, 206, 196 }, { 236, 230, 214 }, { 200, 210, 214 } }, tex = function(h)
+		return if h > 30 then "ribbon" else "punched"
+	end },
+	deco = { m = "Plaster", cols = { { 248, 196, 206 }, { 170, 222, 216 }, { 214, 200, 236 }, { 250, 246, 236 }, { 250, 220, 170 } }, tex = function(h)
+		return "deco"
+	end },
+	stucco = { m = "Plaster", cols = PASTEL, tex = function(h)
+		return if h > 22 then "punched" else "shopfront"
+	end },
+	shack = { m = "Plaster", cols = { { 214, 204, 184 }, { 196, 210, 196 }, { 230, 214, 190 }, { 200, 196, 210 } }, tex = function(h)
+		return "shopfront"
+	end },
+	house = { m = "Plaster", cols = { { 246, 240, 224 }, { 236, 226, 200 }, { 214, 222, 200 }, { 206, 220, 230 }, { 240, 214, 190 }, { 250, 250, 246 } }, tex = function(h)
+		return "house"
+	end },
+	warehouse = { m = "CorrugatedMetal", cols = { { 196, 198, 196 }, { 210, 200, 180 }, { 170, 180, 186 }, { 222, 222, 218 } }, tex = function(h)
+		return "warehouse"
+	end },
+	campus = { m = "Brick", cols = { { 170, 92, 70 }, { 196, 160, 120 }, { 150, 84, 66 } }, tex = function(h)
+		return "punched"
+	end },
+	farmhouse = { m = "WoodPlanks", cols = { { 240, 238, 230 } }, tex = function(h)
+		return "house"
+	end },
+	barn = { m = "WoodPlanks", cols = { { 150, 52, 40 }, { 120, 110, 100 } }, tex = function(h)
+		return nil
+	end },
+	silo = { m = "Metal", cols = { { 200, 200, 196 } }, tex = function(h)
+		return nil
+	end },
+	trailer = { m = "Metal", cols = { { 236, 236, 230 }, { 214, 222, 214 } }, tex = function(h)
+		return nil
+	end },
+}
+local DEFAULT_LOOK = { m = "Concrete", cols = { { 214, 212, 206 } }, tex = function(h: number): string?
+	return nil
+end }
+local ROOFS = { { "ClayRoofTiles", { 186, 96, 64 } }, { "ClayRoofTiles", { 172, 112, 82 } }, { "RoofShingles", { 92, 90, 88 } }, { "RoofShingles", { 112, 98, 86 } } }
+
 local FLATISH = { lot = true, field = true, runway = true, deck = true, panel = true, water = true }
 local ELEV = 22 -- freeway viaduct height (studs above ground)
 local METRO_ELEV = 30
@@ -143,7 +191,8 @@ local function earclip(xs: { number }, zs: { number }): { { number } }
 end
 
 -- One footprint part (world-space polygon) from y0 to y0 + h, plus its roof.
-local function solid(out: { Piece }, xs: { number }, zs: { number }, y0: number, h: number, roof: string, col: { number }, g: string)
+local function solid(out: { Piece }, xs: { number }, zs: { number }, y0: number, h: number, roof: string, col: { number }, g: string, look: any?)
+	local first = #out + 1
 	local n = #xs
 	local isRect = n == 4
 	if isRect then
@@ -162,13 +211,21 @@ local function solid(out: { Piece }, xs: { number }, zs: { number }, y0: number,
 					ridge, across, L, W = b, r, l2, l1
 				end
 				local rh = math.min(W * 0.32, 14)
+				if look then
+					out[#out].m, out[#out].tex = look.m, look.tex
+				end
 				for _, sgn in { 1, -1 } do
 					local n2 = mul(across, sgn)
 					local back = mul(n2, -1) -- full-height face at the ridge
 					local right = cross({ 0, 1, 0 }, back)
-					table.insert(out, { shape = "wedge", p = add({ cx, y0 + h + rh / 2, cz }, mul(n2, W / 4)), r = right, u = { 0, 1, 0 }, b = back, s = { L, rh, W / 2 }, c = GREY.roof, g = g })
+					table.insert(out, { shape = "wedge", p = add({ cx, y0 + h + rh / 2, cz }, mul(n2, W / 4)), r = right, u = { 0, 1, 0 }, b = back, s = { L, rh, W / 2 },
+						c = if look then look.roofC else GREY.roof, g = g, m = if look then look.roofM else nil })
 				end
 				_ = ridge
+				return
+			end
+			if look then
+				out[#out].m, out[#out].tex = look.m, look.tex
 			end
 			return
 		end
@@ -176,6 +233,11 @@ local function solid(out: { Piece }, xs: { number }, zs: { number }, y0: number,
 	local ym = y0 + h / 2
 	for _, t in earclip(xs, zs) do
 		triangle(out, { xs[t[1]], ym, zs[t[1]] }, { xs[t[2]], ym, zs[t[2]] }, { xs[t[3]], ym, zs[t[3]] }, h, col, g)
+	end
+	if look then
+		for q = first, #out do
+			out[q].m, out[q].tex = look.m, look.tex
+		end
 	end
 end
 
@@ -337,8 +399,10 @@ function WorldBuilder.pieces(world: any, area: { x0: number, z0: number, w: numb
 	for bi, b in world.buildings do
 		if inArea(b.x, b.z) then
 			local c, sn = math.cos(math.rad(b.rot)), math.sin(math.rad(b.rot))
-			local shade = 200 - (bi % 5) * 8 -- neighbouring buildings read apart
-			local col = { shade, shade, shade - 4 }
+			local L = LOOK[b.style] or DEFAULT_LOOK
+			local hsh = Gen.Hash.int(bi, 17, 3)
+			local col = L.cols[1 + hsh % #L.cols]
+			local roofPick = ROOFS[1 + (hsh // 7) % #ROOFS]
 			local g = "b" .. bi
 			for _, p in b.parts or {} do
 				local xs, zs = {}, {}
@@ -347,7 +411,10 @@ function WorldBuilder.pieces(world: any, area: { x0: number, z0: number, w: numb
 					table.insert(zs, b.z + sn * p.pts[i] + c * p.pts[i + 1])
 				end
 				local y0 = b.y + p.base - (if p.base == 0 then 4 else 0)
-				solid(out, xs, zs, y0, p.h + (if p.base == 0 then 4 else 0), p.roof, if p.roof == "canopy" then GREY.wall else col, g)
+				local canopy = p.roof == "canopy"
+				local look = if canopy then { m = "SmoothPlastic", tex = nil, roofM = nil, roofC = GREY.roof }
+					else { m = L.m, tex = L.tex(p.h), roofM = roofPick[1], roofC = roofPick[2] }
+				solid(out, xs, zs, y0, p.h + (if p.base == 0 then 4 else 0), p.roof, if canopy then GREY.wall else col, g, look)
 			end
 		end
 	end
@@ -406,6 +473,18 @@ function WorldBuilder.build(world: any?)
 			Vector3.new(pc.u[1], pc.u[2], pc.u[3]), Vector3.new(pc.b[1], pc.b[2], pc.b[3]))
 		part.Color = Color3.fromRGB(pc.c[1], pc.c[2], pc.c[3])
 		part.TopSurface, part.BottomSurface = Enum.SurfaceType.Smooth, Enum.SurfaceType.Smooth
+		if pc.m then
+			part.Material = (Enum.Material :: any)[pc.m]
+		end
+		local fx = pc.tex and Facades[pc.tex]
+		if fx and fx.id ~= "" then -- facade on the four walls
+			for _, face in { Enum.NormalId.Front, Enum.NormalId.Back, Enum.NormalId.Left, Enum.NormalId.Right } do
+				local tx = Instance.new("Texture")
+				tx.Texture, tx.Face = fx.id, face
+				tx.StudsPerTileU, tx.StudsPerTileV = fx.u, fx.v
+				tx.Parent = part
+			end
+		end
 		if pc.t then -- water tint / foam: see-through, nothing collides with it
 			part.Transparency, part.CanCollide, part.CanQuery, part.CastShadow = pc.t, false, false, false
 		end

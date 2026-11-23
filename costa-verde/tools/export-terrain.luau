@@ -20,6 +20,7 @@ local AREAS = { -- name, centre, size (studs)
 	{ "keys", D.keytown.x, D.keytown.z, 2560 },
 	{ "downtown", D.downtown.x, D.downtown.z, 2560 },
 	{ "suburb", D.palmgrove.x, D.palmgrove.z, 2560 },
+	{ "oldtown", 27740, 23180, 1280 }, -- detailed-model test block (tools/blender/detail_town.py)
 	{ "wetland", D.swamptown.x, D.swamptown.z, 2560 },
 	{ "beach", D.beach.x, D.beach.z, 2560 },
 	{ "country", Gen.Config.SIZE * 0.40625, Gen.Config.SIZE * 0.40625, 2560 },

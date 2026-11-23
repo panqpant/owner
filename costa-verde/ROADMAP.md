@@ -69,6 +69,12 @@ statistics. No real place is copied.
 - First test: you press Play in Studio and send screenshots.
 
 ## Phase D: Blender asset kits
+- Started: `tools/blender/detail_town.py` models every building in a test block (old town at 27740, 23180) as a
+  custom detailed mesh from its real footprint and style (windows with frames, sills and shutters, shopfronts,
+  awnings, balconies, Art Deco ledges and pilasters, hip/gable roofs with eaves, parapets, AC units, porches,
+  garage doors, pools, driveways) plus sidewalks, curbs, lane markings and street lights. `--export` writes one
+  Roblox-ready FBX per building (assets/roblox/buildings/, max ~15k triangles each). Next: continuous sidewalks
+  with junction aprons, then the other styles' detail (towers, warehouses, campus) and the rest of the map.
 - Building kits per style (glass towers, Art Deco hotels, stucco, houses, barns, warehouses), with windows and roofs.
 - Palms and other plants, street furniture, vehicles, boats, Easter egg props.
 - Several detail levels per asset; exported as FBX and batch-imported, then placed by name.
