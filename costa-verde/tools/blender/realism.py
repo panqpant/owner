@@ -376,11 +376,21 @@ CAR_COLOURS = [((236, 236, 232), 25), ((24, 24, 26), 20), ((128, 130, 132), 16),
 
 # Smooth cars: lofted rounded cross-sections + subdivision, cabin as its own loft (glass between pillars),
 # wheel arches cut by a boolean. Dimensions in studs (~3 per metre). x along the car (+x = front).
-CAR_SPECS = {  # length, width, body top (hood..tail), cabin x0..x1 (rear..front), roof z, belt z, wheelbase half, wheel r
-    "sedan": dict(L=14.4, W=5.6, hood=3.0, tail=3.2, cab=(-4.4, 3.6), roof=4.6, belt=3.2, wb=4.4, wr=1.3),
-    "suv": dict(L=14.8, W=6.0, hood=3.7, tail=3.9, cab=(-6.8, 4.4), roof=5.9, belt=3.9, wb=4.6, wr=1.45),
-    "pickup": dict(L=16.8, W=6.1, hood=3.7, tail=3.6, cab=(-1.6, 4.2), roof=5.6, belt=3.8, wb=5.2, wr=1.45),
-    "van": dict(L=16.4, W=6.2, hood=3.6, tail=4.1, cab=(-7.9, 4.8), roof=6.8, belt=4.0, wb=5.0, wr=1.35),
+def _spec(L_mm, W_mm, H_mm, WB_mm, wheel_mm, clear_mm, hood, belt, cab, fastback=0.0, clad=False):
+    """Real dimensions (mm) -> studs at 3 per metre. hood / belt as fractions of height; cab = (rear, front) as
+    fractions of length from the tail."""
+    k = 0.003
+    L, H = L_mm * k, H_mm * k
+    return dict(L=L, W=W_mm * k, roof=H, hood=H * hood, tail=H * hood * 1.05, belt=H * belt, wb=WB_mm * k / 2, wr=wheel_mm * k / 2,
+                clear=clear_mm * k, cab=(-L / 2 + L * cab[0], -L / 2 + L * cab[1]), fastback=fastback, clad=clad)
+
+
+# Proportions of the best-selling 2025-26 US types (manufacturer / spec-site figures; sedan and minivan typical).
+CAR_SPECS = {
+    "sedan": _spec(4915, 1840, 1445, 2825, 690, 140, 0.56, 0.66, (0.2, 0.68), fastback=3.4),   # midsize sedan, fastback roof
+    "suv": _spec(4650, 1860, 1690, 2700, 740, 210, 0.6, 0.62, (0.06, 0.66), clad=True),       # compact crossover
+    "pickup": _spec(5884, 2030, 1995, 3694, 820, 240, 0.64, 0.64, (0.36, 0.68), clad=True),  # full-size crew-cab pickup
+    "van": _spec(5170, 1995, 1740, 3060, 720, 160, 0.56, 0.6, (0.04, 0.73)),                  # minivan
 }
 
 
@@ -416,24 +426,28 @@ def _car_mesh(kind):
     half = L / 2
     bm = bmesh.new()
 
+    lo = sp["clear"] + 0.35
+
     def body_top(x):  # hood at the front, tail at the back, smooth blend, rounded down at both ends
         t = (x + half) / L
         top = sp["tail"] + (sp["hood"] - sp["tail"]) * (3 * t * t - 2 * t ** 3)
         end = 1 - (abs(x) / half) ** 10
-        return 1.0 + (top - 1.0) * (0.8 + 0.2 * end)
+        return lo + (top - lo) * (0.82 + 0.18 * end)
 
     def body_ring(x):
         e = max(0.05, 1 - (abs(x) / half) ** 12) ** 0.5  # crisp nose / tail in plan
         top = body_top(x)
-        return _superellipse(0, (top + 1.0) / 2, W / 2 * (0.9 + 0.1 * e), (top - 1.0) / 2, 20, 5.5)  # flat sides, tight corners
-    stations = [-half + L * i / 25 for i in range(26)]
+        return _superellipse(0, (top + lo) / 2, W / 2 * (0.92 + 0.08 * e), (top - lo) / 2, 20, 5.5)  # flat sides, tight corners
+    x_start = sp["cab"][0] - 0.3 if kind == "pickup" else -half  # pickup: the bed is built separately
+    stations = [x_start + (half - x_start) * i / 25 for i in range(26)]
     _loft(bm, stations, body_ring, lambda i, j, n: 0)
     cx0, cx1 = sp["cab"]
     roof, belt = sp["roof"], sp["belt"]
-    rake_f, rake_r = (2.4, 1.6) if kind != "van" else (1.6, 0.3)
+    rake_f = {"van": 2.0, "pickup": 2.2}.get(kind, 2.8)
+    rake_r = sp["fastback"] or {"van": 0.3, "pickup": 0.4}.get(kind, 1.2)
 
     def cab_ring(x):
-        rise = min(1.0, (cx1 - x) / rake_f, (x - cx0) / rake_r) if kind != "pickup" else min(1.0, (cx1 - x) / rake_f, (x - cx0) / 0.4)
+        rise = min(1.0, (cx1 - x) / rake_f, (x - cx0) / rake_r)
         h = belt - 0.3 + (roof - belt + 0.3) * max(0.05, rise)
         return _superellipse(0, (h + belt - 0.3) / 2, W / 2 * 0.84, (h - belt + 0.3) / 2, 16, 4.5)
     cst = [cx0 + (cx1 - cx0) * i / 15 for i in range(16)]
@@ -443,32 +457,53 @@ def _car_mesh(kind):
         if i < 0:
             return 0
         top = n // 4 - 2 <= j <= n // 4 + 2  # ring index around the top of the superellipse (z max near k/4)
-        return 0 if top or i in pillars else 1
+        if top:
+            return 0
+        return 2 if i in pillars else 1  # blacked-out pillars: the 'floating roof' look
     _loft(bm, cst, cab_ring, cab_mi)
     return bm
 
 
 def _car_parts(kind, coll, mats):
-    """Separate small parts: wheels, lights, grille, bumpers, mirrors, plate."""
+    """Wheels, full-width LED light bars, grille, bumpers, flush handles, door seams, cladding, mirrors, plate, pickup bed."""
     sp = CAR_SPECS[kind]
     L, W, wb, wr = sp["L"], sp["W"], sp["wb"], sp["wr"]
     bm = bmesh.new()
+    side_y = W / 2 * 0.92
     for cx in (-wb, wb):
         for side in (-1, 1):
-            _cyl(bm, (cx, side * (W / 2 - 0.6), wr), wr, wr, 1.1, 28, 0, "Y")  # tyre
-            _cyl(bm, (cx, side * (W / 2 - 0.05), wr), wr * 0.68, wr * 0.68, 0.06, 24, 1, "Y")  # rim face
-            _cyl(bm, (cx, side * (W / 2 + 0.0), wr), wr * 0.2, wr * 0.2, 0.08, 12, 4, "Y")  # hub
+            _cyl(bm, (cx, side * (W / 2 - 0.55), wr), wr, wr, 1.0, 28, 0, "Y")  # tyre
+            _cyl(bm, (cx, side * (W / 2 - 0.08), wr), wr * 0.74, wr * 0.74, 0.06, 24, 1, "Y")  # large low-profile rim
+            for k in range(5):  # five twin spokes
+                a = 2 * math.pi * k / 5
+                vs = _cube(bm, (cx, side * (W / 2 - 0.02), wr), (wr * 1.25, 0.05, wr * 0.13), 4)
+                bmesh.ops.rotate(bm, verts=vs, cent=(cx, 0, wr), matrix=__import__("mathutils").Matrix.Rotation(a, 3, "Y"))
+            _cyl(bm, (cx, side * (W / 2 - 0.01), wr), wr * 0.16, wr * 0.16, 0.08, 12, 1, "Y")  # hub
     h = L / 2
-    front_top = 1.0 + (sp["hood"] - 1.0) * 0.8
-    rear_top = 1.0 + (sp["tail"] - 1.0) * 0.8
-    for side in (-1, 1):  # lights and mirrors sit into the bodywork
-        _cube(bm, (h - 0.55, side * W * 0.3, front_top - 0.45), (0.5, W * 0.2, 0.42), 2)  # headlight
-        _cube(bm, (-h + 0.5, side * W * 0.32, rear_top - 0.6), (0.45, W * 0.18, 0.5), 3)  # taillight
-        _cube(bm, (sp["cab"][1] - 1.4, side * (W / 2 * 0.86 + 0.25), sp["belt"] + 0.1), (0.6, 0.5, 0.4), 5)  # mirror, on the door at the A-pillar
-    _cube(bm, (h - 0.45, 0, front_top - 0.9), (0.4, W * 0.42, 0.7), 4)  # grille
-    _cube(bm, (h - 0.35, 0, 1.3), (0.6, W * 0.88, 0.6), 4)  # bumpers
-    _cube(bm, (-h + 0.35, 0, 1.35), (0.6, W * 0.88, 0.6), 4)
-    _cube(bm, (-h + 0.08, 0, 2.2), (0.06, 1.6, 0.7), 6)  # plate
+    front_top = sp["clear"] + 0.35 + (sp["hood"] - sp["clear"] - 0.35) * 0.82
+    rear_top = sp["clear"] + 0.35 + (sp["tail"] - sp["clear"] - 0.35) * 0.82
+    _cube(bm, (h - 0.15, 0, front_top - 0.35), (0.12, W * 0.8, 0.16), 2)  # full-width LED light bar
+    _cube(bm, (-h + 0.15, 0, rear_top - 0.4), (0.12, W * 0.84, 0.18), 3)  # full-width tail light bar
+    for side in (-1, 1):
+        _cube(bm, (h - 0.3, side * W * 0.36, front_top - 0.65), (0.3, W * 0.14, 0.28), 2)  # slim headlights
+        _cube(bm, (sp["cab"][1] - 1.4, side * (W / 2 * 0.86 + 0.25), sp["belt"] + 0.1), (0.6, 0.5, 0.4), 4)  # mirror
+        for xd in (sp["cab"][0] + 0.25 * (sp["cab"][1] - sp["cab"][0]), sp["cab"][0] + 0.62 * (sp["cab"][1] - sp["cab"][0])):
+            _cube(bm, (xd, side * (side_y + 0.03), sp["belt"] - 0.55), (0.9, 0.04, 0.16), 4)  # flush door handle
+        for xd in (sp["cab"][0] + 0.45 * (sp["cab"][1] - sp["cab"][0]), sp["cab"][1] - 0.3):
+            _cube(bm, (xd, side * (side_y + 0.02), (sp["clear"] + 0.6 + sp["belt"]) / 2), (0.05, 0.03, sp["belt"] - sp["clear"] - 0.8), 4)  # door seams
+        if sp["clad"]:  # black lower cladding along the sills
+            _cube(bm, (0, side * (side_y + 0.02), sp["clear"] + 0.65), (L * 0.6, 0.08, 0.6), 4)
+    _cube(bm, (h - 0.25, 0, front_top - 1.25), (0.35, W * (0.62 if kind == "pickup" else 0.45), 0.9 if kind == "pickup" else 0.55), 4)  # grille
+    _cube(bm, (h - 0.3, 0, sp["clear"] + 0.5), (0.5, W * 0.9, 0.55), 4)  # lower bumpers
+    _cube(bm, (-h + 0.3, 0, sp["clear"] + 0.55), (0.5, W * 0.9, 0.55), 4)
+    _cube(bm, (-h + 0.06, 0, rear_top - 1.1), (0.05, 1.4, 0.6), 6)  # plate
+    if kind == "pickup":  # open bed: floor, side walls, tailgate
+        x0, x1 = -h, sp["cab"][0] - 0.3
+        top = sp["belt"]
+        _cube(bm, ((x0 + x1) / 2, 0, sp["clear"] + 1.0), (x1 - x0, W * 0.92, 0.5), 4)
+        for side in (-1, 1):
+            _cube(bm, ((x0 + x1) / 2, side * W * 0.44, (sp["clear"] + 1.0 + top) / 2), (x1 - x0, 0.35, top - sp["clear"] - 1.0), 5)
+        _cube(bm, (x0 + 0.2, 0, (sp["clear"] + 1.0 + top) / 2), (0.35, W * 0.92, top - sp["clear"] - 1.0), 5)
     o = _obj(coll.name + "_parts", bm, [mats["tyre"], mats["rim"], mats["head"], mats["tail"], mats["plastic"], mats["paint"], mats["plate"]], coll)
     return o
 
@@ -488,17 +523,18 @@ def car_models():
             paint = mat_simple(f"paint_{kind}{v}", col, 0.18, 0.6)
             paint.node_tree.nodes["Principled BSDF"].inputs["Coat Weight"].default_value = 1.0
             coll = _collection(f"car_{kind}_{v}")
-            body = _obj(f"car_{kind}_{v}", _car_mesh(kind), [paint, glass], coll)
+            body = _obj(f"car_{kind}_{v}", _car_mesh(kind), [paint, glass, base["plastic"]], coll)
             sub = body.modifiers.new("smooth", "SUBSURF")
             sub.levels, sub.render_levels = 1, 1
             cut = bmesh.new()  # wheel-arch cutters (hidden), applied as a boolean
             for cx in (-sp["wb"], sp["wb"]):
-                _cyl(cut, (cx, 0, sp["wr"]), sp["wr"] + 0.35, sp["wr"] + 0.35, sp["W"] + 2, 24, 0, "Y")
+                _cyl(cut, (cx, 0, sp["wr"]), sp["wr"] + 0.3, sp["wr"] + 0.3, sp["W"] + 2, 24, 0, "Y")
             cutter = _obj(f"car_{kind}_{v}_arches", cut, [], coll)
             cutter.hide_render = True
             cutter.display_type = "WIRE"
             bo = body.modifiers.new("arches", "BOOLEAN")
             bo.operation, bo.object, bo.solver = "DIFFERENCE", cutter, "EXACT"
+            bo.use_self, bo.use_hole_tolerant = True, True  # body and cabin lofts overlap; keep both
             _car_parts(kind, coll, dict(base, paint=paint))
             models.append(coll)
     return models
