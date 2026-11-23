@@ -468,7 +468,7 @@ def main_real():
     for name, x, z, y, rot, sc in hero_spots:
         realism.place(rng.choice(oaks if name == "LiveOak" else palms), x, z, y, _m.radians(rot), sc)
     r = min(roads, key=lambda r: _m.hypot((r["ax"] + r["bx"]) / 2 - CX, (r["az"] + r["bz"]) / 2 - CZ) - _m.hypot(r["bx"] - r["ax"], r["bz"] - r["az"]) * 2)
-    realism.street_life([q for q in roads if q is not r], asphalt, junctions, detailed, zone, gy, rng)
+    realism.street_life(roads, asphalt, junctions, detailed, zone, gy, rng, no_cars=r)
     realism.signs(SIGNS)
     realism.weather(objs)
     realism.haze(CX, CZ, gy)

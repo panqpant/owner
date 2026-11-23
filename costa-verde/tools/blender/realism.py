@@ -640,7 +640,7 @@ def cobra_model():
     return coll
 
 
-def street_life(roads, asphalt, junctions, buildings, zone, gy, rng):
+def street_life(roads, asphalt, junctions, buildings, zone, gy, rng, no_cars=None):
     """Parked cars, utility poles with wires and street lights, hydrants, stop signs, trash cans, mailboxes."""
     cars, props = car_models(), prop_models()
     COBRA.append(cobra_model())
@@ -660,7 +660,7 @@ def street_life(roads, asphalt, junctions, buildings, zone, gy, rng):
         nx, nz = -uz, ux
         ang = math.atan2(-uz, ux)
         t = rng.uniform(8, 16)
-        while t < L - 8:  # parked cars along both curbs, clear of junctions
+        while t < L - 8 and r is not no_cars:  # parked cars along both curbs, clear of junctions (none on the camera's street)
             for side in (-1, 1):
                 x, z = ax + ux * t + nx * (w / 2 - 3.6) * side, az + uz * t + nz * (w / 2 - 3.6) * side
                 if zone[0] < x < zone[2] and zone[1] < z < zone[3] and rng.random() < 0.32 and all(Point(x, z).distance(j) > w / 2 + 22 for j in jpts):
@@ -672,7 +672,7 @@ def street_life(roads, asphalt, junctions, buildings, zone, gy, rng):
             if zone[0] < x < zone[2] and zone[1] < z < zone[3] and off_road(x, z):
                 place(props["utility_pole"], x, z, gy + 1, ang + math.pi / 2)
                 poles.append((x, z, ang))
-                if len(poles) % 2 == 0:  # cobra-head street light on every other pole, arm over the road
+                if True:  # cobra-head street light on each pole, arm over the road
                     place(COBRA[0], x, z, gy + 27, math.atan2(nz, -nx))
                     LAMPS.append((x - nx * 6.5, z - nz * 6.5, gy + 26.4))
             t += 55
@@ -1369,7 +1369,7 @@ def plants_on_fences(fence_lines, gy, rng, plants):
 
 def _wet(level):
     """Water film on hard surfaces: darker, glossy, with a clear coat that reflects."""
-    for name, dark, rough in (("photo_asphalt", 0.55, 0.08), ("real_asphalt", 0.55, 0.08), ("photo_concrete", 0.7, 0.2),
+    for name, dark, rough in (("photo_asphalt", 0.42, 0.05), ("real_asphalt", 0.42, 0.05), ("photo_concrete", 0.7, 0.2),
                               ("real_concrete", 0.7, 0.2), ("photo_roof_flat", 0.7, 0.25), ("stall_paint", 0.8, 0.15)):
         m = bpy.data.materials.get(name)
         if not m:
@@ -1379,7 +1379,7 @@ def _wet(level):
         for ln in list(b.inputs["Roughness"].links):
             nt.links.remove(ln)
         b.inputs["Roughness"].default_value = rough
-        b.inputs["Coat Weight"].default_value = 0.8 * level
+        b.inputs["Coat Weight"].default_value = 1.0 * level
         b.inputs["Coat Roughness"].default_value = 0.02
         src = b.inputs["Base Color"].links[0].from_socket if b.inputs["Base Color"].links else None
         if src:
@@ -1416,10 +1416,10 @@ def _lights_on(lit_share, lamp_energy, lamp_col):
 
 PRESETS = {  # sun elevation, azimuth, sun strength, sun colour, sky strength, exposure, wet, lit windows, street lights
     "day": (32, 215, 5.5, (1.0, 0.93, 0.82), 0.35, 0.0, 0, 0, 0),
-    "golden": (8, 250, 4.5, (1.0, 0.68, 0.42), 0.5, 0.4, 0, 0.05, 0),
-    "rain": (40, 200, 1.6, (0.85, 0.9, 1.0), 0.9, 0.3, 1.0, 0.08, 0),
+    "golden": (7, 235, 7.0, (1.0, 0.52, 0.26), 0.22, 0.0, 0, 0.05, 0),
+    "rain": (40, 200, 1.2, (0.85, 0.9, 1.0), 0.55, -0.4, 1.0, 0.1, 0),
     "dusk": (0.5, 260, 1.2, (1.0, 0.5, 0.3), 0.6, 1.2, 0.3, 0.25, 9000),
-    "night": (-12, 260, 0.0, (1, 1, 1), 0.04, 2.0, 0.4, 0.35, 16000),
+    "night": (-12, 260, 0.0, (1, 1, 1), 1.0, 2.8, 0.4, 0.4, 30000),
 }
 
 
@@ -1433,7 +1433,7 @@ def time_of_day(preset):
         sk = [n for n in s.world.node_tree.nodes if n.type == "TEX_SKY"][0]
         sk.aerosol_density = 6.0
     if preset == "night":
-        bg.inputs["Color"].default_value = (0.006, 0.01, 0.025, 1)
+        bg.inputs["Color"].default_value = (0.004, 0.007, 0.018, 1)  # moonlit sky glow
         for ln in list(bg.inputs["Color"].links):
             s.world.node_tree.links.remove(ln)
     sun = [o for o in bpy.data.objects if o.type == "LIGHT" and o.data.type == "SUN"][-1]
