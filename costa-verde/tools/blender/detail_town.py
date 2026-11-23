@@ -16,6 +16,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 import bpy  # noqa: E402
 from render_terrain import build as build_terrain, lin  # noqa: E402
 from render_world import camera, render, reset, sky  # noqa: E402
+import realism  # noqa: E402
 
 AREA = "oldtown"
 W = json.load(open("build/world.json"))
@@ -247,6 +248,9 @@ def building(idx, b):
                 m.box("pole", (x * 0.8, (y0 + h) / 2, z * 0.8), (1, 0), 1.5, y0 + h, 1.5)
             continue
         m.prism("wall", poly, y0 - 3, y0 + h, wall_col, top=False)
+        if y0 == 0 and style != "tower":  # base course: a slightly proud, darker plinth
+            big = [(x * (1 + 0.6 / max(1, abs(x))) if abs(x) > 0.1 else x, z * (1 + 0.6 / max(1, abs(z))) if abs(z) > 0.1 else z) for x, z in poly]
+            m.prism("wall", big, -1, 1.8, tuple(int(v * 0.72) for v in wall_col), top=False)
         floors = max(1, int(h // fh))
         for e in edges(poly):
             a, _, u, n, L = e
@@ -358,6 +362,62 @@ def streets(zone_roads):
     return m.finish()
 
 
+def main_real():
+    """Hyper-real render of the block (realism.py): real materials, bevels, proper streets, street life."""
+    import math as _m
+    from shapely.geometry import Polygon as SPoly
+    from shapely.ops import unary_union as union
+    rng = random.Random(7)
+    reset()
+    s = bpy.context.scene
+    s.render.resolution_x, s.render.resolution_y = 1920, 1080
+    s.cycles.samples = 96
+    s.cycles.use_denoising = True
+    if "--quick" in sys.argv:
+        s.render.resolution_x, s.render.resolution_y, s.cycles.samples = 960, 540, 12
+    zone = (CX - R, CZ - R, CX + R, CZ + R)
+    in_zone = lambda x, z: zone[0] < x < zone[2] and zone[1] < z < zone[3]  # noqa: E731
+    detailed, keep = [], set()
+    for i, b in enumerate(W["buildings"]):
+        if in_zone(b["x"], b["z"]):
+            detailed.append((i + 1, b))
+            keep.add(f"b{i + 1}")
+    T["pieces"] = [p for p in T["pieces"] if p["g"] not in keep and not (p["shape"] == "box" and abs(p["s"][1] - 1.2) < 0.01 and in_zone(p["p"][0], p["p"][2]))]
+    hero_spots = [it for it in T["items"] if in_zone(it[1], it[2]) and it[0] in ("PalmCoconut", "PalmCabbage", "LiveOak")]
+    T["items"] = [it for it in T["items"] if it not in hero_spots]
+    build_terrain(T)
+    gy = ground(CX, CZ)
+    objs = [building(i, b) for i, b in detailed]
+    realism.realify(objs, gy)
+    roads = [r for r in W["roads"] if in_zone((r["ax"] + r["bx"]) / 2, (r["az"] + r["bz"]) / 2) and r["kind"] not in ("freeway", "ramp", "drive")]
+    asphalt, junctions = realism.streets(roads, zone, gy)
+    palms = [realism.hero_palm(k) for k in range(4)]
+    oaks = [realism.hero_oak(k) for k in range(2)]
+    for name, x, z, y, rot, sc in hero_spots:
+        realism.place(rng.choice(oaks if name == "LiveOak" else palms), x, z, y, _m.radians(rot), sc)
+    realism.street_life(roads, asphalt, junctions, detailed, zone, gy, rng)
+    foot = []
+    for _, b in detailed:
+        c, sn = _m.cos(_m.radians(b["rot"])), _m.sin(_m.radians(b["rot"]))
+        for p in b.get("parts", []):
+            pts = [(b["x"] + c * p["pts"][i] - sn * p["pts"][i + 1], b["z"] + sn * p["pts"][i] + c * p["pts"][i + 1]) for i in range(0, len(p["pts"]), 2)]
+            foot.append(SPoly(pts).buffer(1.5))
+    exclude = union([asphalt.buffer(9)] + foot)
+    terrain = bpy.data.objects["ground"]
+    realism.grass(terrain, (CX - 260, CZ - 260, CX + 260, CZ + 260), exclude)
+    realism.sky_and_sun(32, 215, exposure=0.0)
+    # 1) street level on a sidewalk, looking along the most central street
+    r = min(roads, key=lambda r: _m.hypot((r["ax"] + r["bx"]) / 2 - CX, (r["az"] + r["bz"]) / 2 - CZ) - _m.hypot(r["bx"] - r["ax"], r["bz"] - r["az"]) * 2)
+    L = _m.hypot(r["bx"] - r["ax"], r["bz"] - r["az"])
+    ux, uz = (r["bx"] - r["ax"]) / L, (r["bz"] - r["az"]) / L
+    ex, ez = r["ax"] + ux * L * 0.35 - uz * (r["width"] / 2 + 4), r["az"] + uz * L * 0.35 + ux * (r["width"] / 2 + 4)
+    realism.real_camera((ex, -ez, gy + 7), (ex + ux * 120 + uz * 8, -(ez + uz * 120 - ux * 8), gy + 9), 30, focus=60, fstop=11)
+    render("real_street")
+    # 2) low aerial over the block
+    realism.real_camera((CX + 240, -(CZ + 220), gy + 150), (CX - 10, -(CZ - 10), gy + 5), 35)
+    render("real_aerial")
+
+
 def main():
     reset()
     s = bpy.context.scene
@@ -398,4 +458,7 @@ def main():
     render("detail_street")
 
 
-main()
+if "--real" in sys.argv:
+    main_real()
+else:
+    main()
