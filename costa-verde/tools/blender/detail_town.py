@@ -420,9 +420,10 @@ def main_real():
     objs = [building(i, b) for i, b in detailed]
     realism.realify(objs, gy)
     roads = [r for r in W["roads"] if in_zone((r["ax"] + r["bx"]) / 2, (r["az"] + r["bz"]) / 2) and r["kind"] not in ("freeway", "ramp", "drive")]
-    asphalt, junctions = realism.streets(roads, zone, gy)
+    asphalt, junctions, walk_outer = realism.streets(roads, zone, gy)
     palms = [realism.hero_palm(k) for k in range(4)]
     oaks = [realism.hero_oak(k) for k in range(2)]
+    realism.photo_upgrade()
     for name, x, z, y, rot, sc in hero_spots:
         realism.place(rng.choice(oaks if name == "LiveOak" else palms), x, z, y, _m.radians(rot), sc)
     r = min(roads, key=lambda r: _m.hypot((r["ax"] + r["bx"]) / 2 - CX, (r["az"] + r["bz"]) / 2 - CZ) - _m.hypot(r["bx"] - r["ax"], r["bz"] - r["az"]) * 2)
@@ -430,15 +431,10 @@ def main_real():
     realism.signs(SIGNS)
     realism.weather(objs)
     realism.haze(CX, CZ, gy)
-    foot = []
-    for _, b in detailed:
-        c, sn = _m.cos(_m.radians(b["rot"])), _m.sin(_m.radians(b["rot"]))
-        for p in b.get("parts", []):
-            pts = [(b["x"] + c * p["pts"][i] - sn * p["pts"][i + 1], b["z"] + sn * p["pts"][i] + c * p["pts"][i + 1]) for i in range(0, len(p["pts"]), 2)]
-            foot.append(SPoly(pts).buffer(1.5))
-    exclude = union([asphalt.buffer(9)] + foot)
+    lawn, _ = realism.landcover(detailed, walk_outer, zone, gy, rng, palms, oaks)
+    realism.real_trees(oaks, palms)
     terrain = bpy.data.objects["ground"]
-    realism.grass(terrain, (CX - 260, CZ - 260, CX + 260, CZ + 260), exclude)
+    realism.grass(terrain, (CX - 260, CZ - 260, CX + 260, CZ + 260), lawn)
     realism.sky_and_sun(32, 215, exposure=0.0)
     # 1) street level on the sidewalk, mid-block, looking along the most central street
     L = _m.hypot(r["bx"] - r["ax"], r["bz"] - r["az"])

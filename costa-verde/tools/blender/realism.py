@@ -153,8 +153,8 @@ def mat_asphalt():
     return m
 
 
-def mat_concrete(tint=(0.42, 0.41, 0.38)):
-    m, nt, b = _nodes("real_concrete")
+def mat_concrete(tint=(0.42, 0.41, 0.38), name="real_concrete"):
+    m, nt, b = _nodes(name)
     co = _coords(nt)
     n1 = _n(nt, "ShaderNodeTexNoise", Scale=0.3, Detail=8.0)
     nt.links.new(co, n1.inputs["Vector"])
@@ -214,7 +214,7 @@ def realify(objs, ground_z):
     swap = {"wall": wall, "roof_tile": roof, "glass": glass, "concrete": conc, "asphalt": asph,
             "trim": mat_simple("real_trim", (240, 238, 230), 0.55, vertex=True), "frame": mat_simple("real_frame", (0, 0, 0), 0.45, vertex=True),
             "door": mat_simple("real_door", (0, 0, 0), 0.5, vertex=True), "awning": mat_simple("real_awning", (0, 0, 0), 0.85, vertex=True),
-            "roof_flat": mat_concrete((0.5, 0.49, 0.46)), "metal": mat_simple("real_metal", (176, 178, 180), 0.35, 0.8),
+            "roof_flat": mat_concrete((0.5, 0.49, 0.46), "real_roof_flat"), "metal": mat_simple("real_metal", (176, 178, 180), 0.35, 0.8),
             "pool": mat_simple("real_pool", (40, 150, 190), 0.03), "paint": mat_simple("real_paint", (0, 0, 0), 0.6, vertex=True),
             "pole": mat_simple("real_pole", (80, 82, 84), 0.45, 0.7), "lamp": mat_simple("real_lamp", (255, 240, 210), 0.3, emit=(1, 0.85, 0.6))}
     for o in objs:
@@ -273,6 +273,7 @@ def streets(roads, zone, gy):
     lines = [(LineString([(r["ax"], r["az"]), (r["bx"], r["bz"])]), r["width"]) for r in roads]
     asphalt = unary_union([ln.buffer(w / 2, cap_style="round", join_style="round") for ln, w in lines]).intersection(clip)
     walk = unary_union([ln.buffer(w / 2 + 8, cap_style="round") for ln, w in lines]).difference(asphalt).intersection(clip)
+    walk_outer = unary_union([ln.buffer(w / 2 + 8, cap_style="round") for ln, w in lines])
     _slab("asphalt", asphalt, gy - 1, gy + 0.5, mat_asphalt())
     _slab("sidewalk", walk, gy - 1, gy + 1.0, mat_concrete())
     # junctions: vertices used by 3+ segment ends
@@ -325,7 +326,7 @@ def streets(roads, zone, gy):
         me.materials.append(mat_paint(name, col))
         o = bpy.data.objects.new(name, me)
         bpy.context.collection.objects.link(o)
-    return asphalt, junctions
+    return asphalt, junctions, walk_outer
 
 
 # ---------------------------------------------------------------- models (built once, instanced)
@@ -640,19 +641,19 @@ def shrubs_by_name(name):
     return _SHRUBS[name]
 
 
-def grass(terrain_obj, zone, exclude, density=900000):
+def grass(terrain_obj, zone, lawn, density=900000):
     """Grass blades on lawn ground inside the zone, kept off roads, sidewalks and buildings."""
     me = terrain_obj.data
     vg = terrain_obj.vertex_groups.new(name="lawn")
     col = me.color_attributes["col"]
     from shapely.prepared import prep
-    ex = prep(exclude)
+    inc = prep(lawn.buffer(-1.5))
     idx = []
     for v in me.vertices:
         x, z = v.co.x, -v.co.y
         if zone[0] < x < zone[2] and zone[1] < z < zone[3]:
             r, g, b, _ = col.data[v.index].color
-            if g > r and g > b and not ex.contains(Point(x, z)):
+            if inc.contains(Point(x, z)):
                 idx.append(v.index)
     vg.add(idx, 1.0, "REPLACE")
     mod = terrain_obj.modifiers.new("grass", "PARTICLE_SYSTEM")
@@ -806,3 +807,297 @@ def lens(path):
     a = a + np.asarray(bright).astype(np.float32) / 255 * 0.18
     a += np.random.default_rng(1).normal(0, 0.012, a.shape).astype(np.float32)
     Image.fromarray((np.clip(a, 0, 1) * 255).astype(np.uint8)).save(path)
+
+
+# ---------------------------------------------------------------- CC0 photo materials (ambientCG, tools/fetch_cc0.py)
+
+def cc0(nt, mid, size):
+    """Box-projected (world space) photo texture set, one tile = `size` studs. Returns sockets dict."""
+    import os
+    co = _coords(nt)
+    mp = _n(nt, "ShaderNodeMapping")
+    mp.inputs["Scale"].default_value = (1 / size, 1 / size, 1 / size)
+    nt.links.new(co, mp.inputs["Vector"])
+    out = {}
+    for key, cs in (("Color", "sRGB"), ("Roughness", "Non-Color"), ("Displacement", "Non-Color"), ("Opacity", "Non-Color")):
+        path = os.path.abspath(f"assets/cc0/{mid}/{mid}_1K-JPG_{key}.jpg")
+        if not os.path.exists(path):
+            continue
+        img = _n(nt, "ShaderNodeTexImage")
+        img.image = bpy.data.images.load(path, check_existing=True)
+        img.image.colorspace_settings.name = cs
+        img.projection, img.projection_blend = "BOX", 0.25
+        nt.links.new(mp.outputs["Vector"], img.inputs["Vector"])
+        out[key] = img.outputs["Color"]
+    return out
+
+
+def photo(mat_name, mid, size, tint_vertex=False, tint=None, bump=0.6):
+    """Photo material, optionally tinted by the building's vertex colour (stucco colours) or a fixed tint."""
+    m, nt, b = _nodes(mat_name)
+    t = cc0(nt, mid, size)
+    col = t["Color"]
+    if tint_vertex or tint:
+        src = _n(nt, "ShaderNodeAttribute", attribute_name="col").outputs["Color"] if tint_vertex else None
+        g = _n(nt, "ShaderNodeRGBToBW")
+        nt.links.new(col, g.inputs["Color"])
+        mul = _n(nt, "ShaderNodeMix", data_type="RGBA", blend_type="MULTIPLY")
+        mul.inputs["Factor"].default_value = 1.0
+        if src:
+            nt.links.new(src, mul.inputs["A"])
+        else:
+            mul.inputs["A"].default_value = (*_lin(tint), 1)
+        bright = _n(nt, "ShaderNodeMath", operation="MULTIPLY", Value=1.6)
+        bright.inputs[1].default_value = 1.6
+        nt.links.new(g.outputs["Val"], bright.inputs[0])
+        nt.links.new(bright.outputs["Value"], mul.inputs["B"])
+        col = mul.outputs["Result"]
+    nt.links.new(col, b.inputs["Base Color"])
+    if "Roughness" in t:
+        nt.links.new(t["Roughness"], b.inputs["Roughness"])
+    if "Displacement" in t:
+        _bump(nt, b, t["Displacement"], bump, 0.15)
+    if "Opacity" in t:
+        nt.links.new(t["Opacity"], b.inputs["Alpha"])
+    return m, nt, b, col
+
+
+def mat_window_interior():
+    """Windows: strong reflection over a room behind the glass; every window differs (dark, lit, blinds, curtains)."""
+    m, nt, b = _nodes("real_glass_interior")
+    co = _coords(nt)
+    cell = _n(nt, "ShaderNodeTexVoronoi", Scale=0.11)  # one cell ~ one window
+    nt.links.new(co, cell.inputs["Vector"])
+    sep = _n(nt, "ShaderNodeSeparateColor")
+    nt.links.new(cell.outputs["Color"], sep.inputs["Color"])
+    room = _mix(nt, (0.006, 0.006, 0.007), (0.05, 0.035, 0.025), _rng(nt, sep.outputs["Green"], 0, 1, 0, 1))
+    blinds = _n(nt, "ShaderNodeTexWave", wave_type="BANDS", bands_direction="Z", Scale=2.2)
+    nt.links.new(co, blinds.inputs["Vector"])
+    blind_col = _mix(nt, (0.35, 0.33, 0.28), (0.22, 0.2, 0.17), blinds.outputs["Fac"])
+    is_blind = _rng(nt, sep.outputs["Red"], 0.55, 0.56, 0, 1)
+    c = _mix(nt, room, blind_col, is_blind)
+    curtain = _mix(nt, (0.30, 0.18, 0.12), (0.18, 0.22, 0.28), sep.outputs["Blue"])
+    c = _mix(nt, c, curtain, _rng(nt, sep.outputs["Red"], 0.82, 0.83, 0, 1))
+    nt.links.new(c, b.inputs["Base Color"])
+    lit = _rng(nt, sep.outputs["Blue"], 0.86, 0.87, 0, 1.2)  # a few lit rooms
+    b.inputs["Emission Color"].default_value = (1.0, 0.78, 0.5, 1)
+    nt.links.new(lit, b.inputs["Emission Strength"])
+    b.inputs["Roughness"].default_value = 0.03
+    b.inputs["Specular IOR Level"].default_value = 1.0
+    b.inputs["Coat Weight"].default_value = 1.0
+    b.inputs["Coat Roughness"].default_value = 0.0
+    return m
+
+
+def photo_upgrade():
+    """Swap the procedural building / street materials for the photo ones, keeping grime layers on walls."""
+    walls, _, _, _ = photo("photo_wall", "Plaster001", 14, tint_vertex=True, bump=0.5)
+    roof, nt, b, col = photo("photo_roof", "RoofingTiles013A", 10, bump=1.2)
+    tint = _n(nt, "ShaderNodeAttribute", attribute_name="col").outputs["Color"]  # per-house tile / shingle colour
+    mx = _n(nt, "ShaderNodeMix", data_type="RGBA", blend_type="MULTIPLY")
+    mx.inputs["Factor"].default_value = 0.55
+    nt.links.new(col, mx.inputs["A"])
+    nt.links.new(tint, mx.inputs["B"])
+    nt.links.new(mx.outputs["Result"], b.inputs["Base Color"])
+    gravel_roof = photo("photo_roof_flat", "Gravel043", 8, tint=(170, 166, 158))[0]
+    asph = photo("photo_asphalt", "Asphalt031", 22, bump=0.4)[0]
+    conc = photo("photo_concrete", "Concrete034", 16, bump=0.3)[0]
+    swaps = {"real_wall": walls, "real_roof": roof, "real_concrete": conc, "real_asphalt": asph, "real_glass": mat_window_interior(),
+             "real_roof_flat": gravel_roof}
+    for o in bpy.data.objects:
+        if o.type == "MESH":
+            for i, mt in enumerate(o.data.materials):
+                if mt and mt.name in swaps:
+                    o.data.materials[i] = swaps[mt.name]
+    return {"grass": "Grass004", "gravel": "Gravel043", "mulch": "Ground037", "bark": "Bark014", "leaf": "Leaf001", "wood": "WoodSiding011"}
+
+
+# ---------------------------------------------------------------- land cover, trees with real leaves
+
+def landcover(detailed, street_area, zone, gy, rng, palms, oaks):
+    """Every bit of ground gets a real use: paved lots, alleys, mulch beds, fences, parks, dirt. Returns lawn area."""
+    from shapely.geometry import MultiPoint
+    from shapely.ops import voronoi_diagram
+    clip = sbox(*zone)
+    feet, cents, styles = [], [], []
+    for _, b in detailed:
+        c, s = math.cos(math.radians(b["rot"])), math.sin(math.radians(b["rot"]))
+        ps = []
+        for p in b.get("parts", []):
+            pts = [(b["x"] + c * p["pts"][i] - s * p["pts"][i + 1], b["z"] + s * p["pts"][i] + c * p["pts"][i + 1]) for i in range(0, len(p["pts"]), 2)]
+            ps.append(Polygon(pts).buffer(0))
+        f = unary_union(ps)
+        feet.append(f)
+        cents.append(Point(b["x"], b["z"]))
+        styles.append(b["style"])
+    built = unary_union(feet)
+    land = clip.difference(street_area).difference(built.buffer(0.3))
+    cells = voronoi_diagram(MultiPoint(cents), envelope=clip)
+    paved, mulch, lawn, dirt, fences, stalls = [], [], [], [], [], []
+    for cell in cells.geoms:
+        k = next((i for i, p in enumerate(cents) if cell.contains(p)), None)
+        if k is None:
+            continue
+        lot = cell.intersection(land).intersection(feet[k].buffer(45))  # lots end ~45 studs from their building
+        if lot.is_empty:
+            continue
+        if styles[k] == "house":
+            bed = feet[k].buffer(4).difference(feet[k]).intersection(lot)
+            mulch.append(bed)
+            lawn.append(lot.difference(bed))
+            edge = lot.boundary.difference(street_area.buffer(16))  # privacy fence: sides and back only
+            fences.append(edge)
+        else:
+            strip = lot.difference(lot.buffer(-3))  # planted edge around the car park
+            mulch.append(strip.difference(street_area.buffer(1)))
+            inner = lot.buffer(-3)
+            paved.append(inner.union(lot.intersection(street_area.buffer(12))))  # lot entrance reaches the street
+            if not inner.is_empty:  # parking bays: stripes every 9 studs across the lot
+                x0, z0, x1, z1 = inner.bounds
+                a = math.radians(rng.choice([0, 90]))
+                ux, uz = math.cos(a), math.sin(a)
+                cx, cz = (x0 + x1) / 2, (z0 + z1) / 2
+                span = max(x1 - x0, z1 - z0)
+                for t in range(int(-span / 2), int(span / 2), 9):
+                    for row in (-11, 11):
+                        ln = LineString([(cx + ux * t - uz * (row - 8), cz + uz * t + ux * (row - 8)), (cx + ux * t - uz * (row + 8), cz + uz * t + ux * (row + 8))])
+                        seg = ln.intersection(inner.buffer(-2))
+                        if not seg.is_empty and seg.length > 10:
+                            stalls.append(seg.buffer(0.35, cap_style="flat"))
+    covered = unary_union(paved + mulch + lawn)
+    rest = land.difference(covered)
+    parks = [g for g in (rest.geoms if hasattr(rest, "geoms") else [rest]) if g.area > 3000]
+    for g in (rest.geoms if hasattr(rest, "geoms") else [rest]):
+        if g.area <= 3000:
+            dirt.append(g)
+    paths = []
+    for p in parks:  # park: lawn, a footpath loop, trees
+        inner = p.buffer(-14)
+        if not inner.is_empty:
+            ring = inner.boundary.buffer(2.5).intersection(p)
+            paths.append(ring)
+        lawn.append(p.difference(unary_union(paths)) if paths else p)
+        x0, z0, x1, z1 = p.bounds
+        for _ in range(int(p.area / 1100)):
+            x, z = rng.uniform(x0, x1), rng.uniform(z0, z1)
+            if p.buffer(-6).contains(Point(x, z)) and not any(q.contains(Point(x, z)) for q in paths):
+                place(rng.choice(oaks + palms), x, z, gy, rng.uniform(0, 6.28), rng.uniform(0.8, 1.15))
+    asph = bpy.data.materials.get("photo_asphalt") or mat_asphalt()
+    _slab("lots", unary_union(paved), gy - 0.5, gy + 0.32, asph)
+    _slab("stalls", unary_union(stalls).intersection(unary_union(paved)), gy + 0.32, gy + 0.36, mat_paint("stall_paint", (236, 236, 230)))
+    _slab("mulch", unary_union(mulch), gy - 0.5, gy + 0.18, photo("photo_mulch", "Ground037", 6, tint=(120, 84, 60))[0])
+    _slab("dirt", unary_union(dirt), gy - 0.5, gy + 0.08, photo("photo_dirt", "Ground037", 10, tint=(190, 170, 140))[0])
+    _slab("paths", unary_union(paths) if paths else Polygon(), gy - 0.5, gy + 0.2, bpy.data.materials.get("photo_concrete") or mat_concrete())
+    fence_mat = photo("photo_fence", "WoodSiding011", 6, tint=(190, 160, 120))[0]
+    verts, faces = [], []
+    for fl in fences:
+        for ln in (fl.geoms if hasattr(fl, "geoms") else [fl]):
+            if ln.is_empty or ln.geom_type not in ("LineString", "LinearRing"):
+                continue
+            cs = list(ln.coords)
+            for (ax, az), (bx, bz) in zip(cs, cs[1:]):
+                L = math.hypot(bx - ax, bz - az)
+                if L < 1:
+                    continue
+                nx, nz = -(bz - az) / L * 0.25, (bx - ax) / L * 0.25
+                k = len(verts)
+                for (x, z), y in (((ax + nx, az + nz), gy), ((bx + nx, bz + nz), gy), ((bx + nx, bz + nz), gy + 6), ((ax + nx, az + nz), gy + 6),
+                                  ((ax - nx, az - nz), gy), ((bx - nx, bz - nz), gy), ((bx - nx, bz - nz), gy + 6), ((ax - nx, az - nz), gy + 6)):
+                    verts.append((x, -z, y))
+                faces += [(k, k + 1, k + 2, k + 3), (k + 5, k + 4, k + 7, k + 6), (k + 3, k + 2, k + 6, k + 7)]
+    me = bpy.data.meshes.new("fences")
+    me.from_pydata(verts, [], faces)
+    me.materials.append(fence_mat)
+    bpy.context.collection.objects.link(bpy.data.objects.new("fences", me))
+    return unary_union(lawn), unary_union(mulch)
+
+
+def leaf_card(name, length, width, tint):
+    """A leaf card with the photo leaf texture and its alpha cut-out, double-sided."""
+    me = bpy.data.meshes.new(name)
+    me.from_pydata([(-width / 2, 0, 0), (width / 2, 0, 0), (width / 2, length, 0), (-width / 2, length, 0)], [], [(0, 1, 2, 3)])
+    me.uv_layers.new(name="UVMap")
+    for li, uv in zip(range(4), ((0, 0), (1, 0), (1, 1), (0, 1))):
+        me.uv_layers[0].data[li].uv = uv
+    m, nt, b = _nodes(name + "_mat")
+    import os
+    for key, target in (("Color", "Base Color"), ("Opacity", "Alpha")):
+        img = _n(nt, "ShaderNodeTexImage")
+        img.image = bpy.data.images.load(os.path.abspath(f"assets/cc0/Leaf001/Leaf001_1K-JPG_{key}.jpg"), check_existing=True)
+        if key == "Opacity":
+            img.image.colorspace_settings.name = "Non-Color"
+            nt.links.new(img.outputs["Color"], b.inputs[target])
+        else:
+            mul = _n(nt, "ShaderNodeMix", data_type="RGBA", blend_type="MULTIPLY")
+            mul.inputs["Factor"].default_value = 1.0
+            mul.inputs["B"].default_value = (*_lin(tint), 1)
+            nt.links.new(img.outputs["Color"], mul.inputs["A"])
+            nt.links.new(mul.outputs["Result"], b.inputs[target])
+    b.inputs["Roughness"].default_value = 0.5
+    b.inputs["Subsurface Weight"].default_value = 0.2
+    me.materials.append(m)
+    o = bpy.data.objects.new(name, me)
+    return o
+
+
+def foliate(emitter, card, count, size=1.0):
+    """Cover an emitter (hidden blob canopy) with leaf cards."""
+    mod = emitter.modifiers.new("leaves", "PARTICLE_SYSTEM")
+    st = mod.particle_system.settings
+    st.type, st.count = "HAIR", count
+    st.use_advanced_hair = True
+    st.hair_length = 1.0
+    st.render_type, st.instance_object = "OBJECT", card
+    st.particle_size, st.size_random = size, 0.5
+    st.use_rotations, st.rotation_mode = True, "NOR"
+    st.rotation_factor_random, st.phase_factor_random = 0.6, 2.0
+    st.distribution = "RAND"
+    emitter.show_instancer_for_render = False
+
+
+def real_trees(oaks, palms):
+    """Give the hero oaks real leaves and Spanish moss, palms bark, shrubs leaves."""
+    import os
+    holder = bpy.data.collections.new("leaf_cards")  # cards must exist but not render on their own
+    oak_leaf = leaf_card("oak_leaf_card", 1.4, 0.9, (150, 175, 120))
+    shrub_leaf = leaf_card("shrub_leaf_card", 0.9, 0.6, (160, 190, 120))
+    for c in (oak_leaf, shrub_leaf):
+        holder.objects.link(c)
+    bark = photo("photo_bark", "Bark014", 6, tint=(140, 126, 110), bump=1.0)[0]
+    moss = mat_simple("spanish_moss", (128, 134, 118), 0.9)
+    for coll in oaks:
+        rng = random.Random(coll.name)
+        for o in list(coll.objects):
+            if "leaves" in o.name:
+                foliate(o, oak_leaf, 14000, 1.0)
+            elif "trunk" in o.name:
+                o.data.materials[0] = bark
+                bm = bmesh.new()  # Spanish moss hanging from the limbs
+                for _ in range(260):  # wispy, irregular strands in clusters
+                    x, y = rng.uniform(-16, 16), rng.uniform(-16, 16)
+                    if x * x + y * y > 17 ** 2:
+                        continue
+                    for _ in range(rng.randint(2, 5)):
+                        L = rng.uniform(1.5, 6)
+                        res = bmesh.ops.create_cone(bm, cap_ends=False, segments=3, radius1=0.015, radius2=rng.uniform(0.08, 0.2), depth=L)
+                        lean = (rng.uniform(-0.25, 0.25), rng.uniform(-0.25, 0.25))
+                        for v in res["verts"]:  # strands sway and taper irregularly
+                            t = (v.co.z + L / 2) / L
+                            v.co.x += lean[0] * (1 - t) * L
+                            v.co.y += lean[1] * (1 - t) * L
+                        bmesh.ops.translate(bm, vec=(x + rng.uniform(-1, 1), y + rng.uniform(-1, 1), rng.uniform(13, 18) - L / 2), verts=res["verts"])
+                me = bpy.data.meshes.new("moss")
+                bm.to_mesh(me)
+                bm.free()
+                me.materials.append(moss)
+                coll.objects.link(bpy.data.objects.new("moss", me))
+    for coll in palms:
+        for o in coll.objects:
+            if o.data.materials and o.data.materials[0].name.startswith("palm_trunk"):
+                o.data.materials[0] = bark
+    for name in ("hedge", "shrub_pink", "shrub_green", "shrub_white"):
+        c = _SHRUBS.get(name)
+        if c:
+            for o in c.objects:
+                foliate(o, shrub_leaf, 700, 0.9)
+    _ = os
