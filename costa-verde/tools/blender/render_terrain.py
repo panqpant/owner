@@ -10,6 +10,7 @@ import sys
 sys.path.insert(0, os.path.dirname(__file__))
 import bpy  # noqa: E402
 from render_world import P, camera, render, reset, sky  # noqa: E402
+import make_assets  # noqa: E402
 
 SRC = open("src/shared/TerrainBuilder.luau").read()
 block = SRC[SRC.index("TerrainBuilder.PALETTE = {"):SRC.index("}\nTerrainBuilder.WATER")]
@@ -76,6 +77,21 @@ def build(c):
     m.use_nodes = True
     m.node_tree.nodes["Principled BSDF"].inputs["Base Color"].default_value = (0.09, 0.09, 0.09, 1)
     rm.materials.append(m)
+    # vegetation and shore props: instances of the exported models (hidden source collections)
+    if c.get("items"):
+        src = {}
+        for name, obj in make_assets.build_all().items():
+            col = bpy.data.collections.new("src_" + name)
+            col.objects.link(obj)
+            src[name] = col
+        for name, x, z, y, rot, scale in c["items"]:
+            e = bpy.data.objects.new(name, None)
+            e.instance_type = "COLLECTION"
+            e.instance_collection = src[name]
+            e.location = P(x, z, y)
+            e.rotation_euler = (0, 0, math.radians(rot))
+            e.scale = (scale, scale, scale)
+            bpy.context.collection.objects.link(e)
     wm = bpy.data.meshes.new("water")
     wm.from_pydata(wv, [], wf)
     wo = bpy.data.objects.new("water", wm)

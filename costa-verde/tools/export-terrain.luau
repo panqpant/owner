@@ -9,6 +9,8 @@ local Gen = require("../src/shared/Gen")
 TB.selfCheck()
 local world = serde.decode("json", fs.readFile("build/world.json"))
 local ridx = TB.roadIndex(world.roads)
+local Vegetation = require("../src/shared/Vegetation")
+local bidx = Vegetation.buildingIndex(world.buildings)
 local D = {}
 for _, d in world.districts do
 	D[d.id] = d
@@ -24,6 +26,12 @@ for _, a in AREAS do
 	local x0, z0 = math.floor((a[2] - a[4] / 2) / 16) * 16, math.floor((a[3] - a[4] / 2) / 16) * 16
 	local c = TB.columns(x0, z0, a[4], a[4], ridx)
 	c.x0, c.z0, c.res = x0, z0, 4
+	c.items = Vegetation.place(c, x0, z0, ridx, bidx)
+	local per = {}
+	for _, it in c.items do
+		per[it[1]] = (per[it[1]] or 0) + 1
+	end
+	print(a[1], #c.items, "models", serde.encode("json", per))
 	c.roads = {} -- grey road strips for the preview (parts in Roblox); drives are dirt terrain
 	for _, r in world.roads do
 		if r.kind ~= "drive" and math.max(r.ax, r.bx) > x0 and math.min(r.ax, r.bx) < x0 + a[4] and math.max(r.az, r.bz) > z0 and math.min(r.az, r.bz) < z0 + a[4] then

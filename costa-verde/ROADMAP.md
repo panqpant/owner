@@ -46,6 +46,16 @@ statistics. No real place is copied.
   corner by corner against every road.
 
 ## Phase C: Roblox world builder (needs you in Studio)
+- Terrain builder ready: `src/shared/TerrainBuilder.luau` (4-stud voxels, per-biome materials, Florida palette,
+  water levels, roadside ditches and wetland canals, levees, seawalls, wet sand, worn verges, dirt tracks).
+- Vegetation and shore props ready: `src/shared/Vegetation.luau` places the models from
+  `tools/blender/make_assets.py` (assets/roblox/*.fbx: 2 palms, live oak, slash pine, mangrove, palmetto,
+  sawgrass, sea oats, dock, piling, buoy, riprap) by biome, clear of roads and buildings.
+- To build in Studio: sync with Rojo; import assets/roblox/*.fbx with the 3D Importer into a folder
+  ReplicatedStorage.Assets (keep the file names); then in the command bar, in edit mode:
+  `require(game.ReplicatedStorage.Shared.TerrainBuilder).build()` and
+  `require(game.ReplicatedStorage.Shared.Vegetation).build()`; save the place.
+- Preview without Studio: `lune run tools/export-terrain.luau` then `python tools/blender/render_terrain.py`.
 - Server script that runs the generator: terrain voxels in chunks (WriteVoxels), water at each lake's level,
   roads as parts or meshes, buildings as placeholders, streaming setup.
 - First test: you press Play in Studio and send screenshots.

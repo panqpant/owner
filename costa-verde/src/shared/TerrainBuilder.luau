@@ -136,7 +136,7 @@ function TerrainBuilder.columns(x0: number, z0: number, w: number, d: number, ro
 		return S[b].water or S[b + 1].water or S[b + sw].water or S[b + sw + 1].water -- levels are flat per water body
 	end
 	local nx, nz = w // RES, d // RES
-	local H, Wt, M = table.create(nx * nz), table.create(nx * nz), table.create(nx * nz)
+	local H, Wt, M, Bi = table.create(nx * nz), table.create(nx * nz), table.create(nx * nz), table.create(nx * nz)
 	local hgrid, extra = {}, {}
 	for j = -1, nz do -- one-column border for slopes
 		for i = -1, nx do
@@ -209,9 +209,10 @@ function TerrainBuilder.columns(x0: number, z0: number, w: number, d: number, ro
 			table.insert(H, h)
 			table.insert(Wt, water or false)
 			table.insert(M, m)
+			table.insert(Bi, if built[k] then "town" elseif tag then "road" else S[k].biome) -- for Vegetation
 		end
 	end
-	return { nx = nx, nz = nz, h = H, water = Wt, material = M }
+	return { nx = nx, nz = nz, h = H, water = Wt, material = M, biome = Bi }
 end
 
 -- Road index for `columns`, from the generator's road list ({ ax, az, bx, bz, width, kind }).
