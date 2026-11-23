@@ -15,6 +15,7 @@ The whole world is generated from code, so the same seed always builds the same 
 | `tools/terrain_stats.py`, `tools/train_terrain.py` | Learn terrain from real USGS elevation, fit the generator to it |
 | `tools/fetch_roads.py`, `tools/road_stats.py`, `tools/train_streets.py` | Learn street patterns from real Census road data, fit the street styles to it (in the same block setting the game uses) |
 | `tools/interchange_stats.py` | Measures the real mix of freeway interchange types from Census ramp data |
+| `tools/landmarks.py` | The 200 unique landmarks (checked: exactly 200, all unique) → `LANDMARKS.md`, `tools/data/landmarks.json` |
 | `tools/building_stats.py` | Real counts of every building type (Census business data) scaled to the map → `BUILDINGS.md` |
 | `tools/fetch_refs.py` | Downloads 50 USGS reference images (public domain) used to study real geography |
 

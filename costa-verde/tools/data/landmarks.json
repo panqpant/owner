@@ -1,0 +1,1602 @@
+[
+ {
+  "district": "downtown",
+  "name": "Solano Tower",
+  "type": "Tallest skyscraper, rooftop helipad",
+  "analog": "Brickell supertall towers",
+  "gameplay": "BASE jumps, rooftop heist finale",
+  "gta": "Maze Bank Tower (V)"
+ },
+ {
+  "district": "downtown",
+  "name": "Costa Verde Federal Building",
+  "type": "Federal law-enforcement field office",
+  "analog": "Downtown federal office towers",
+  "gameplay": "Story HQ, infiltration mission",
+  "gta": "FIB Building (V)"
+ },
+ {
+  "district": "downtown",
+  "name": "Port Solano City Hall",
+  "type": "City hall",
+  "analog": "Florida city halls",
+  "gameplay": "Political missions",
+  "gta": "Los Santos City Hall (V)"
+ },
+ {
+  "district": "downtown",
+  "name": "Old County Courthouse",
+  "type": "Neoclassical courthouse with tower",
+  "analog": "Dade County Courthouse",
+  "gameplay": "Trials, prisoner transfers",
+  "gta": "Davis courthouse (V)"
+ },
+ {
+  "district": "downtown",
+  "name": "Port Solano Police Headquarters",
+  "type": "Police HQ and impound",
+  "analog": "Big-city police HQ",
+  "gameplay": "Arrest respawn, impound lot",
+  "gta": "Mission Row PD (V)"
+ },
+ {
+  "district": "downtown",
+  "name": "Solano Central Station",
+  "type": "Rail and metro hub",
+  "analog": "Union-style central stations",
+  "gameplay": "Train travel hub",
+  "gta": "Union Depot (V)"
+ },
+ {
+  "district": "downtown",
+  "name": "Bayfront Arena",
+  "type": "Indoor sports arena",
+  "analog": "Downtown NBA arenas",
+  "gameplay": "Events, concert mission",
+  "gta": "Maze Bank Arena (V) / Sahara Arena (VI, reported)"
+ },
+ {
+  "district": "downtown",
+  "name": "Solano Center for the Performing Arts",
+  "type": "Opera and concert hall",
+  "analog": "Modern performing arts centres",
+  "gameplay": "Gala heist setup",
+  "gta": ""
+ },
+ {
+  "district": "downtown",
+  "name": "Port Solano Convention Center",
+  "type": "Convention hall",
+  "analog": "City convention centres",
+  "gameplay": "Trade-show events",
+  "gta": ""
+ },
+ {
+  "district": "downtown",
+  "name": "Meridian Bank Tower",
+  "type": "Bank headquarters with vault",
+  "analog": "Bank HQ towers",
+  "gameplay": "Big bank heist",
+  "gta": "Union Depository (V)"
+ },
+ {
+  "district": "downtown",
+  "name": "Arrival Tower",
+  "type": "Historic Mediterranean-revival tower",
+  "analog": "Freedom Tower-type immigration landmark",
+  "gameplay": "History museum",
+  "gta": ""
+ },
+ {
+  "district": "downtown",
+  "name": "Bayside Wharf Market",
+  "type": "Waterfront festival marketplace",
+  "analog": "Bayside-type marketplaces",
+  "gameplay": "Shops, boat tours",
+  "gta": ""
+ },
+ {
+  "district": "downtown",
+  "name": "The Corsair Hotel",
+  "type": "Luxury hotel tower",
+  "analog": "Five-star downtown hotels",
+  "gameplay": "Hit on a hotel guest",
+  "gta": ""
+ },
+ {
+  "district": "downtown",
+  "name": "WCVN News 9 Studios",
+  "type": "TV news station",
+  "analog": "Local TV studios",
+  "gameplay": "News-van missions",
+  "gta": "Weazel News (V)"
+ },
+ {
+  "district": "downtown",
+  "name": "Port Solano Main Library",
+  "type": "Central public library",
+  "analog": "Main library buildings",
+  "gameplay": "Research side-quests",
+  "gta": ""
+ },
+ {
+  "district": "downtown",
+  "name": "Federal Detention Center",
+  "type": "Federal jail tower",
+  "analog": "Downtown federal jails",
+  "gameplay": "Breakout mission",
+  "gta": ""
+ },
+ {
+  "district": "downtown",
+  "name": "Skyloop People Mover",
+  "type": "Elevated automated loop line",
+  "analog": "Metromover-type people movers",
+  "gameplay": "Free downtown transit",
+  "gta": ""
+ },
+ {
+  "district": "downtown",
+  "name": "Altitude 61",
+  "type": "Rooftop nightclub",
+  "analog": "Rooftop bars",
+  "gameplay": "Club activity",
+  "gta": "Nine1Nine-type club (VI, reported)"
+ },
+ {
+  "district": "downtown",
+  "name": "The Monarch (unfinished)",
+  "type": "Abandoned half-built condo tower",
+  "analog": "Stalled Florida condo projects",
+  "gameplay": "Climb, shootout set piece",
+  "gta": "Unfinished building (V)"
+ },
+ {
+  "district": "downtown",
+  "name": "Spiral Garage",
+  "type": "Sculptural parking garage",
+  "analog": "Designer parking garages",
+  "gameplay": "Car chase set piece",
+  "gta": ""
+ },
+ {
+  "district": "midtown",
+  "name": "The Walls",
+  "type": "Street-art warehouse district",
+  "analog": "Wynwood-type mural districts",
+  "gameplay": "Graffiti collectibles",
+  "gta": ""
+ },
+ {
+  "district": "midtown",
+  "name": "Atelier Row",
+  "type": "Luxury design-district shopping",
+  "analog": "Design districts",
+  "gameplay": "High-end clothing",
+  "gta": "Ponsonbys-type luxury shops (V)"
+ },
+ {
+  "district": "midtown",
+  "name": "Sunshine Children's Hospital",
+  "type": "Children's hospital",
+  "analog": "Regional children's hospitals",
+  "gameplay": "Respawn point",
+  "gta": ""
+ },
+ {
+  "district": "midtown",
+  "name": "Costa Verde Science Museum",
+  "type": "Science museum and planetarium",
+  "analog": "Science museums",
+  "gameplay": "Exhibit heist",
+  "gta": "Galileo Observatory-type attraction (V)"
+ },
+ {
+  "district": "midtown",
+  "name": "Museum of Tropical Art",
+  "type": "Art museum",
+  "analog": "Waterfront art museums",
+  "gameplay": "Painting theft",
+  "gta": "Kortz Center-type museum (V)"
+ },
+ {
+  "district": "midtown",
+  "name": "Hopworks Yard",
+  "type": "Craft brewery taproom",
+  "analog": "Brewery districts",
+  "gameplay": "Bar activity",
+  "gta": ""
+ },
+ {
+  "district": "midtown",
+  "name": "Midtown Galleria",
+  "type": "Vertical shopping mall",
+  "analog": "Urban malls",
+  "gameplay": "Mall shootout set piece",
+  "gta": ""
+ },
+ {
+  "district": "midtown",
+  "name": "Harvest Point Cathedral",
+  "type": "Megachurch",
+  "analog": "Florida megachurches",
+  "gameplay": "Cult/scam storyline",
+  "gta": "Epsilon Program-type (V)"
+ },
+ {
+  "district": "midtown",
+  "name": "Brightloop Labs",
+  "type": "Glass tech-startup HQ",
+  "analog": "Tech campuses",
+  "gameplay": "Data-theft heist",
+  "gta": "Lifeinvader HQ (V)"
+ },
+ {
+  "district": "midtown",
+  "name": "Studio Mareas",
+  "type": "Recording studio",
+  "analog": "Miami music studios",
+  "gameplay": "Music missions",
+  "gta": "Record A Studios (V Online)"
+ },
+ {
+  "district": "beach",
+  "name": "The Flamingo Moderne",
+  "type": "Art Deco hotel",
+  "analog": "Ocean Drive-type Deco hotels",
+  "gameplay": "Hotel stay, missions",
+  "gta": "Ocean Drive hotels (VI)"
+ },
+ {
+  "district": "beach",
+  "name": "The Pastel Palms",
+  "type": "Art Deco hotel with neon",
+  "analog": "Streamline Moderne hotels",
+  "gameplay": "Rooftop pool party",
+  "gta": ""
+ },
+ {
+  "district": "beach",
+  "name": "Lifeguard Towers",
+  "type": "Set of colourful lifeguard huts",
+  "analog": "Painted beach lifeguard towers",
+  "gameplay": "Photo collectibles",
+  "gta": ""
+ },
+ {
+  "district": "beach",
+  "name": "Coral Strand Pier",
+  "type": "Amusement pier with Ferris wheel",
+  "analog": "Florida amusement piers",
+  "gameplay": "Rides, pier chase",
+  "gta": "Del Perro Pier (V)"
+ },
+ {
+  "district": "beach",
+  "name": "Iron Beach",
+  "type": "Outdoor beach gym",
+  "analog": "Beach outdoor gyms",
+  "gameplay": "Stats training",
+  "gta": "Muscle Sands (V)"
+ },
+ {
+  "district": "beach",
+  "name": "Villa Escondida",
+  "type": "Notorious Mediterranean mansion",
+  "analog": "Infamous beach mansions",
+  "gameplay": "Murder-mystery mission",
+  "gta": ""
+ },
+ {
+  "district": "beach",
+  "name": "Club Electra",
+  "type": "Beach-strip nightclub",
+  "analog": "South Beach clubs",
+  "gameplay": "Club activity",
+  "gta": "Vice City clubs (VI)"
+ },
+ {
+  "district": "beach",
+  "name": "Strand Botanical Garden",
+  "type": "Small botanical garden",
+  "analog": "Beach botanical gardens",
+  "gameplay": "Quiet meet-ups",
+  "gta": ""
+ },
+ {
+  "district": "beach",
+  "name": "Sapphire Ballroom",
+  "type": "Historic 1950s hotel ballroom",
+  "analog": "Mid-century resort hotels",
+  "gameplay": "Gala infiltration",
+  "gta": ""
+ },
+ {
+  "district": "beach",
+  "name": "South Point Pier",
+  "type": "Fishing pier at the island tip",
+  "analog": "Inlet fishing piers",
+  "gameplay": "Fishing activity",
+  "gta": ""
+ },
+ {
+  "district": "beach",
+  "name": "Strand Yacht Basin",
+  "type": "Superyacht marina",
+  "analog": "Superyacht marinas",
+  "gameplay": "Yacht purchase",
+  "gta": "Yachts (V Online)"
+ },
+ {
+  "district": "beach",
+  "name": "Coral Strand Water Tower",
+  "type": "Logo water tower",
+  "analog": "Branded beach-town water towers",
+  "gameplay": "Climb, sniper spot",
+  "gta": ""
+ },
+ {
+  "district": "beach",
+  "name": "Strand Beach Patrol HQ",
+  "type": "Beach police station",
+  "analog": "Beach police substations",
+  "gameplay": "Arrest respawn",
+  "gta": "Vespucci Beach police (V)"
+ },
+ {
+  "district": "beach",
+  "name": "Surfside Row",
+  "type": "Surf and tattoo shop strip",
+  "analog": "Beach shop strips",
+  "gameplay": "Tattoos, surf gear",
+  "gta": ""
+ },
+ {
+  "district": "beach",
+  "name": "The Barnacle",
+  "type": "Dive bar on the sand",
+  "analog": "Beach dive bars",
+  "gameplay": "Bar activity",
+  "gta": ""
+ },
+ {
+  "district": "beach",
+  "name": "Grand Lagoon Resort",
+  "type": "Resort with lagoon pool",
+  "analog": "Mega beach resorts",
+  "gameplay": "Resort heist",
+  "gta": ""
+ },
+ {
+  "district": "beach",
+  "name": "Hotel Majestic",
+  "type": "Condemned 1920s hotel",
+  "analog": "Abandoned Boom-era hotels",
+  "gameplay": "Haunted easter egg",
+  "gta": ""
+ },
+ {
+  "district": "beach",
+  "name": "Strand Watersports Dock",
+  "type": "Jet ski and parasail rentals",
+  "analog": "Beach rental docks",
+  "gameplay": "Jet ski races",
+  "gta": ""
+ },
+ {
+  "district": "beach",
+  "name": "Strand Inlet Coast Guard Station",
+  "type": "Coast Guard station",
+  "analog": "Coast Guard stations at inlets",
+  "gameplay": "Boat chases",
+  "gta": "Coast Guard (V)"
+ },
+ {
+  "district": "beach",
+  "name": "Strand Inlet Light",
+  "type": "Lighthouse at the north inlet",
+  "analog": "Florida inlet lighthouses",
+  "gameplay": "Lookout, collectible",
+  "gta": "Lighthouse (V)"
+ },
+ {
+  "district": "calle",
+  "name": "Parque Domin\u00f3",
+  "type": "Domino park",
+  "analog": "Little Havana domino parks",
+  "gameplay": "Domino minigame",
+  "gta": ""
+ },
+ {
+  "district": "calle",
+  "name": "La Esperanza Cigar Works",
+  "type": "Cigar factory",
+  "analog": "Hand-rolled cigar factories",
+  "gameplay": "Smuggling front",
+  "gta": ""
+ },
+ {
+  "district": "calle",
+  "name": "Teatro Tropical",
+  "type": "Historic movie palace",
+  "analog": "Atmospheric movie palaces",
+  "gameplay": "Cinema activity",
+  "gta": "Ten Cent Theater-type (V)"
+ },
+ {
+  "district": "calle",
+  "name": "La Gran Mesa",
+  "type": "Famous family restaurant",
+  "analog": "Iconic Cuban-American restaurants",
+  "gameplay": "Story meetings",
+  "gta": ""
+ },
+ {
+  "district": "calle",
+  "name": "Bot\u00e1nica San L\u00e1zaro",
+  "type": "Bot\u00e1nica shop",
+  "analog": "Bot\u00e1nica shops",
+  "gameplay": "Curios, easter egg",
+  "gta": ""
+ },
+ {
+  "district": "calle",
+  "name": "Plaza de los Murales",
+  "type": "Mural plaza",
+  "analog": "Neighbourhood mural plazas",
+  "gameplay": "Festival event",
+  "gta": ""
+ },
+ {
+  "district": "calle",
+  "name": "Calle Verde Walk of Stars",
+  "type": "Sidewalk stars",
+  "analog": "Sidewalk walks of fame",
+  "gameplay": "Collectibles",
+  "gta": "Vinewood Walk of Fame (V)"
+ },
+ {
+  "district": "calle",
+  "name": "Ventanita 24",
+  "type": "24-hour coffee window",
+  "analog": "Cafecito windows",
+  "gameplay": "Quick heal stop",
+  "gta": ""
+ },
+ {
+  "district": "calle",
+  "name": "Ermita del Mar",
+  "type": "Seaside shrine church",
+  "analog": "Waterfront shrine churches",
+  "gameplay": "Story scene",
+  "gta": ""
+ },
+ {
+  "district": "calle",
+  "name": "Rooster Row",
+  "type": "Painted rooster statues",
+  "analog": "Street sculpture trails",
+  "gameplay": "Collectibles",
+  "gta": ""
+ },
+ {
+  "district": "docks",
+  "name": "Solano Container Terminal",
+  "type": "Container port with gantry cranes",
+  "analog": "Container terminals",
+  "gameplay": "Cargo heists, crane climb",
+  "gta": "Port of Los Santos (V)"
+ },
+ {
+  "district": "docks",
+  "name": "Solano Cruise Terminal",
+  "type": "Cruise ship terminal",
+  "analog": "Cruise terminals",
+  "gameplay": "Cruise ship mission",
+  "gta": ""
+ },
+ {
+  "district": "docks",
+  "name": "Port Authority Tower",
+  "type": "Port control tower",
+  "analog": "Port administration buildings",
+  "gameplay": "Bribe the harbour master",
+  "gta": ""
+ },
+ {
+  "district": "docks",
+  "name": "Solano Dry Dock",
+  "type": "Shipyard with dry dock",
+  "analog": "Ship repair yards",
+  "gameplay": "Ship sabotage",
+  "gta": ""
+ },
+ {
+  "district": "docks",
+  "name": "Customs Inspection Shed",
+  "type": "Customs warehouse",
+  "analog": "Port customs facilities",
+  "gameplay": "Seized-goods heist",
+  "gta": ""
+ },
+ {
+  "district": "docks",
+  "name": "Fisherman's Wharf Market",
+  "type": "Fishing fleet wharf and fish market",
+  "analog": "Working fish markets",
+  "gameplay": "Fishing jobs",
+  "gta": ""
+ },
+ {
+  "district": "docks",
+  "name": "Solano Rail Yard",
+  "type": "Freight rail yard",
+  "analog": "Port rail yards",
+  "gameplay": "Train heist",
+  "gta": "Rail yards (V)"
+ },
+ {
+  "district": "docks",
+  "name": "Harbor Tank Farm",
+  "type": "Fuel storage tank farm",
+  "analog": "Port fuel terminals",
+  "gameplay": "Explosive set piece",
+  "gta": "Tank farms (V)"
+ },
+ {
+  "district": "docks",
+  "name": "Gateway Auto Export",
+  "type": "Car export lot",
+  "analog": "Vehicle roll-on/roll-off lots",
+  "gameplay": "Car theft deliveries",
+  "gta": "Import/Export (V Online)"
+ },
+ {
+  "district": "docks",
+  "name": "Old Bay Cannery",
+  "type": "Abandoned cannery",
+  "analog": "Derelict waterfront canneries",
+  "gameplay": "Hideout",
+  "gta": ""
+ },
+ {
+  "district": "docks",
+  "name": "The Rusty Anchor",
+  "type": "Seafarers' bar",
+  "analog": "Dockside bars",
+  "gameplay": "Contacts and tips",
+  "gta": ""
+ },
+ {
+  "district": "docks",
+  "name": "Harbor Fireboat Station",
+  "type": "Fireboat station",
+  "analog": "Port fire stations",
+  "gameplay": "Firefighting boat missions",
+  "gta": ""
+ },
+ {
+  "district": "northshore",
+  "name": "Sunrise Park Racecourse",
+  "type": "Horse racetrack",
+  "analog": "Florida thoroughbred tracks",
+  "gameplay": "Betting, horse races",
+  "gta": "Vinewood Racetrack (V)"
+ },
+ {
+  "district": "northshore",
+  "name": "Panther Rock Resort & Casino",
+  "type": "Tribal resort casino with guitar-shaped tower",
+  "analog": "Florida tribal casino resorts",
+  "gameplay": "Casino games, casino heist",
+  "gta": "Diamond Casino (V Online)"
+ },
+ {
+  "district": "northshore",
+  "name": "Lake Isles Estates",
+  "type": "Lakefront mansion row",
+  "analog": "Lakefront mansion enclaves",
+  "gameplay": "Mansion burglaries",
+  "gta": "Rockford Hills (V)"
+ },
+ {
+  "district": "northshore",
+  "name": "North Shore Galleria",
+  "type": "Enclosed shopping mall",
+  "analog": "Regional malls",
+  "gameplay": "Shopping, mall chase",
+  "gta": ""
+ },
+ {
+  "district": "northshore",
+  "name": "Fronton Norte",
+  "type": "Jai-alai fronton",
+  "analog": "Florida jai-alai frontons",
+  "gameplay": "Betting minigame",
+  "gta": ""
+ },
+ {
+  "district": "northshore",
+  "name": "North Shore Regional Hospital",
+  "type": "General hospital",
+  "analog": "Regional hospitals",
+  "gameplay": "Respawn point",
+  "gta": "Mount Zonah (V)"
+ },
+ {
+  "district": "northshore",
+  "name": "Banyan Hills Country Club",
+  "type": "Golf country club",
+  "analog": "Florida country clubs",
+  "gameplay": "Golf, tennis",
+  "gta": "Los Santos Golf Club (V)"
+ },
+ {
+  "district": "northshore",
+  "name": "Tidepool Water Park",
+  "type": "Water park",
+  "analog": "Florida water parks",
+  "gameplay": "Slides, races",
+  "gta": ""
+ },
+ {
+  "district": "northshore",
+  "name": "Sunset Shores Active Living",
+  "type": "Gated retirement community",
+  "analog": "Florida retirement communities",
+  "gameplay": "Golf-cart missions",
+  "gta": ""
+ },
+ {
+  "district": "northshore",
+  "name": "Twin Palms Drive-In",
+  "type": "Drive-in cinema",
+  "analog": "Surviving drive-in theatres",
+  "gameplay": "Cinema, dates",
+  "gta": ""
+ },
+ {
+  "district": "westside",
+  "name": "Westside Power Center",
+  "type": "Big-box retail power centre",
+  "analog": "Big-box power centres",
+  "gameplay": "Shopping hub",
+  "gta": ""
+ },
+ {
+  "district": "westside",
+  "name": "Westside Swap Shop",
+  "type": "Giant flea market",
+  "analog": "Florida swap shops",
+  "gameplay": "Fence stolen goods",
+  "gta": ""
+ },
+ {
+  "district": "westside",
+  "name": "Westside Raceway",
+  "type": "Oval speedway and drag strip",
+  "analog": "Local speedways",
+  "gameplay": "Street and oval races",
+  "gta": "LS Car Meet / races (V)"
+ },
+ {
+  "district": "westside",
+  "name": "StoreAll Mega Storage",
+  "type": "Self-storage maze",
+  "analog": "Self-storage complexes",
+  "gameplay": "Storage-unit stash missions",
+  "gta": ""
+ },
+ {
+  "district": "westside",
+  "name": "Westside Transit Garage",
+  "type": "Bus depot",
+  "analog": "Transit bus garages",
+  "gameplay": "Bus driver job",
+  "gta": "Dashound depot (V)"
+ },
+ {
+  "district": "westside",
+  "name": "Palm Haven Mobile Estates",
+  "type": "Trailer park",
+  "analog": "Florida trailer parks",
+  "gameplay": "Gang turf",
+  "gta": "Sandy Shores trailers (V)"
+ },
+ {
+  "district": "westside",
+  "name": "Westside Distribution Center",
+  "type": "Mega warehouse",
+  "analog": "E-commerce fulfilment centres",
+  "gameplay": "Truck hijacks",
+  "gta": ""
+ },
+ {
+  "district": "westside",
+  "name": "Big Al's Salvage",
+  "type": "Junkyard with car crusher",
+  "analog": "Salvage yards",
+  "gameplay": "Destroy evidence cars",
+  "gta": "Scrapyard (V)"
+ },
+ {
+  "district": "palmgrove",
+  "name": "The Preserve at Palm Grove",
+  "type": "Gated golf community",
+  "analog": "Gated golf communities",
+  "gameplay": "Home invasions",
+  "gta": ""
+ },
+ {
+  "district": "palmgrove",
+  "name": "Palm Grove High School",
+  "type": "High school with football stadium",
+  "analog": "Florida high schools",
+  "gameplay": "Friday-night football",
+  "gta": ""
+ },
+ {
+  "district": "palmgrove",
+  "name": "Palm Grove Community College",
+  "type": "Community college campus",
+  "analog": "State colleges",
+  "gameplay": "Classes side-activity",
+  "gta": ""
+ },
+ {
+  "district": "palmgrove",
+  "name": "Palm Grove Fashion Mall",
+  "type": "Suburban fashion mall",
+  "analog": "Suburban malls",
+  "gameplay": "Clothing shopping",
+  "gta": ""
+ },
+ {
+  "district": "palmgrove",
+  "name": "Gulfway Outlets",
+  "type": "Outlet mall",
+  "analog": "Outlet malls",
+  "gameplay": "Discount clothing",
+  "gta": ""
+ },
+ {
+  "district": "palmgrove",
+  "name": "County Fire Training Tower",
+  "type": "Fire training tower",
+  "analog": "Fire training centres",
+  "gameplay": "Firefighter missions",
+  "gta": ""
+ },
+ {
+  "district": "palmgrove",
+  "name": "Living Waters Church",
+  "type": "Suburban megachurch",
+  "analog": "Suburban megachurches",
+  "gameplay": "Community missions",
+  "gta": ""
+ },
+ {
+  "district": "palmgrove",
+  "name": "The Ainsley House",
+  "type": "Haunted cul-de-sac house",
+  "analog": "Local legend houses",
+  "gameplay": "Ghost easter egg",
+  "gta": "Haunted spots (V)"
+ },
+ {
+  "district": "university",
+  "name": "Tarpon Stadium",
+  "type": "College football stadium",
+  "analog": "College stadiums",
+  "gameplay": "Game-day events",
+  "gta": ""
+ },
+ {
+  "district": "university",
+  "name": "University Medical Center",
+  "type": "Research and teaching hospital",
+  "analog": "Academic medical centres",
+  "gameplay": "Respawn, lab heist",
+  "gta": "Pillbox Hill Medical (V)"
+ },
+ {
+  "district": "university",
+  "name": "Institute of Marine Science",
+  "type": "Marine research campus",
+  "analog": "Oceanographic institutes",
+  "gameplay": "Submarine missions",
+  "gta": ""
+ },
+ {
+  "district": "university",
+  "name": "Greek Row",
+  "type": "Fraternity houses",
+  "analog": "Fraternity rows",
+  "gameplay": "Party missions",
+  "gta": ""
+ },
+ {
+  "district": "university",
+  "name": "University Library Tower",
+  "type": "Campus library tower",
+  "analog": "Campus landmark towers",
+  "gameplay": "Climb, collectible",
+  "gta": "ULSA campus (V)"
+ },
+ {
+  "district": "university",
+  "name": "National Storm Center",
+  "type": "Hurricane forecasting centre",
+  "analog": "Hurricane research centres",
+  "gameplay": "Storm-chaser missions",
+  "gta": ""
+ },
+ {
+  "district": "airport",
+  "name": "Solano International Terminal",
+  "type": "Airport passenger terminal",
+  "analog": "International terminals",
+  "gameplay": "Flights, airport heist",
+  "gta": "LSIA (V) / Vice City International (VI)"
+ },
+ {
+  "district": "airport",
+  "name": "Solano Control Tower",
+  "type": "Air traffic control tower",
+  "analog": "Airport control towers",
+  "gameplay": "Climb, sniper spot",
+  "gta": ""
+ },
+ {
+  "district": "airport",
+  "name": "Air Cargo Village",
+  "type": "Freight terminal and hangars",
+  "analog": "Air cargo facilities",
+  "gameplay": "Cargo plane theft",
+  "gta": ""
+ },
+ {
+  "district": "airport",
+  "name": "Skyharbor Private Jets",
+  "type": "Private-jet terminal",
+  "analog": "Fixed-base operators",
+  "gameplay": "Buy jets",
+  "gta": "Private hangars (V)"
+ },
+ {
+  "district": "airport",
+  "name": "Airport Gateway Hotel",
+  "type": "Airport hotel",
+  "analog": "Airport hotels",
+  "gameplay": "Meet-ups",
+  "gta": ""
+ },
+ {
+  "district": "airport",
+  "name": "Old Runway Boneyard",
+  "type": "Retired aircraft storage",
+  "analog": "Aircraft boneyards",
+  "gameplay": "Hidden plane collectible",
+  "gta": ""
+ },
+ {
+  "district": "airport",
+  "name": "Airport Fuel Farm",
+  "type": "Jet fuel depot",
+  "analog": "Airport fuel farms",
+  "gameplay": "Sabotage",
+  "gta": ""
+ },
+ {
+  "district": "airport",
+  "name": "Rental Car Center",
+  "type": "Consolidated rental-car garage",
+  "analog": "Rental car centres",
+  "gameplay": "Car theft",
+  "gta": ""
+ },
+ {
+  "district": "gulftown",
+  "name": "Pelican Bay Pier",
+  "type": "Long Gulf fishing pier",
+  "analog": "Gulf fishing piers",
+  "gameplay": "Fishing",
+  "gta": ""
+ },
+ {
+  "district": "gulftown",
+  "name": "Pelican Bay Depot",
+  "type": "Historic railroad depot",
+  "analog": "Restored train depots",
+  "gameplay": "Train stop",
+  "gta": ""
+ },
+ {
+  "district": "gulftown",
+  "name": "Shrimp Fleet Docks",
+  "type": "Shrimp boat harbour",
+  "analog": "Gulf shrimping ports",
+  "gameplay": "Fishing-boat jobs",
+  "gta": ""
+ },
+ {
+  "district": "gulftown",
+  "name": "Pelican Bay Ballpark",
+  "type": "Spring-training baseball stadium",
+  "analog": "Spring-training parks",
+  "gameplay": "Baseball minigame",
+  "gta": ""
+ },
+ {
+  "district": "gulftown",
+  "name": "Grand Tent Museum",
+  "type": "Circus winter-quarters museum",
+  "analog": "Circus museums",
+  "gameplay": "Weird easter eggs",
+  "gta": ""
+ },
+ {
+  "district": "gulftown",
+  "name": "Villa Pellicano",
+  "type": "Venetian-style mansion museum",
+  "analog": "Gulf-coast mansion museums",
+  "gameplay": "Art heist",
+  "gta": ""
+ },
+ {
+  "district": "gulftown",
+  "name": "Shuffleboard Club",
+  "type": "Retirees' shuffleboard club",
+  "analog": "Historic shuffleboard clubs",
+  "gameplay": "Shuffleboard minigame",
+  "gta": ""
+ },
+ {
+  "district": "gulftown",
+  "name": "Gulf Breeze Resort",
+  "type": "Beachfront resort",
+  "analog": "Gulf beach resorts",
+  "gameplay": "Resort missions",
+  "gta": ""
+ },
+ {
+  "district": "gulftown",
+  "name": "Calusa County Courthouse",
+  "type": "County-seat courthouse",
+  "analog": "Small-town courthouses",
+  "gameplay": "Court missions",
+  "gta": ""
+ },
+ {
+  "district": "gulftown",
+  "name": "Pelican Bay Water Tower",
+  "type": "Town water tower",
+  "analog": "Small-town water towers",
+  "gameplay": "Climb, collectible",
+  "gta": ""
+ },
+ {
+  "district": "gulftown",
+  "name": "The Green Flash",
+  "type": "Sunset bar",
+  "analog": "Gulf-coast sunset bars",
+  "gameplay": "Bar activity",
+  "gta": ""
+ },
+ {
+  "district": "gulftown",
+  "name": "Gulf Seafood Plant",
+  "type": "Seafood processing plant",
+  "analog": "Seafood processors",
+  "gameplay": "Smuggling front",
+  "gta": ""
+ },
+ {
+  "district": "swamptown",
+  "name": "Gator Hollow Airboats",
+  "type": "Airboat tour dock",
+  "analog": "Everglades airboat tours",
+  "gameplay": "Airboat races",
+  "gta": ""
+ },
+ {
+  "district": "swamptown",
+  "name": "Gator Hollow Reptile Farm",
+  "type": "Alligator farm with wrestling show",
+  "analog": "Roadside gator farms",
+  "gameplay": "Gator show, easter egg",
+  "gta": ""
+ },
+ {
+  "district": "swamptown",
+  "name": "Smallest Post Office",
+  "type": "Tiny shed post office",
+  "analog": "Ochopee-type tiny post offices",
+  "gameplay": "Collectible, delivery jobs",
+  "gta": ""
+ },
+ {
+  "district": "swamptown",
+  "name": "Hollow Fish Camp",
+  "type": "Fish camp and bait shop",
+  "analog": "Swamp fish camps",
+  "gameplay": "Fishing, boat rental",
+  "gta": ""
+ },
+ {
+  "district": "swamptown",
+  "name": "Old Trading Post",
+  "type": "Frontier trading post",
+  "analog": "Historic swamp trading posts",
+  "gameplay": "Fence goods",
+  "gta": ""
+ },
+ {
+  "district": "swamptown",
+  "name": "Sawgrass Ranger Station",
+  "type": "Park ranger station",
+  "analog": "Park ranger stations",
+  "gameplay": "Ranger missions",
+  "gta": "Park rangers (V)"
+ },
+ {
+  "district": "swamptown",
+  "name": "The Snake Pit",
+  "type": "Swamp biker bar",
+  "analog": "Roadside biker bars",
+  "gameplay": "Biker gang turf",
+  "gta": "Lost MC clubhouse (V)"
+ },
+ {
+  "district": "swamptown",
+  "name": "Stilt Shacks",
+  "type": "Fishing shacks on stilts",
+  "analog": "Stiltsville-type shacks",
+  "gameplay": "Hideouts",
+  "gta": ""
+ },
+ {
+  "district": "truckstop",
+  "name": "Mile 88 Travel Plaza",
+  "type": "Truck stop with diner",
+  "analog": "Interstate travel plazas",
+  "gameplay": "Trucker jobs",
+  "gta": "You Tool / truck stops (V)"
+ },
+ {
+  "district": "truckstop",
+  "name": "Mile 88 Weigh Station",
+  "type": "Truck weigh station",
+  "analog": "Interstate weigh stations",
+  "gameplay": "Smuggling checkpoint",
+  "gta": ""
+ },
+ {
+  "district": "truckstop",
+  "name": "Big Citrus Fruit Stand",
+  "type": "Giant-orange fruit stand",
+  "analog": "Roadside citrus stands",
+  "gameplay": "Easter egg",
+  "gta": ""
+ },
+ {
+  "district": "truckstop",
+  "name": "Reptile World",
+  "type": "Roadside reptile zoo",
+  "analog": "Tourist-trap reptile parks",
+  "gameplay": "Easter egg",
+  "gta": ""
+ },
+ {
+  "district": "truckstop",
+  "name": "Starlite Motor Lodge",
+  "type": "Cheap highway motel",
+  "analog": "Mid-century motor lodges",
+  "gameplay": "Hideout motel",
+  "gta": "Motels (VI trailers)"
+ },
+ {
+  "district": "truckstop",
+  "name": "Boom Town Fireworks",
+  "type": "Fireworks superstore",
+  "analog": "Florida roadside fireworks stores",
+  "gameplay": "Buy explosives",
+  "gta": ""
+ },
+ {
+  "district": "rural",
+  "name": "Ridge Citrus Packing House",
+  "type": "Citrus packing house",
+  "analog": "Citrus packing houses",
+  "gameplay": "Truck jobs",
+  "gta": ""
+ },
+ {
+  "district": "rural",
+  "name": "Sunburst Juice Plant",
+  "type": "Orange juice processing plant",
+  "analog": "Juice processing plants",
+  "gameplay": "Industrial set piece",
+  "gta": ""
+ },
+ {
+  "district": "rural",
+  "name": "Cane Ridge Sugar Mill",
+  "type": "Sugar mill with smokestacks",
+  "analog": "Florida sugar mills",
+  "gameplay": "Cane-burning season events",
+  "gta": "Ambrosia sugar refinery (VI, reported)"
+ },
+ {
+  "district": "rural",
+  "name": "Bone Ridge Phosphate Mine",
+  "type": "Open-pit phosphate mine and gypsum stack",
+  "analog": "Florida phosphate mines",
+  "gameplay": "Quarry chase, mining-truck jobs",
+  "gta": "Davis Quartz quarry (V)"
+ },
+ {
+  "district": "rural",
+  "name": "Cattlemen's Auction Barn",
+  "type": "Livestock auction",
+  "analog": "Cattle auction markets",
+  "gameplay": "Ranch missions",
+  "gta": ""
+ },
+ {
+  "district": "rural",
+  "name": "Citrus County Rodeo Arena",
+  "type": "Rodeo arena",
+  "analog": "Florida rodeos",
+  "gameplay": "Rodeo minigame",
+  "gta": ""
+ },
+ {
+  "district": "rural",
+  "name": "County Fairgrounds",
+  "type": "Fairgrounds with midway",
+  "analog": "County fairgrounds",
+  "gameplay": "Seasonal fair",
+  "gta": ""
+ },
+ {
+  "district": "rural",
+  "name": "Ridge Feed Mill",
+  "type": "Feed mill and grain silos",
+  "analog": "Rural feed mills",
+  "gameplay": "Climb, sniper spot",
+  "gta": "Grain silos (V)"
+ },
+ {
+  "district": "rural",
+  "name": "Crystal Eye Springs",
+  "type": "Spring-fed park with dive cave",
+  "analog": "Florida first-magnitude springs",
+  "gameplay": "Cave diving, treasure",
+  "gta": ""
+ },
+ {
+  "district": "rural",
+  "name": "Sirena Springs",
+  "type": "Live mermaid show attraction",
+  "analog": "Roadside mermaid shows",
+  "gameplay": "Easter egg show",
+  "gta": ""
+ },
+ {
+  "district": "rural",
+  "name": "Singing Tower Gardens",
+  "type": "Carillon tower on the ridge",
+  "analog": "Ridge-top carillon gardens",
+  "gameplay": "Viewpoint, collectible",
+  "gta": "Galileo Observatory viewpoint (V)"
+ },
+ {
+  "district": "rural",
+  "name": "Starcove Adventure Park",
+  "type": "Major theme park",
+  "analog": "Central Florida theme parks",
+  "gameplay": "Rides, park heist",
+  "gta": ""
+ },
+ {
+  "district": "rural",
+  "name": "Ridge Airfield",
+  "type": "Small airfield with crop dusters",
+  "analog": "Rural airfields",
+  "gameplay": "Crop-dusting missions",
+  "gta": "Sandy Shores Airfield (V)"
+ },
+ {
+  "district": "rural",
+  "name": "Skydive Citrus",
+  "type": "Skydiving centre",
+  "analog": "Skydiving drop zones",
+  "gameplay": "Parachute jumps",
+  "gta": "Parachuting (V)"
+ },
+ {
+  "district": "rural",
+  "name": "Calusa State Penitentiary",
+  "type": "State prison",
+  "analog": "Florida state prisons",
+  "gameplay": "Breakout, story",
+  "gta": "Bolingbroke (V) / Leonida Penitentiary (VI)"
+ },
+ {
+  "district": "rural",
+  "name": "Citrus County Jail",
+  "type": "County jail",
+  "analog": "County jails",
+  "gameplay": "Bail missions",
+  "gta": ""
+ },
+ {
+  "district": "rural",
+  "name": "Sun Ridge Solar Farm",
+  "type": "Utility-scale solar farm",
+  "analog": "Florida utility solar farms",
+  "gameplay": "Sabotage mission",
+  "gta": "Ron Alternates Wind Farm (V)"
+ },
+ {
+  "district": "rural",
+  "name": "Ridge Energy Center",
+  "type": "Gas-fired power plant",
+  "analog": "Combined-cycle gas plants",
+  "gameplay": "Blackout heist",
+  "gta": "Palmer-Taylor Power Station (V)"
+ },
+ {
+  "district": "rural",
+  "name": "Citrus County Landfill",
+  "type": "Landfill with methane flare",
+  "analog": "County landfills",
+  "gameplay": "Body disposal jobs",
+  "gta": "Landfill (V)"
+ },
+ {
+  "district": "rural",
+  "name": "Ridge Water Treatment Plant",
+  "type": "Water treatment plant",
+  "analog": "Municipal water plants",
+  "gameplay": "Poisoning plot",
+  "gta": ""
+ },
+ {
+  "district": "rural",
+  "name": "Orange Blossom Nursery",
+  "type": "Tree nursery greenhouses",
+  "analog": "Plant nurseries",
+  "gameplay": "Grow-op front",
+  "gta": ""
+ },
+ {
+  "district": "rural",
+  "name": "Holloway Dairy",
+  "type": "Dairy farm",
+  "analog": "Florida dairy farms",
+  "gameplay": "Farm missions",
+  "gta": "Grapeseed farms (V)"
+ },
+ {
+  "district": "rural",
+  "name": "Three Oaks Horse Farm",
+  "type": "Thoroughbred horse farm",
+  "analog": "Ocala-type horse farms",
+  "gameplay": "Horse races link",
+  "gta": ""
+ },
+ {
+  "district": "rural",
+  "name": "Cape Arcadia Launch Complex",
+  "type": "Rocket launch pad and assembly building",
+  "analog": "Space-coast launch complexes",
+  "gameplay": "Launch heist",
+  "gta": ""
+ },
+ {
+  "district": "rural",
+  "name": "Cape Arcadia Visitor Center",
+  "type": "Space centre visitor complex",
+  "analog": "Space visitor complexes",
+  "gameplay": "Museum, easter eggs",
+  "gta": ""
+ },
+ {
+  "district": "rural",
+  "name": "Mangrove Point Nuclear Plant",
+  "type": "Coastal nuclear power plant",
+  "analog": "Coastal Florida nuclear plants",
+  "gameplay": "Meltdown-threat mission",
+  "gta": ""
+ },
+ {
+  "district": "base",
+  "name": "Fort Calusa Airfield",
+  "type": "Military air base",
+  "analog": "Florida air force bases",
+  "gameplay": "Steal a jet",
+  "gta": "Fort Zancudo (V)"
+ },
+ {
+  "district": "base",
+  "name": "Calusa Radar Domes",
+  "type": "Radar and missile-tracking site",
+  "analog": "Military radar sites",
+  "gameplay": "Sabotage",
+  "gta": ""
+ },
+ {
+  "district": "base",
+  "name": "Calusa Research Annex",
+  "type": "Secret weapons lab",
+  "analog": "Defence research labs",
+  "gameplay": "Lab raid",
+  "gta": "Humane Labs (V)"
+ },
+ {
+  "district": "base",
+  "name": "Fort Calusa Barracks",
+  "type": "Barracks and parade ground",
+  "analog": "Army installations",
+  "gameplay": "Infiltration",
+  "gta": ""
+ },
+ {
+  "district": "base",
+  "name": "Fort Calusa Main Gate",
+  "type": "Guarded base gate",
+  "analog": "Base entry control points",
+  "gameplay": "Gate-crash",
+  "gta": ""
+ },
+ {
+  "district": "base",
+  "name": "Cold War Bunker",
+  "type": "Abandoned bunker complex",
+  "analog": "Cold War bunkers",
+  "gameplay": "Easter egg, gunrunning base",
+  "gta": "Bunkers (V Online)"
+ },
+ {
+  "district": "wetlands",
+  "name": "Sawgrass Observation Tower",
+  "type": "Spiral observation tower",
+  "analog": "Everglades observation towers",
+  "gameplay": "Viewpoint",
+  "gta": ""
+ },
+ {
+  "district": "wetlands",
+  "name": "Nike Site HM-88",
+  "type": "Abandoned missile site",
+  "analog": "Cold War Nike missile sites",
+  "gameplay": "Easter egg",
+  "gta": ""
+ },
+ {
+  "district": "wetlands",
+  "name": "Glades Airboat Course",
+  "type": "Airboat racing course",
+  "analog": "Airboat race courses",
+  "gameplay": "Races",
+  "gta": ""
+ },
+ {
+  "district": "wetlands",
+  "name": "Cypress Hunting Camp",
+  "type": "Hunting camp",
+  "analog": "Wetland hunting camps",
+  "gameplay": "Hunting missions",
+  "gta": "Hunting (V)"
+ },
+ {
+  "district": "wetlands",
+  "name": "Python Research Station",
+  "type": "Invasive-species research station",
+  "analog": "Everglades research stations",
+  "gameplay": "Python hunt",
+  "gta": ""
+ },
+ {
+  "district": "wetlands",
+  "name": "Glades Pump Station",
+  "type": "Water-control pump station and levee gates",
+  "analog": "South Florida water-management pump stations",
+  "gameplay": "Flood plot",
+  "gta": "Land Act Dam-type infrastructure (V)"
+ },
+ {
+  "district": "keys",
+  "name": "The Long Bridge",
+  "type": "Seven-mile-style bridge beside an old rail bridge",
+  "analog": "Overseas highway bridges",
+  "gameplay": "Bridge chase, jumps",
+  "gta": ""
+ },
+ {
+  "district": "keys",
+  "name": "Key Marisol Old Town",
+  "type": "Historic island old town",
+  "analog": "Key West-type old towns",
+  "gameplay": "Bars, story hub",
+  "gta": "Leonida Keys (VI)"
+ },
+ {
+  "district": "keys",
+  "name": "Sunset Pier",
+  "type": "Nightly sunset celebration pier",
+  "analog": "Sunset celebration piers",
+  "gameplay": "Street performers event",
+  "gta": ""
+ },
+ {
+  "district": "keys",
+  "name": "Southernmost Buoy",
+  "type": "Southernmost-point marker",
+  "analog": "Southernmost-point monuments",
+  "gameplay": "Photo collectible",
+  "gta": ""
+ },
+ {
+  "district": "keys",
+  "name": "Key Marisol Lighthouse",
+  "type": "Lighthouse museum",
+  "analog": "Island lighthouse museums",
+  "gameplay": "Collectible",
+  "gta": ""
+ },
+ {
+  "district": "keys",
+  "name": "The Author's House",
+  "type": "Writer's house with six-toed cats",
+  "analog": "Literary house museums",
+  "gameplay": "Easter egg",
+  "gta": ""
+ },
+ {
+  "district": "keys",
+  "name": "Naval Air Station Marisol",
+  "type": "Naval air station",
+  "analog": "Island naval air stations",
+  "gameplay": "Steal a helicopter",
+  "gta": ""
+ },
+ {
+  "district": "keys",
+  "name": "Treasure Fleet Museum",
+  "type": "Shipwreck treasure museum",
+  "analog": "Shipwreck treasure museums",
+  "gameplay": "Gold heist",
+  "gta": ""
+ },
+ {
+  "district": "keys",
+  "name": "Dolphin Research Center",
+  "type": "Marine mammal centre",
+  "analog": "Keys dolphin centres",
+  "gameplay": "Rescue missions",
+  "gta": ""
+ },
+ {
+  "district": "keys",
+  "name": "Sea Turtle Hospital",
+  "type": "Turtle rescue hospital",
+  "analog": "Keys turtle hospitals",
+  "gameplay": "Rescue missions",
+  "gta": ""
+ },
+ {
+  "district": "keys",
+  "name": "Fort Dry Shoal",
+  "type": "Island brick fort far offshore",
+  "analog": "Remote island forts",
+  "gameplay": "Smuggler showdown",
+  "gta": ""
+ },
+ {
+  "district": "keys",
+  "name": "Hidden Tiki Bar",
+  "type": "Floating tiki bar",
+  "analog": "Floating bars",
+  "gameplay": "Easter egg",
+  "gta": ""
+ },
+ {
+  "district": "keys",
+  "name": "Marisol Charter Marina",
+  "type": "Sport-fishing charter marina",
+  "analog": "Keys charter marinas",
+  "gameplay": "Deep-sea fishing",
+  "gta": "Boat yard (VI, reported)"
+ },
+ {
+  "district": "keys",
+  "name": "Bat Tower",
+  "type": "Old wooden bat tower",
+  "analog": "Keys bat tower",
+  "gameplay": "Easter egg",
+  "gta": ""
+ },
+ {
+  "district": "islands",
+  "name": "Isla Perdida Estate",
+  "type": "Private island mansion",
+  "analog": "Private-island estates",
+  "gameplay": "Drug-lord raid",
+  "gta": "Cayo Perico (V Online)"
+ },
+ {
+  "district": "islands",
+  "name": "Gulf Platform 7",
+  "type": "Offshore oil platform",
+  "analog": "Gulf oil platforms",
+  "gameplay": "Platform assault",
+  "gta": ""
+ },
+ {
+  "district": "islands",
+  "name": "San Rafael Wreck Reef",
+  "type": "Shipwreck dive reef",
+  "analog": "Florida shipwreck reefs",
+  "gameplay": "Diving, treasure",
+  "gta": "Sunken treasure (V)"
+ },
+ {
+  "district": "islands",
+  "name": "MS Grand Solano",
+  "type": "Anchored cruise ship",
+  "analog": "Cruise ships",
+  "gameplay": "Cruise ship mission",
+  "gta": ""
+ },
+ {
+  "district": "islands",
+  "name": "Cay Light",
+  "type": "Lighthouse on a lonely cay",
+  "analog": "Reef lighthouses",
+  "gameplay": "Lookout",
+  "gta": ""
+ },
+ {
+  "district": "airport",
+  "name": "Costa Verde Emergency Operations Center",
+  "type": "Hardened hurricane command bunker",
+  "analog": "County emergency operations centres",
+  "gameplay": "Hurricane event HQ",
+  "gta": ""
+ },
+ {
+  "district": "northshore",
+  "name": "Ridge Transmitter Farm",
+  "type": "TV and radio mast farm",
+  "analog": "Broadcast tower farms",
+  "gameplay": "Climb, pirate radio",
+  "gta": ""
+ },
+ {
+  "district": "downtown",
+  "name": "Strand Causeway Toll Plaza",
+  "type": "Causeway toll plaza",
+  "analog": "Causeway toll plazas",
+  "gameplay": "Toll-booth heist",
+  "gta": ""
+ },
+ {
+  "district": "docks",
+  "name": "River Drawbridge",
+  "type": "Bascule drawbridge",
+  "analog": "Miami River-type drawbridges",
+  "gameplay": "Bridge-jump chase",
+  "gta": ""
+ },
+ {
+  "district": "truckstop",
+  "name": "I-1 Rest Area",
+  "type": "Interstate rest area",
+  "analog": "Interstate rest areas",
+  "gameplay": "Meet-ups, easter eggs",
+  "gta": ""
+ }
+]
