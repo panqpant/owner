@@ -390,16 +390,16 @@ def _car(L_mm, W_mm, H_mm, WB_mm, wheel_mm, clear_mm, top, belt, wb_centre=0.5, 
 CAR_SPECS = {
     "sedan": _car(4915, 1840, 1445, 2825, 690, 140,
                   [(0, .42), (.02, .56), (.09, .66), (.17, .69), (.29, .93), (.38, 1), (.55, 1), (.65, .91), (.735, .7), (.9, .64), (.97, .56), (1, .4)],
-                  .63, .5, ["sunroof", "fin"]),
+                  .66, .5, ["sunroof", "fin"]),
     "suv": _car(4650, 1860, 1690, 2700, 740, 210,
                 [(0, .4), (.015, .62), (.045, .93), (.1, 1), (.58, 1), (.665, .9), (.77, .67), (.93, .61), (.985, .52), (1, .38)],
-                .59, .49, ["rails", "clad", "fin"]),
+                .64, .49, ["rails", "clad", "fin"]),
     "ev": _car(4750, 1920, 1624, 2890, 760, 160,
                [(0, .42), (.03, .63), (.13, .85), (.3, 1), (.56, 1), (.685, .86), (.785, .6), (.94, .55), (1, .42)],
-               .57, .5, ["flush", "fin"]),
+               .63, .5, ["flush", "fin"]),
     "van": _car(5170, 1995, 1740, 3060, 720, 160,
                 [(0, .4), (.012, .94), (.045, 1), (.66, 1), (.745, .84), (.845, .59), (.955, .54), (1, .4)],
-                .55, .48, ["fin"]),
+                .6, .48, ["fin"]),
     "pickup": _car(5884, 2030, 1995, 3694, 820, 240,
                    [(.36, .62), (.375, 1), (.57, 1), (.625, .92), (.69, .7), (.95, .69), (.99, .6), (1, .43)],
                    .62, .44, ["clad", "bed", "truckgrille"]),
@@ -428,21 +428,28 @@ def _car_mesh(kind):
         x = -L / 2 + L * t
         ztop = _interp(sp["top"], t) * H
         gh = max(0.0, min(1.0, (ztop - belt) / max(H - belt, 1e-6)))  # 1 = full-height greenhouse here
-        end = max(0.0, 1 - (abs(t - 0.5) / 0.5) ** 14) ** 0.35  # plan view: round the corners at nose / tail
-        hw = W / 2 * (0.9 + 0.1 * end)
+        end = max(0.0, 1 - (abs(t - 0.5) / 0.5) ** 6) ** 0.5  # plan view: corners taper in toward nose / tail
+        hw = W / 2 * (0.8 + 0.2 * end)
+        off = sp["L"] * (sp["wbc"] - 0.5)
+        for ax in (-sp["wb"] + off, sp["wb"] + off):  # fenders swell out over each wheel
+            hw += 0.12 * math.exp(-((x - ax) / (sp["wr"] * 1.4)) ** 2)
         lo = clear + 0.3
         half = [  # (y, z) from bottom centre up to roof centre
-            (0.0, lo), (hw - 0.45, lo), (hw - 0.05, lo + 0.55), (hw, lo + (belt - lo) * 0.45),  # rocker, door bulge
-            (hw - 0.06, belt - 0.3), (hw - 0.22, belt),  # shoulder, beltline
+            (0.0, lo), (hw - 0.5, lo), (hw - 0.08, lo + 0.5), (hw, lo + (belt - lo) * 0.42),  # rocker, door bulge
+            (hw - 0.05, belt - 0.4), (hw - 0.16, belt - 0.05),  # soft shoulder, beltline
         ]
         if gh > 0.02:  # greenhouse: glass tucks inward (tumblehome) up to the roof
-            z_top = belt + (ztop - belt)
-            half += [(hw * (0.9 - 0.04 * gh), belt + 0.12), (hw * (0.9 - 0.18 * gh), belt + (z_top - belt) * 0.82),
-                     (hw * (0.86 - 0.26 * gh), z_top - 0.04), (0.0, z_top + 0.06)]
+            z_top = ztop
+            half += [(hw * (0.92 - 0.06 * gh), belt + 0.1), (hw * (0.92 - 0.2 * gh), belt + (z_top - belt) * 0.8),
+                     (hw * (0.86 - 0.3 * gh), z_top - 0.05), (0.0, z_top + 0.05)]
         else:  # hood / trunk lid: upper points fold onto a gently crowned panel
-            half += [(hw * 0.86, ztop - 0.04), (hw * 0.62, ztop + 0.02), (hw * 0.34, ztop + 0.06), (0.0, ztop + 0.08)]
+            half += [(hw * 0.9, ztop - 0.06), (hw * 0.66, ztop + 0.02), (hw * 0.34, ztop + 0.07), (0.0, ztop + 0.09)]
         ring = [(-y, z) for y, z in half[::-1][:-1]] + half[1:]  # mirror into a full loop (centre points shared)
-        ring = [(y, z) for y, z in ring]
+        edge = min(t - t0, 1 - t) / max(1 - t0, 1e-6)  # 0 at the very nose / tail
+        if edge < 0.06:  # round the fascia in side view: pull the end rings in toward their centre
+            k = 0.9 + 0.1 * (edge / 0.06) ** 0.6
+            zc = (lo + ztop) / 2
+            ring = [(y * (k * 0.97), zc + (z - zc) * k) for y, z in ring]
         rings.append([bm.verts.new((x, y, z)) for y, z in ring])
         gh_list.append(gh)
         xs.append(t)
@@ -503,8 +510,11 @@ def _car_parts(kind, coll, mats):
             _cyl(bm, (cx, side * (W / 2 + 0.02), wr), wr * 0.16, wr * 0.16, 0.08, 16, 6, "Y")  # hub with chrome cap
     for side in (-1, 1):
         # headlight cluster: slim, swept back along the fender; DRL strip above
-        _cube(bm, (h - 0.55, side * W * 0.34, hood_z - 0.45), (0.9, W * 0.17, 0.26), 2)
-        _cube(bm, (h - 0.4, side * W * 0.34, hood_z - 0.27), (0.6, W * 0.19, 0.06), 2)
+        _cube(bm, (h - 0.2, side * W * 0.3, hood_z - 0.55), (0.6, W * 0.17, 0.26), 2)  # headlight cluster
+        _cube(bm, (h - 0.15, side * W * 0.3, hood_z - 0.38), (0.5, W * 0.19, 0.06), 2)  # LED strip
+        _cube(bm, (h - 0.15, side * W * 0.34, clear + 0.95), (0.2, 0.32, 0.12), 4)  # fog-lamp bezel
+        _cube(bm, (h - 0.06, side * W * 0.34, clear + 0.95), (0.06, 0.22, 0.07), 2)  # fog lamp
+        _cube(bm, (L * 0.28, side * (W / 2 + 0.06), sp["belt"] * H - 0.25), (0.45, 0.05, 0.1), 3)  # side indicator
         # tail lamps wrapping the corners
         _cube(bm, (-h + 0.35, side * W * 0.38, tail_z - 0.55), (0.5, W * 0.16, 0.3), 3)
         # mirror on a stalk at the base of the A-pillar
@@ -520,20 +530,30 @@ def _car_parts(kind, coll, mats):
     if "flush" not in ex:  # grille: frame + dark mesh, lower intake
         gw = W * (0.66 if "truckgrille" in ex else 0.46)
         gh = 1.2 if "truckgrille" in ex else 0.6
-        _cube(bm, (h - 0.1, 0, hood_z - 0.75 - gh / 2), (0.2, gw, gh), 6 if "truckgrille" in ex else 4)
+        _cube(bm, (h - 0.3, 0, hood_z - 0.75 - gh / 2), (0.45, gw, gh), 6 if "truckgrille" in ex else 4)
         for k in range(int(gw / 0.35)):
-            _cube(bm, (h - 0.02, -gw / 2 + 0.17 + k * 0.35, hood_z - 0.75 - gh / 2), (0.08, 0.06, gh * 0.9), 4)
+            _cube(bm, (h - 0.06, -gw / 2 + 0.17 + k * 0.35, hood_z - 0.75 - gh / 2), (0.1, 0.06, gh * 0.9), 4)
     else:
         _cube(bm, (h - 0.25, 0, hood_z - 0.3), (0.08, W * 0.82, 0.05), 2)  # EV: one light bar across the nose
-    _cube(bm, (h - 0.15, 0, clear + 0.75), (0.3, W * 0.5, 0.35), 4)  # lower intake
+    _cube(bm, (h - 0.25, 0, clear + 0.75), (0.4, W * 0.48, 0.35), 4)  # lower intake
+    _cube(bm, (h - 0.05, 0, clear + 1.3), (0.05, 1.3, 0.45), 6)  # front plate
     _cube(bm, (-h + 0.25, 0, tail_z - 0.5), (0.1, W * 0.84, 0.08), 3)  # full-width tail light bar
     _cube(bm, (-h + 0.2, 0, clear + 0.55), (0.25, W * 0.6, 0.3), 4)  # rear diffuser
     _cube(bm, (-h + 0.06, 0, tail_z - 1.15), (0.05, 1.3, 0.55), 6)  # plate
-    _cube(bm, (h - 0.02, 0, hood_z - 0.62), (0.05, 0.55, 0.22), 6)  # badge
+    _cube(bm, (h + 0.0, 0, hood_z - 0.6), (0.06, 0.55, 0.22), 6)  # badge
     wind = next(t for t in [i / 200 for i in range(200, -1, -1)] if zt(t) > sp["belt"] * H + 0.15) * L - h
     for k in (-1, 1):  # wipers at the base of the windscreen
         vs = _cube(bm, (wind + 0.2, k * W * 0.2, sp["belt"] * H + 0.2), (0.12, W * 0.34, 0.06), 4)
         bmesh.ops.rotate(bm, verts=vs, cent=(wind + 0.2, k * W * 0.2, sp["belt"] * H + 0.2), matrix=Matrix.Rotation(0.25 * k, 3, "Z"))
+    cab_ts = [i / 200 for i in range(201) if zt(i / 200) > sp["belt"] * H + 0.4]
+    if cab_ts:
+        c0, c1 = cab_ts[0] * L - h, cab_ts[-1] * L - h
+        for side in (-1, 1):
+            y = side * (W / 2 + 0.015)
+            _cube(bm, ((c0 + c1) / 2, side * (W / 2 * 0.93), sp["belt"] * H + 0.02), (c1 - c0 - 0.6, 0.1, 0.07), 6)  # chrome belt trim
+            for xd in (c1 - 0.3, (c0 + c1) / 2, c0 + 0.6 if kind not in ("pickup",) else (c0 + c1) / 2 - 2.6):  # door shut lines
+                _cube(bm, (xd, y, (clear + 0.9 + sp["belt"] * H) / 2), (0.05, 0.03, sp["belt"] * H - clear - 1.0), 4)
+            _cube(bm, ((c0 + c1) / 2, y, clear + 0.95), (c1 - c0, 0.03, 0.05), 4)  # sill line
     if "rails" in ex:
         for side in (-1, 1):
             _cube(bm, (-L * 0.08, side * W * 0.33, H + 0.12), (L * 0.42, 0.15, 0.15), 4)
@@ -549,8 +569,11 @@ def _car_parts(kind, coll, mats):
             _cube(bm, ((x0 + x1) / 2, side * W * 0.445, (clear + 0.3 + top) / 2), (x1 - x0, 0.32, top - clear - 0.3), 5)
             _cube(bm, ((x0 + x1) / 2, side * W * 0.445, top + 0.04), (x1 - x0, 0.4, 0.08), 4)
         _cube(bm, (x0 + 0.18, 0, (clear + 0.3 + top) / 2), (0.36, W * 0.9, top - clear - 0.3), 5)
-    return _obj(coll.name + "_parts", bm, [mats["tyre"], mats["rim"], mats["head"], mats["tail"], mats["plastic"], mats["paint"],
-                                           mats["chrome"], mats["disc"], mats["caliper"], mats["glass"]], coll)
+    o = _obj(coll.name + "_parts", bm, [mats["tyre"], mats["rim"], mats["head"], mats["tail"], mats["plastic"], mats["paint"],
+                                        mats["chrome"], mats["disc"], mats["caliper"], mats["glass"]], coll)
+    bev = o.modifiers.new("soft", "BEVEL")  # rounded tyre shoulders and softened trim edges
+    bev.width, bev.segments, bev.limit_method = 0.1, 2, "ANGLE"
+    return o
 
 
 CAR_COLOURS = [((236, 236, 232), 25), ((24, 24, 26), 20), ((128, 130, 132), 16), ((190, 192, 194), 14), ((40, 66, 120), 10),
