@@ -404,62 +404,135 @@ def car_models():
     return models
 
 
-def hero_palm(seed):
-    """Coconut palm: ringed curving trunk, 16 fronds each with ~40 pairs of drooping leaflets, coconuts, a dead frond."""
+def mat_frond(name, base, tip):
+    """Palm leaflet: darker at the base, lighter yellow-green toward the tip (UV v), translucent."""
+    m, nt, b = _nodes(name)
+    uv = _n(nt, "ShaderNodeUVMap")
+    sep = _n(nt, "ShaderNodeSeparateXYZ")
+    nt.links.new(uv.outputs["UV"], sep.inputs["Vector"])
+    c = _mix(nt, _lin(base), _lin(tip), sep.outputs["Y"])
+    noise = _n(nt, "ShaderNodeTexNoise", Scale=3.0, Detail=4.0)
+    nt.links.new(_coords(nt), noise.inputs["Vector"])
+    c = _mix(nt, c, tuple(x * 0.7 for x in _lin(base)), _rng(nt, noise.outputs["Fac"], 0.4, 0.7, 0, 0.5))
+    nt.links.new(c, b.inputs["Base Color"])
+    b.inputs["Roughness"].default_value = 0.45
+    b.inputs["Subsurface Weight"].default_value = 0.25
+    return m
+
+
+def hero_palm(seed, dwarf=False):
+    """Coconut palm (or a short areca clump stem when dwarf): ringed curving trunk, frond boots, ~16 fronds of
+    dense curved leaflets drooping to the tips, coconuts, hanging dead fronds."""
+    from mathutils import Matrix
     rng = random.Random(seed)
     coll = _collection(f"hero_palm_{seed}")
     trunk_m = mat_simple(f"palm_trunk{seed}", (126, 108, 88), 0.9)
-    leaf_m, dead_m = mat_foliage(f"palm_leaf{seed}", (74, 112, 40), 0.22), mat_simple(f"palm_dead{seed}", (150, 120, 70), 0.9)
+    leaf_m = mat_frond(f"palm_leaf{seed}", (40, 64, 22), (120, 150, 60))
+    dead_m = mat_frond(f"palm_dead{seed}", (110, 86, 50), (170, 140, 90))
     nut_m = mat_simple(f"coconut{seed}", (96, 84, 40), 0.7)
     bm = bmesh.new()
-    H = rng.uniform(34, 44)
-    lean = rng.uniform(4, 10)
-    segs = 28
-    for i in range(segs):  # ringed trunk: alternating ring diameters
+    uvl = bm.loops.layers.uv.new("UVMap")
+    H = rng.uniform(6, 10) if dwarf else rng.uniform(34, 44)
+    lean = rng.uniform(0.5, 1.5) if dwarf else rng.uniform(4, 10)
+    segs = 10 if dwarf else 28
+    rr = 0.35 if dwarf else 1.15
+    for i in range(segs):
         t0, t1 = i / segs, (i + 1) / segs
-        p0 = Vector((lean * t0 ** 1.6, 0, H * t0))
-        p1 = Vector((lean * t1 ** 1.6, 0, H * t1))
-        r = 1.15 - 0.4 * t0 + (0.08 if i % 2 else 0)
+        p0, p1 = Vector((lean * t0 ** 1.6, 0, H * t0)), Vector((lean * t1 ** 1.6, 0, H * t1))
+        r = rr * (1 - 0.35 * t0) + (rr * 0.07 if i % 2 else 0)
         d = p1 - p0
-        from mathutils import Matrix
         rot = d.to_track_quat("Z", "Y").to_matrix().to_4x4()
         res = bmesh.ops.create_cone(bm, cap_ends=False, segments=10, radius1=r, radius2=r * 0.97, depth=d.length, matrix=Matrix.Translation((p0 + p1) / 2) @ rot)
         for f in {f for v in res["verts"] for f in v.link_faces}:
             f.material_index = 0
     top = Vector((lean, 0, H))
-    for k in range(16):
-        a = 2 * math.pi * k / 16 + rng.uniform(-0.15, 0.15)
-        up = rng.uniform(-0.2, 0.7)  # some fronds rise, most arch and droop
-        dead = k < 2 and rng.random() < 0.7
-        length = rng.uniform(13, 17) * (0.8 if dead else 1)
+    res = bmesh.ops.create_cone(bm, cap_ends=True, segments=10, radius1=rr * 1.25, radius2=rr * 0.9, depth=rr * 2.2, matrix=Matrix.Translation(top - Vector((0, 0, rr))))
+    for f in {f for v in res["verts"] for f in v.link_faces}:  # frond boots
+        f.material_index = 2
+    nfr = 14 if dwarf else 17
+    scale = 0.45 if dwarf else 1.0
+    for k in range(nfr):
+        a = 2 * math.pi * k / nfr + rng.uniform(-0.15, 0.15)
+        dead = (not dwarf) and k < 3 and rng.random() < 0.8
+        up = rng.uniform(0.3, 0.9) if not dead else -0.9
+        length = rng.uniform(13, 17) * scale * (0.85 if dead else 1)
         pts = []
-        for j in range(21):  # rachis: arcs out and down
-            t = j / 20
+        for j in range(25):  # rachis arcs up then droops
+            t = j / 24
             r = length * t
-            z = r * up - (r ** 2) * 0.045 * (1.6 if dead else 1) - (8 * t if dead else 0)
-            pts.append(top + Vector((math.cos(a) * r, math.sin(a) * r, z)))
+            z = r * up - (r ** 2) * (0.05 / scale) - (length * 0.5 * t if dead else 0)
+            pts.append(top + Vector((math.cos(a) * r * (0.6 if dead else 1), math.sin(a) * r * (0.6 if dead else 1), z)))
         side = Vector((-math.sin(a), math.cos(a), 0))
         mi = 2 if dead else 1
-        for j in range(1, 20):
-            t = j / 20
-            ll = 3.4 * math.sin(math.pi * min(1, t * 1.05)) + 0.3
-            base = pts[j]
-            dirv = (pts[j + 1] - pts[j - 1]).normalized()
-            for s in (-1, 1):  # a leaflet each side, drooping
-                tip = base + side * s * ll * 0.85 + dirv * ll * 0.45 + Vector((0, 0, -ll * 0.55))
-                v1 = bm.verts.new(base)
-                v2 = bm.verts.new(base + dirv * 0.35)
-                v3 = bm.verts.new(tip)
-                f = bm.faces.new((v1, v2, v3))
-                f.material_index = mi
-    for k in range(rng.randint(3, 7)):
-        a = rng.uniform(0, 2 * math.pi)
-        res = bmesh.ops.create_icosphere(bm, subdivisions=2, radius=0.75)
-        bmesh.ops.translate(bm, vec=top + Vector((math.cos(a) * 0.9, math.sin(a) * 0.9, -1.0)), verts=res["verts"])
-        for f in {f for v in res["verts"] for f in v.link_faces}:
-            f.material_index = 3
+        for j in range(2, 24):
+            t = j / 24
+            ll = (3.6 * math.sin(math.pi * min(1, t * 1.02)) + 0.4) * scale
+            base, dirv = pts[j], (pts[j + 1] - pts[j - 1]).normalized()
+            for s in (-1, 1):
+                droop = rng.uniform(0.5, 0.9)
+                w = 0.28 * scale
+                prev = None
+                for q in range(4):  # leaflet: 3 curved segments, tapering, sagging toward the tip
+                    u = q / 3
+                    c = base + side * s * ll * 0.85 * u + dirv * ll * 0.35 * u + Vector((0, 0, -ll * droop * u * u))
+                    half = w * (1 - 0.8 * u) + 0.02
+                    pa, pb = bm.verts.new(c - dirv * half), bm.verts.new(c + dirv * half)
+                    if prev:
+                        f = bm.faces.new((prev[0], prev[1], pb, pa))
+                        f.material_index = mi
+                        for lp, (uu, vv) in zip(f.loops, ((0, (q - 1) / 3), (1, (q - 1) / 3), (1, u), (0, u))):
+                            lp[uvl].uv = (uu, vv)
+                    prev = (pa, pb)
+    if not dwarf:
+        for _ in range(rng.randint(3, 7)):
+            a = rng.uniform(0, 2 * math.pi)
+            res = bmesh.ops.create_icosphere(bm, subdivisions=2, radius=0.75)
+            bmesh.ops.translate(bm, vec=top + Vector((math.cos(a) * 1.1, math.sin(a) * 1.1, -1.4)), verts=res["verts"])
+            for f in {f for v in res["verts"] for f in v.link_faces}:
+                f.material_index = 3
     _obj(f"hero_palm_{seed}", bm, [trunk_m, leaf_m, dead_m, nut_m], coll)
     return coll
+
+
+def areca_clump(seed):
+    """Clumping areca palm: several short leaning stems with feathery fronds (common Florida yard plant)."""
+    rng = random.Random(seed)
+    coll = _collection(f"areca_{seed}")
+    for k in range(rng.randint(3, 5)):
+        sub = hero_palm(seed * 10 + k, dwarf=True)
+        for o in list(sub.objects):
+            sub.objects.unlink(o)
+            o.location = (rng.uniform(-1.2, 1.2), rng.uniform(-1.2, 1.2), 0)
+            o.rotation_euler = (rng.uniform(-0.15, 0.15), rng.uniform(-0.15, 0.15), rng.uniform(0, 6.28))
+            coll.objects.link(o)
+        bpy.data.collections.remove(sub)
+    return coll
+
+
+def plant_beds(beds, gy, rng, keep_clear=None):
+    """Fill mulch beds and lot-edge strips with shrubs, flowering bushes and areca clumps every few studs."""
+    kinds = [shrubs_by_name(n) for n in ("shrub_green", "shrub_pink", "shrub_white", "hedge")]
+    arecas = [areca_clump(900 + k) for k in range(3)]
+    geoms = beds.geoms if hasattr(beds, "geoms") else [beds]
+    n = 0
+    for g in geoms:
+        if g.is_empty or g.area < 4:
+            continue
+        line = g.buffer(-1.0).boundary if not g.buffer(-1.0).is_empty else g.boundary
+        L = line.length
+        t = rng.uniform(0, 3)
+        while t < L:
+            p = line.interpolate(t)
+            if keep_clear is not None and keep_clear.contains(p):  # storefront side: leave it open
+                t += 3
+                continue
+            if rng.random() < 0.05:
+                place(rng.choice(arecas), p.x, p.y, gy + 0.2, rng.uniform(0, 6.28), rng.uniform(0.8, 1.2))
+            else:
+                place(rng.choice(kinds), p.x, p.y, gy + 0.1, rng.uniform(0, 6.28), rng.uniform(0.6, 1.15))
+            n += 1
+            t += rng.uniform(6, 11)
+    return n
 
 
 def hero_oak(seed):
@@ -1099,5 +1172,5 @@ def real_trees(oaks, palms):
         c = _SHRUBS.get(name)
         if c:
             for o in c.objects:
-                foliate(o, shrub_leaf, 700, 0.9)
+                foliate(o, shrub_leaf, 260, 1.1)
     _ = os

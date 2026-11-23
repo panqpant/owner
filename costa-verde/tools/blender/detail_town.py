@@ -431,7 +431,8 @@ def main_real():
     realism.signs(SIGNS)
     realism.weather(objs)
     realism.haze(CX, CZ, gy)
-    lawn, _ = realism.landcover(detailed, walk_outer, zone, gy, rng, palms, oaks)
+    lawn, beds = realism.landcover(detailed, walk_outer, zone, gy, rng, palms, oaks)
+    print("bed plants:", realism.plant_beds(beds, gy, rng, walk_outer.buffer(10)))
     realism.real_trees(oaks, palms)
     terrain = bpy.data.objects["ground"]
     realism.grass(terrain, (CX - 260, CZ - 260, CX + 260, CZ + 260), lawn)
