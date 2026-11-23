@@ -162,10 +162,21 @@ function City.generate(): { roads: { Road }, buildings: { Building }, parks: { P
 		end
 		-- still none: route around the other landmarks over the terrain (A*, landmarks cost 500)
 		local routed: { number }? = nil
-		if not from and cands[1] and cands[1][1] < 6000 ^ 2 then
-			best, from, to = cands[1][1], cands[1][2], cands[1][3]
-			local f, t = from :: { number }, to :: { number }
-			routed = Roads.route({ { f[1] / W, f[2] / W }, { t[1] / W, t[2] / W } }, "connector")
+		-- the A* grid (256 studs) can't see small sites, so check each route and keep the first that's clear
+		for k = 1, math.min(#cands, 40), 4 do
+			local c = cands[k]
+			if from or c[1] >= 6000 ^ 2 then
+				break
+			end
+			local route = Roads.route({ { c[2][1] / W, c[2][2] / W }, { c[3][1] / W, c[3][2] / W } }, "connector")
+			route[1], route[2], route[#route - 1], route[#route] = c[2][1], c[2][2], c[3][1], c[3][2]
+			local clear = true
+			for i = 1, #route - 3, 2 do
+				clear = clear and not Landmarks.crosses(route[i], route[i + 1], route[i + 2], route[i + 3])
+			end
+			if clear then
+				best, from, to, routed = c[1], c[2], c[3], route
+			end
 		end
 		if from and to then
 			local pts = {}
