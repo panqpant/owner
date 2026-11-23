@@ -863,6 +863,7 @@ def cobra_model():
 def street_life(roads, asphalt, junctions, buildings, zone, gy, rng, no_cars=None):
     """Parked cars, utility poles with wires and street lights, hydrants, stop signs, trash cans, mailboxes."""
     cars, props = car_models(), prop_models()
+    cars = [c for c in cars if not c.name.startswith("car_sedan")]  # best of the generated set until the imported models arrive
     COBRA.append(cobra_model())
     jpts = [Point(j) for j in junctions]
     from shapely.prepared import prep
