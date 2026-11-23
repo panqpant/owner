@@ -182,6 +182,73 @@ for b in B:
 check("every building has a real shape", no_parts == 0 and outside_lot == 0, f"{no_parts} without parts, {outside_lot} part corners outside their lot")
 check("building shapes clear of roads", on_road_parts / len(B) < 0.01, f"{on_road_parts} buildings ({100 * on_road_parts / len(B):.2f}%) with a part corner on a road")
 say(f"building types: {len(Counter(b.get('type') for b in B))} kinds; top: {dict(Counter(b.get('type') for b in B).most_common(12))}")
+
+# Footprints vs real ones (tools/footprint_stats.py, FEMA/ORNL USA Structures): same metrics, in metres.
+from shapely import STRtree  # noqa: E402
+from shapely.geometry import LineString, Polygon  # noqa: E402
+from shapely.ops import unary_union  # noqa: E402
+from footprint_stats import mrr  # noqa: E402
+
+REAL = json.load(open("tools/data/footprint_stats.json"))
+SPM = REAL["stud_per_m"]
+road_lines = [LineString([(r["ax"] / SPM, r["az"] / SPM), (r["bx"] / SPM, r["bz"] / SPM)]) for r in ROADS
+              if r["kind"] not in ("freeway", "ramp", "drive") and (r["ax"], r["az"]) != (r["bx"], r["bz"])]
+road_tree = STRtree(road_lines)
+fp_b, fp_poly = [], []
+for b in B:
+    if b.get("district") in ("rural", "hamlet") or b["style"] not in REAL["styles"]:
+        continue
+    c, sn = math.cos(math.radians(b["rot"])), math.sin(math.radians(b["rot"]))
+    polys = []
+    for p in b.get("parts", []):
+        pts = p["pts"]
+        ring = [((b["x"] + c * pts[i] - sn * pts[i + 1]) / SPM, (b["z"] + sn * pts[i] + c * pts[i + 1]) / SPM) for i in range(0, len(pts), 2)]
+        polys.append(Polygon(ring).buffer(0))
+    if polys:
+        fp_b.append(b)
+        fp_poly.append(unary_union(polys))
+fp_tree = STRtree(fp_poly)
+gen = defaultdict(list)
+for i, (b, p) in enumerate(zip(fp_b, fp_poly)):
+    L, S, ang = mrr(p)
+    hull = p if p.geom_type == "Polygon" else p.convex_hull
+    corners = len(hull.simplify(0.4).exterior.coords) - 1
+    near = road_lines[road_tree.nearest(p)]
+    gap = min((p.distance(fp_poly[j]) for j in fp_tree.query(p.buffer(60)) if j != i), default=None)
+    sx, sz = near.coords[-1][0] - near.coords[0][0], near.coords[-1][1] - near.coords[0][1]
+    rel = abs(math.degrees(ang - math.atan2(sz, sx))) % 180
+    gen[b["style"]].append({"area": p.area, "long": L, "short": S, "fill": p.area / max(L * S, 1), "corners": corners,
+                            "setback": p.distance(near), "gap": gap, "angle": min(rel, 180 - rel)})
+
+
+def q(v, f):
+    v = sorted(x for x in v if x is not None)
+    return v[min(len(v) - 1, int(f * len(v)))] if v else float("nan")
+
+
+say("\n## Building footprints vs real (FEMA USA Structures)")
+say("| style | n | area m² p10/p50/p90 gen (real) | long×short m p50 | plain boxes | end-on | setback m p50 | gap m p50 |")
+say("|---|---|---|---|---|---|---|---|")
+fp_bad = []
+for style, rows in sorted(gen.items()):
+    R = REAL["styles"][style]["all"]
+    g = {k: q([r[k] for r in rows], 0.5) for k in ("area", "long", "short", "setback", "gap")}
+    g10, g90 = q([r["area"] for r in rows], 0.1), q([r["area"] for r in rows], 0.9)
+    box = sum(r["fill"] > 0.97 and r["corners"] <= 4 for r in rows) / len(rows)
+    aligned = [r for r in rows if r["angle"] < 20 or r["angle"] > 70]
+    endon = sum(r["angle"] > 70 for r in aligned) / max(1, len(aligned))
+    real_endon = R["endon_share"] / max(0.01, R["endon_share"] + R["parallel_share"])
+    say(f"| {style} | {len(rows)} | {g10:.0f}/{g['area']:.0f}/{g90:.0f} ({R['area_m2']['p10']:.0f}/{R['area_m2']['p50']:.0f}/{R['area_m2']['p90']:.0f}) "
+        f"| {g['long']:.0f}×{g['short']:.0f} ({R['long_m']['p50']:.0f}×{R['short_m']['p50']:.0f}) | {box:.2f} ({R['plain_box_share']:.2f}) "
+        f"| {endon:.2f} ({real_endon:.2f}) | {g['setback']:.0f} ({R['setback_m']['p50']:.0f}) | {g['gap']:.1f} ({R['gap_m']['p50']:.1f}) |")
+    if len(rows) < 30:
+        continue
+    ok = (0.6 < g["area"] / R["area_m2"]["p50"] < 1.6 and 0.5 < (g90 / g10) / (R["area_m2"]["p90"] / R["area_m2"]["p10"]) < 2
+          and abs(box - R["plain_box_share"]) < 0.15 and abs(endon - real_endon) < 0.2 and 0.5 < g["gap"] / R["gap_m"]["p50"] < 2
+          and 0.6 < g["setback"] / R["setback_m"]["p50"] < 1.6)
+    if not ok:
+        fp_bad.append(style)
+check("footprints match real buildings", not fp_bad, f"size, spread, shape, orientation, setback and gap within range of the real data; off: {fp_bad or 'none'}")
 bg = defaultdict(list)
 for b in B:
     bg[(int(b["x"] // 128), int(b["z"] // 128))].append(b)
@@ -249,7 +316,7 @@ check("landmarks on land (except offshore ones)", not wet_lm, f"{len(wet_lm)} on
 cut = []
 for l in LM:
     for r in seg_grid[(int(l["x"] // 128), int(l["z"] // 128))]:
-        if l["site"] != "bridge" and r["kind"] != "access" and inside(l, (r["ax"] + r["bx"]) / 2, (r["az"] + r["bz"]) / 2, 10):
+        if l["site"] != "bridge" and inside(l, (r["ax"] + r["bx"]) / 2, (r["az"] + r["bz"]) / 2, 10):
             cut.append(l["name"])
             break
 check("no road through a landmark", not cut, f"{len(cut)} landmarks with a road through them: {cut[:5]}")

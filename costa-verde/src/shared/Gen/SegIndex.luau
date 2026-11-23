@@ -30,13 +30,22 @@ function SegIndex.new()
 		end
 		return true
 	end
-	-- A rotated building box (centre, width along rot, depth): corners and edge midpoints all off the road.
+	-- A rotated building box (centre, width along rot, depth): its outline every 16 studs and its middle
+	-- all off the road (dense enough that no road can pass between test points).
 	function idx.boxClear(x: number, z: number, w: number, d: number, rotDeg: number): boolean
 		local c, s = math.cos(math.rad(rotDeg)), math.sin(math.rad(rotDeg))
-		for _, p in { { -1, -1 }, { 1, -1 }, { 1, 1 }, { -1, 1 }, { 0, -1 }, { 1, 0 }, { 0, 1 }, { -1, 0 } } do
-			local px, pz = p[1] * w / 2, p[2] * d / 2
-			if not idx.clear(x + c * px - s * pz, z + s * px + c * pz, 2) then
-				return false
+		if not idx.clear(x, z, math.min(w, d) / 2) then
+			return false
+		end
+		local nw, nd = math.max(1, math.ceil(w / 16)), math.max(1, math.ceil(d / 16))
+		for i = 0, nw do
+			for j = 0, nd do
+				if i == 0 or j == 0 or i == nw or j == nd then
+					local px, pz = (i / nw - 0.5) * w, (j / nd - 0.5) * d
+					if not idx.clear(x + c * px - s * pz, z + s * px + c * pz, 2) then
+						return false
+					end
+				end
 			end
 		end
 		return true

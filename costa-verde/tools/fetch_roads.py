@@ -96,7 +96,8 @@ def fetch(t):
     return name, role, len(roads), sum(len(p) for _, p in roads)
 
 
-os.makedirs("tools/data/roads", exist_ok=True)
-with ThreadPoolExecutor(4) as ex:
-    for name, role, n, pts in ex.map(fetch, TEMPLATES):
-        print(f"{name:22s} {role:9s} {n:6d} roads {pts:7d} points")
+if __name__ == "__main__":
+    os.makedirs("tools/data/roads", exist_ok=True)
+    with ThreadPoolExecutor(4) as ex:
+        for name, role, n, pts in ex.map(fetch, TEMPLATES):
+            print(f"{name:22s} {role:9s} {n:6d} roads {pts:7d} points")

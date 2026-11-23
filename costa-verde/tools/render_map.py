@@ -98,9 +98,17 @@ for dist in world["districts"]:
     d.text((x, z), dist["name"], fill=(255, 255, 255), font=font, anchor="mm", stroke_width=3, stroke_fill=(0, 0, 0))
 # Landmarks: footprints with names (readable when zoomed); playable markers as lettered circles.
 lm_font = ImageFont.truetype("DejaVuSans-Bold.ttf", 12)
+SURFACE = {"lot": (120, 120, 125), "field": (90, 160, 80), "stands": (225, 120, 200), "runway": (60, 60, 65), "deck": (170, 130, 90),
+           "tank": (230, 230, 235), "water": (60, 170, 220), "panel": (40, 60, 120), "wall": (60, 60, 60), "pit": (175, 150, 110)}
 for l in world.get("landmarks", []):
     x, z, w2, d2 = l["x"] * k, l["z"] * k, l["w"] * k / 2, l["d"] * k / 2
-    d.rectangle([x - w2, z - d2, x + w2, z + d2], fill=(205, 60, 180), outline=(90, 0, 80), width=2)
+    if l.get("parts"):  # site plan: surfaces in their own colours, buildings in landmark magenta
+        for p in sorted(l["parts"], key=lambda p: p["base"] + p["h"]):
+            pts = p["pts"]
+            poly = [((l["x"] + pts[i]) * k, (l["z"] + pts[i + 1]) * k) for i in range(0, len(pts), 2)]
+            d.polygon(poly, fill=SURFACE.get(p["roof"], (205, 60, 180)), outline=(90, 0, 80) if p["roof"] not in SURFACE else None)
+    else:
+        d.rectangle([x - w2, z - d2, x + w2, z + d2], fill=(205, 60, 180), outline=(90, 0, 80), width=2)
     d.text((x, z - d2 - 8), l["name"], fill=(255, 230, 250), font=lm_font, anchor="mm", stroke_width=2, stroke_fill=(60, 0, 50))
 MARK = {"gun_store": ("G", (200, 30, 30)), "mod_shop": ("M", (240, 140, 20)), "car_dealer": ("C", (40, 120, 220)),
         "boat_dealer": ("B", (20, 160, 200)), "clothing": ("S", (180, 80, 220)), "barber": ("H", (120, 80, 40)),

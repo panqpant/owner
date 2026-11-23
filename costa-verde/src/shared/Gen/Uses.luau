@@ -20,6 +20,16 @@ local COMMERCIAL = { tower = true, midrise = true, deco = true, stucco = true, w
 local DIRECT = { house = "Home", trailer = "Home", farmhouse = "Farm house", barn = "Farm", silo = "Farm",
 	gas = "Gas station", church = "Religious congregation (private)", diner = "Full-service restaurant" }
 
+-- Uses that need a big building: smallest typical real footprint, m² (the building redraws if smaller).
+local MIN_M2: { [string]: number } = {
+	["Supercenter / warehouse club"] = 3000, ["Department store"] = 3000, ["Hospital (private)"] = 3000, ["Home centre / hardware"] = 2500,
+	["Sugar mill / refinery"] = 3000, ["Amusement / theme park"] = 3000, ["Port / marine cargo"] = 3000, ["Public high school"] = 2000,
+	["Public middle school"] = 2000, ["Casino"] = 2000, ["Warehouse / distribution"] = 2000, ["Public elementary school"] = 1500,
+	["Supermarket / grocery"] = 1500, ["Cinema"] = 1500, ["Self-storage"] = 1500, ["Bowling centre"] = 1200, ["College / university"] = 1000,
+	["Nursing home"] = 1000, ["Furniture store"] = 800, ["Electronics store"] = 800, ["Hotel / motel"] = 600,
+}
+local STUD2_PER_M2 = 2.4 ^ 2 -- Config.STUD_PER_M squared
+
 -- Weighted pick from the district's real mix, restricted to the style's groups.
 local function pick(mix: { { use: string, group: string, w: number } }, allowed: { [string]: boolean }, roll: number): string
 	local total = 0
@@ -53,7 +63,13 @@ function Uses.assign(buildings: { any }, seed: number)
 			local mix = if b.district == "keytown" then Data.keys
 				elseif b.style == "shack" or b.district == "hamlet" then Data.rural
 				else Data.metro
-			b.use = pick(mix, GROUPS[b.style] or GENERAL, rng:next())
+			local area = b.w * b.d / STUD2_PER_M2
+			for _ = 1, 8 do -- redraw from the same real mix until the use fits the building
+				b.use = pick(mix, GROUPS[b.style] or GENERAL, rng:next())
+				if area >= (MIN_M2[b.use] or 0) then
+					break
+				end
+			end
 		else
 			b.use = "Home"
 		end
@@ -65,6 +81,17 @@ end
 -- at the even-spread distance for the count and shrinks if too few fit. Sets b.marker = feature.
 function Uses.markers(buildings: { any }, seed: number)
 	local rng = Hash.rng(seed)
+	-- no district gets more than 1.5x its fair share of markers by building count (small towns stay uncluttered)
+	local total, inDistrict, cap, used = 0, {}, {}, {}
+	for _, m in Data.markers do
+		total += m.count
+	end
+	for _, b in buildings do
+		inDistrict[b.district] = (inDistrict[b.district] or 0) + 1
+	end
+	for dId, n in inDistrict do
+		cap[dId], used[dId] = math.max(2, math.ceil(1.5 * n * total / #buildings)), 0
+	end
 	for _, m in Data.markers do
 		local pool = {}
 		local x0, z0, x1, z1 = math.huge, math.huge, -math.huge, -math.huge
@@ -85,12 +112,13 @@ function Uses.markers(buildings: { any }, seed: number)
 				if #chosen >= m.count then
 					break
 				end
-				local ok = not b.marker
+				local ok = not b.marker and used[b.district] < cap[b.district]
 				for _, c in chosen do
 					ok = ok and (b.x - c.x) ^ 2 + (b.z - c.z) ^ 2 >= spacing * spacing
 				end
 				if ok then
 					b.marker = m.feature
+					used[b.district] += 1
 					table.insert(chosen, b)
 				end
 			end

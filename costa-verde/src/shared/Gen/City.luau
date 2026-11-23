@@ -12,6 +12,7 @@ local Landmarks = require("./Landmarks")
 local SegIndex = require("./SegIndex")
 local segIndex = SegIndex.new
 local StreetStyles = require("./StreetStyles")
+local Footprints = require("./FootprintData")
 
 local City = {}
 
@@ -22,11 +23,40 @@ export type Park = { x: number, z: number, y: number, w: number, d: number, dist
 local W = Config.SIZE
 local SP = Config.ROADS.ARTERIAL_SPACING
 
--- Lot sizes along the frontage per style: width along the street, depth back from it, setback.
-local LOT = {
-	tower = { 70, 90, 6 }, midrise = { 60, 80, 6 }, deco = { 55, 70, 8 }, stucco = { 40, 50, 8 },
-	house = { 42, 55, 16 }, shack = { 34, 40, 14 }, warehouse = { 110, 120, 12 }, campus = { 80, 70, 20 },
-}
+-- Embedded in the whole-map network these styles came out with blocks shorter than real ones (audit:
+-- block median, 2.4 km windows), too small for real-size office blocks, campus halls and warehouses.
+-- One-step correction = real / generated block median.
+local BLOCK_FIX: { [string]: number } = { tower = 1.6, midrise = 1.7, campus = 1.5, warehouse = 2.2 }
+
+-- Value at uniform u from a real 10/25/50/75/90% quantile table (FootprintData); tails extend 1.6x.
+local QU = { 0, 0.1, 0.25, 0.5, 0.75, 0.9, 1 }
+local function quantile(t: { number }, u: number, logScale: boolean?): number
+	local v = { t[1] / 1.6, t[1], t[2], t[3], t[4], t[5], t[5] * 1.6 }
+	for i = 2, #QU do
+		if u <= QU[i] then
+			local f = (u - QU[i - 1]) / (QU[i] - QU[i - 1])
+			if logScale then
+				return math.exp(math.log(v[i - 1]) + (math.log(v[i]) - math.log(v[i - 1])) * f)
+			end
+			return v[i - 1] + (v[i] - v[i - 1]) * f
+		end
+	end
+	return v[#v]
+end
+
+-- One real-sized building footprint: width along the street, depth back from it, setback, side gap.
+local function footprint(style: string, rng: Hash.Rng, shrink: number): (number, number, number, number)
+	local f = Footprints[style] or Footprints.house
+	local area = quantile(f.area, rng:next(), true) * shrink
+	local aspect = math.max(1, quantile(f.aspect, rng:next()))
+	local long = math.sqrt(area * aspect)
+	local short = area / long
+	local w, d = long, short
+	if rng:next() < f.endon then
+		w, d = short, long
+	end
+	return w, d, quantile(f.setback, rng:next(), true), quantile(f.gap, rng:next(), true)
+end
 
 -- Built-up land a local street or lot may use, and the urban district there (nil if none).
 local function urbanDistrict(x: number, z: number): Config.District?
@@ -115,21 +145,39 @@ function City.generate(): { roads: { Road }, buildings: { Building }, parks: { P
 		local best, from, to = math.huge, nil, nil
 		for k = 1, math.min(#cands, 40) do
 			local c = cands[k]
-			if Terrain.dryLink(c[2][1], c[2][2], c[3][1], c[3][2]) then
+			if Terrain.dryLink(c[2][1], c[2][2], c[3][1], c[3][2]) and not Landmarks.crosses(c[2][1], c[2][2], c[3][1], c[3][2]) then
 				best, from, to = c[1], c[2], c[3]
 				break
 			end
 		end
 		-- none over dry land (wetland sites): the nearest, as a park road on a causeway, if it isn't too long
+		if not from then
+			for k = 1, math.min(#cands, 40) do
+				local c = cands[k]
+				if c[1] < 6000 ^ 2 and not Landmarks.crosses(c[2][1], c[2][2], c[3][1], c[3][2]) then
+					best, from, to = c[1], c[2], c[3]
+					break
+				end
+			end
+		end
+		-- still none: route around the other landmarks over the terrain (A*, landmarks cost 500)
+		local routed: { number }? = nil
 		if not from and cands[1] and cands[1][1] < 6000 ^ 2 then
 			best, from, to = cands[1][1], cands[1][2], cands[1][3]
+			local f, t = from :: { number }, to :: { number }
+			routed = Roads.route({ { f[1] / W, f[2] / W }, { t[1] / W, t[2] / W } }, "connector")
 		end
 		if from and to then
-			local n = math.max(1, math.ceil(math.sqrt(best) / 40))
 			local pts = {}
-			for k = 0, n do
-				table.insert(pts, from[1] + (to[1] - from[1]) * k / n)
-				table.insert(pts, from[2] + (to[2] - from[2]) * k / n)
+			if routed then
+				pts = routed
+				pts[1], pts[2] = from[1], from[2]
+			else
+				local n = math.max(1, math.ceil(math.sqrt(best) / 40))
+				for k = 0, n do
+					table.insert(pts, from[1] + (to[1] - from[1]) * k / n)
+					table.insert(pts, from[2] + (to[2] - from[2]) * k / n)
+				end
 			end
 			pts[#pts - 1], pts[#pts] = to[1], to[2] -- exact junction
 			Streets.addExternal(shared, pts)
@@ -204,6 +252,12 @@ function City.generate(): { roads: { Road }, buildings: { Building }, parks: { P
 				local d = best
 				local style = d.style :: string
 				local params = StreetStyles[style] or StreetStyles.house
+				local fix = BLOCK_FIX[style]
+				if fix then
+					params = table.clone(params)
+					params.spacing *= fix
+					params.seedEvery = (params.seedEvery or 240) * fix
+				end
 				local function inside(x: number, z: number): boolean
 					return x > x0 + 20 and x < x0 + SP - 20 and z > z0 + 20 and z < z0 + SP - 20 and urbanDistrict(x, z) ~= nil and not Landmarks.blocked(x, z)
 				end
@@ -248,70 +302,66 @@ function City.generate(): { roads: { Road }, buildings: { Building }, parks: { P
 	end
 
 	-- 3. Buildings on the frontage of every street and major road (majors become commercial strips).
+	-- placed footprints as rotated boxes, bucketed on a 128-stud grid by their bounding box
 	local placed: { [number]: { { number } } } = {}
-	local function free(x: number, z: number, r: number): boolean
-		local gx, gz = math.floor(x / 128), math.floor(z / 128)
-		for a = -1, 1 do
-			for b = -1, 1 do
-				for _, o in placed[(gx + a + 4096) * 8192 + gz + b + 4096] or {} do
-					if (o[1] - x) ^ 2 + (o[2] - z) ^ 2 < (o[3] + r) ^ 2 then
-						return false
-					end
+	local function cells(x: number, z: number, w: number, d: number, rot: number, fn: (number) -> boolean?): boolean
+		local c, sn = math.abs(math.cos(math.rad(rot))), math.abs(math.sin(math.rad(rot)))
+		local ex, ez = (w * c + d * sn) / 2, (w * sn + d * c) / 2
+		for gx = (x - ex) // 128, (x + ex) // 128 do
+			for gz = (z - ez) // 128, (z + ez) // 128 do
+				if fn((gx + 4096) * 8192 + gz + 4096) == false then
+					return false
 				end
 			end
 		end
 		return true
 	end
+	local function overlap(a: { number }, b: { number }, pad: number): boolean -- separating-axis test
+		for _, o in { a, b } do
+			for k = 0, 1 do
+				local ang = math.rad(o[5]) + k * math.pi / 2
+				local ux, uz = math.cos(ang), math.sin(ang)
+				local function half(r: { number }): number
+					local rc, rs = math.cos(math.rad(r[5])), math.sin(math.rad(r[5]))
+					return (math.abs(ux * rc + uz * rs) * r[3] + math.abs(-ux * rs + uz * rc) * r[4]) / 2
+				end
+				if math.abs((b[1] - a[1]) * ux + (b[2] - a[2]) * uz) >= half(a) + half(b) + pad then
+					return false
+				end
+			end
+		end
+		return true
+	end
+	local function free(box: { number }, pad: number): boolean
+		return cells(box[1], box[2], box[3], box[4], box[5], function(k)
+			for _, o in placed[k] or {} do
+				if overlap(box, o, pad) then
+					return false
+				end
+			end
+			return nil
+		end)
+	end
+	-- Frontage candidates: real-sized footprints drawn along both sides of every street at real gaps.
+	local cands = {}
 	local function frontage(pts: { number }, width: number)
-		local carry = 0
+		local carry = { [1] = 0, [-1] = 0 }
 		for i = 1, #pts - 3, 2 do
 			local ax, az, bx, bz = pts[i], pts[i + 1], pts[i + 2], pts[i + 3]
 			local len = math.sqrt((bx - ax) ^ 2 + (bz - az) ^ 2)
 			if len > 1e-3 then
 				local dx, dz = (bx - ax) / len, (bz - az) / len
-				local t = carry
 				local d = urbanDistrict((ax + bx) / 2, (az + bz) / 2)
-				local lot = LOT[d and d.style or "house"] or LOT.house
-				while t < len do
-					local px, pz = ax + dx * t, az + dz * t
-					for _, side in { 1, -1 } do
-						local w = lot[1] * rng:range(0.8, 1.25)
-						local dep = lot[2] * rng:range(0.8, 1.3)
-						local off = width / 2 + lot[3] + dep / 2
-						local x, z = px - dz * off * side, pz + dx * off * side
-						local rad = math.max(w, dep) * 0.5
-						local ld = urbanDistrict(x, z)
-						if ld and segs.clear(x, z, rad * 0.85) and segs.boxClear(x, z, w, dep, math.deg(math.atan2(dz, dx)))
-							and free(x, z, rad * 0.9) and not Landmarks.blocked(x, z, rad) then
-							local style = ld.style :: string
-							local s = Terrain.sample(x, z)
-							local k = (math.floor(x / 128) + 4096) * 8192 + math.floor(z / 128) + 4096
-							placed[k] = placed[k] or {}
-							table.insert(placed[k], { x, z, rad })
-							if rng:next() < (ld.parkChance or 0) * 0.5 then
-								local suburb = style == "house" or style == "shack"
-								local roll = rng:next()
-								table.insert(parks, { x = x, z = z, y = s.h, w = w * 1.6, d = dep * 1.6, district = ld.id,
-									kind = if suburb and roll < 0.3 then "lake" elseif suburb and roll < 0.55 then "golf" else "park" })
-							else
-								local centre = 1 - math.min(1, math.sqrt((x / W - ld.u) ^ 2 + (z / W - ld.v) ^ 2) / ld.radius)
-								local tt = rng:next() ^ 1.6
-								if style == "tower" or style == "midrise" then
-									tt *= 0.25 + 0.75 * centre ^ 1.5
-								end
-								local minH, maxH = ld.minH :: number, ld.maxH :: number
-								table.insert(buildings, {
-									x = x, z = z, y = s.h, w = w, d = dep,
-									h = math.floor(minH + (maxH - minH) * tt),
-									rot = math.deg(math.atan2(dz, dx)) + (if side == 1 then 0 else 180),
-									style = style, district = ld.id, variant = rng:int(1, 8),
-								})
-							end
-						end
+				local style0 = d and d.style or "house"
+				for _, side in { 1, -1 } do
+					local t = carry[side]
+					while t < len do
+						local fw, fd, setback, gap = footprint(style0, rng, 1)
+						table.insert(cands, { ax = ax, az = az, dx = dx, dz = dz, width = width, t = t, side = side, w = fw, d = fd, setback = setback })
+						t += fw + gap
 					end
-					t += lot[1] * rng:range(0.9, 1.15)
+					carry[side] = t - len
 				end
-				carry = t - len
 			end
 		end
 	end
@@ -323,6 +373,64 @@ function City.generate(): { roads: { Road }, buildings: { Building }, parks: { P
 	for _, ln in localNets do
 		for _, r in ln.net do
 			frontage(r.pts, Config.ROAD_W)
+		end
+	end
+	-- Biggest first (a big building takes its block, smaller ones fill around it); each slides along
+	-- the street, then shrinks, until it fits.
+	table.sort(cands, function(p, q)
+		return p.w * p.d > q.w * q.d
+	end)
+	for _, c in cands do
+		local ang = math.deg(math.atan2(c.dz, c.dx))
+		local w, dep, x, z, ld = 0, 0, 0, 0, nil :: Config.District?
+		local ok = false
+		-- { area scale, slide along the street, turn sideways, build to the sidewalk }
+		for _, try in { { 1, 0 }, { 1, 15 }, { 1, -15 }, { 1, 30 }, { 1, 0, true }, { 1, 0, false, true }, { 1, 0, true, true },
+			{ 1, 20, true, true }, { 0.6, 0 }, { 0.6, 0, true, true }, { 0.35, 0 } } do
+			local k = math.sqrt(try[1])
+			w, dep = c.w * k, c.d * k
+			if try[3] then
+				w, dep = dep, w
+			end
+			local off = (if try[4] then c.width / 2 + 4 else math.max(c.setback, c.width / 2 + 4)) + dep / 2
+			local at = c.t + try[2] + w / 2
+			local px, pz = c.ax + c.dx * at, c.az + c.dz * at
+			x, z = px - c.dz * off * c.side, pz + c.dx * off * c.side
+			ld = urbanDistrict(x, z)
+			if ld and segs.boxClear(x, z, w, dep, ang) and free({ x, z, w, dep, ang }, 1.5)
+				and not Landmarks.blocked(x, z, math.max(w, dep) / 2) then
+				ok = true
+				break
+			end
+		end
+		if ok and ld then
+			local style = ld.style :: string
+			local s = Terrain.sample(x, z)
+			local box = { x, z, w, dep, ang }
+			cells(x, z, w, dep, ang, function(k)
+				placed[k] = placed[k] or {}
+				table.insert(placed[k], box)
+				return nil
+			end)
+			if rng:next() < (ld.parkChance or 0) * 0.5 then
+				local suburb = style == "house" or style == "shack"
+				local roll = rng:next()
+				table.insert(parks, { x = x, z = z, y = s.h, w = w * 1.6, d = dep * 1.6, district = ld.id,
+					kind = if suburb and roll < 0.3 then "lake" elseif suburb and roll < 0.55 then "golf" else "park" })
+			else
+				local centre = 1 - math.min(1, math.sqrt((x / W - ld.u) ^ 2 + (z / W - ld.v) ^ 2) / ld.radius)
+				local tt = rng:next() ^ 1.6
+				if style == "tower" or style == "midrise" then
+					tt *= 0.25 + 0.75 * centre ^ 1.5
+				end
+				local minH, maxH = ld.minH :: number, ld.maxH :: number
+				table.insert(buildings, {
+					x = x, z = z, y = s.h, w = w, d = dep,
+					h = math.floor(minH + (maxH - minH) * tt),
+					rot = ang + (if c.side == 1 then 0 else 180),
+					style = style, district = ld.id, variant = rng:int(1, 8),
+				})
+			end
 		end
 	end
 

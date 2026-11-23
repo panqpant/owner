@@ -1,3 +1,5 @@
 build/
 refs/
 tools/data/census/
+tools/data/footprints/
+__pycache__/

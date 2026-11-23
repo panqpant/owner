@@ -11,6 +11,7 @@ local settlements = Gen.Rural.generate(city.roads, city.buildings, city.shared)
 Gen.Uses.assign(city.buildings, Gen.Config.SEED + 800) -- every building gets a real use
 Gen.Uses.markers(city.buildings, Gen.Config.SEED + 801) -- then the playable ones
 Gen.Shapes.assign(city.buildings, Gen.Config.SEED + 802) -- and a real shape each
+Gen.Shapes.landmarks(city.landmarks, Gen.Config.SEED + 803) -- landmarks get site plans
 local pois = Gen.Rural.pois()
 local tracks, stations = Gen.Transit.generate(settlements, city.roads)
 
