@@ -1,0 +1,28 @@
+-- Preview of what TerrainBuilder writes into Roblox: runs its column logic for a few areas and writes
+-- build/terrain_<name>.json (4-stud heights, water levels, materials) for tools/blender/render_terrain.py.
+-- Usage (from costa-verde/): lune run tools/export-terrain.luau
+local fs = require("@lune/fs")
+local serde = require("@lune/serde")
+local TB = require("../src/shared/TerrainBuilder")
+local Gen = require("../src/shared/Gen")
+
+TB.selfCheck()
+local world = serde.decode("json", fs.readFile("build/world.json"))
+local D = {}
+for _, d in world.districts do
+	D[d.id] = d
+end
+local AREAS = { -- name, centre, size (studs)
+	{ "keys", D.keytown.x, D.keytown.z, 2560 },
+	{ "wetland", D.swamptown.x, D.swamptown.z, 2560 },
+	{ "beach", D.beach.x, D.beach.z, 2560 },
+	{ "country", Gen.Config.SIZE * 0.45, Gen.Config.SIZE * 0.3, 2560 },
+}
+for _, a in AREAS do
+	local t0 = os.clock()
+	local x0, z0 = math.floor((a[2] - a[4] / 2) / 16) * 16, math.floor((a[3] - a[4] / 2) / 16) * 16
+	local c = TB.columns(x0, z0, a[4], a[4])
+	c.x0, c.z0, c.res = x0, z0, 4
+	fs.writeFile("build/terrain_" .. a[1] .. ".json", serde.encode("json", c))
+	print(string.format("%s: %dx%d columns in %.1fs", a[1], c.nx, c.nz, os.clock() - t0))
+end

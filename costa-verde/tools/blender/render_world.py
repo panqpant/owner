@@ -351,5 +351,6 @@ def shot_country():
 
 
 SHOTS = {"country": shot_country, "sunset": shot_sunset, "beach": shot_day_beach, "night": shot_night, "keys": shot_keys}
-for name in (sys.argv[1:] or SHOTS):
-    SHOTS[name]()
+if __name__ == "__main__":
+    for name in (sys.argv[1:] or SHOTS):
+        SHOTS[name]()
