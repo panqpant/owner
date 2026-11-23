@@ -7,6 +7,7 @@ local Districts = require("./Districts")
 local Hash = require("./Hash")
 local Streets = require("./Streets")
 local StreetStyles = require("./StreetStyles")
+local Roads = require("./Roads")
 
 local Rural = {}
 
@@ -37,10 +38,87 @@ local function segmentOk(ax: number, az: number, bx: number, bz: number): boolea
 	return true
 end
 
+-- Union-find over road endpoints; routes a connector from each cut-off piece to the main network.
+local function connectIslands(roads: { any }, net: { any })
+	local all = table.clone(roads)
+	for _, r in net do
+		local p = r.pts
+		for i = 1, #p - 3, 2 do
+			table.insert(all, { ax = p[i], az = p[i + 1], bx = p[i + 2], bz = p[i + 3], kind = "county" })
+		end
+	end
+	local parent: { [string]: string } = {}
+	local function key(x: number, z: number): string
+		return math.round(x * 2) .. "," .. math.round(z * 2)
+	end
+	local function find(a: string): string
+		while (parent[a] or a) ~= a do
+			parent[a] = parent[parent[a]] or parent[a]
+			a = parent[a]
+		end
+		return a
+	end
+	local pos: { [string]: { number } } = {}
+	local len: { [string]: number } = {}
+	for _, r in all do
+		if r.kind ~= "runway" then
+			local a, b = key(r.ax, r.az), key(r.bx, r.bz)
+			pos[a], pos[b] = { r.ax, r.az }, { r.bx, r.bz }
+			parent[find(a)] = find(b)
+		end
+	end
+	for _, r in all do
+		if r.kind ~= "runway" then
+			local c = find(key(r.ax, r.az))
+			len[c] = (len[c] or 0) + math.sqrt((r.bx - r.ax) ^ 2 + (r.bz - r.az) ^ 2)
+		end
+	end
+	local main, best = nil, 0
+	for c, l in len do
+		if l > best then
+			main, best = c, l
+		end
+	end
+	local mainPts = {}
+	for k, p in pos do
+		if find(k) == main then
+			table.insert(mainPts, p)
+		end
+	end
+	for c in len do
+		if c ~= main then
+			local bestD, from, to = math.huge, nil, nil
+			for k, p in pos do
+				if find(k) == c then
+					for q = 1, #mainPts, 7 do -- every 7th main vertex is plenty to find the nearest area
+						local m = mainPts[q]
+						local d = (m[1] - p[1]) ^ 2 + (m[2] - p[2]) ^ 2
+						if d < bestD then
+							bestD, from, to = d, p, m
+						end
+					end
+				end
+			end
+			if from and to then
+				local route = Roads.route({ { from[1] / W, from[2] / W }, { to[1] / W, to[2] / W } }, "state")
+				route[1], route[2], route[#route - 1], route[#route] = from[1], from[2], to[1], to[2] -- exact junctions
+				for i = 1, #route - 3, 2 do
+					local wet = Terrain.sample((route[i] + route[i + 2]) / 2, (route[i + 1] + route[i + 3]) / 2).water ~= nil
+					table.insert(roads, { ax = route[i], az = route[i + 1], bx = route[i + 2], bz = route[i + 3], width = Config.COUNTY_W, kind = "county", bridge = wet })
+				end
+			end
+		end
+	end
+end
+
 -- Rural roads grow with the style trained on real county road networks, joining the city network.
 function Rural.generate(roads: { any }, buildings: { any }, shared: Streets.Shared?)
 	local rng = Hash.rng(Config.SEED + 500)
-	local net = Streets.grow(StreetStyles.rural, ruralOk, W / 2, W / 2, W / 2, 0, Config.SEED + 503, 2500, shared)
+	local net = Streets.grow(StreetStyles.rural, ruralOk, W / 2, W / 2, W / 2, 0, Config.SEED + 503, 2500, shared, nil, Terrain.dryLink)
+	-- loose county-road ends join the nearest road (state road, city edge, another county road)
+	for _, link in Streets.stitch(shared or Streets.newShared(), net, 900, Terrain.dryLink) do
+		table.insert(net, link)
+	end
 	local segs = {}
 	local uses: { [number]: number } = {}
 	local function vkey(x: number, z: number): number
@@ -51,7 +129,7 @@ function Rural.generate(roads: { any }, buildings: { any }, shared: Streets.Shar
 		for i = 1, #pts - 3, 2 do
 			local sg = { ax = pts[i], az = pts[i + 1], bx = pts[i + 2], bz = pts[i + 3] }
 			table.insert(segs, sg)
-			table.insert(roads, { ax = sg.ax, az = sg.az, bx = sg.bx, bz = sg.bz, width = if r.kind == "arterial" then Config.ROAD_W else Config.COUNTY_W, kind = "county", bridge = false })
+			table.insert(roads, { ax = sg.ax, az = sg.az, bx = sg.bx, bz = sg.bz, width = if r.kind == "collector" then Config.ROAD_W else Config.COUNTY_W, kind = "county", bridge = false })
 		end
 		-- junction degree: endpoints count once, interior vertices twice
 		for i = 1, #pts - 1, 2 do
@@ -59,6 +137,10 @@ function Rural.generate(roads: { any }, buildings: { any }, shared: Streets.Shar
 			uses[k] = (uses[k] or 0) + (if i == 1 or i == #pts - 1 then 1 else 2)
 		end
 	end
+
+	-- Every road piece joins the main network: pieces cut off (e.g. land ringed by marsh) get a
+	-- connector routed over the terrain like a state road (bridging where it must).
+	connectIslands(roads, net)
 
 	-- Farmsteads: house + barn + silo set back from a road, joined by a driveway.
 	local spacing = 0
@@ -70,13 +152,12 @@ function Rural.generate(roads: { any }, buildings: { any }, shared: Streets.Shar
 			local dx, dz = (sg.bx - sg.ax) / len, (sg.bz - sg.az) / len
 			local side = if rng:next() < 0.5 then -1 else 1
 			local ox, oz = -dz * side, dx * side -- perpendicular, away from the road
-			local t = rng:range(0.2, 0.8) * len
-			local rx, rz = sg.ax + dx * t, sg.az + dz * t
+			local rx, rz = sg.ax, sg.az -- a road vertex, so the driveway is a real junction
 			local hx, hz = rx + ox * 90, rz + oz * 90
 			if ruralOk(hx, hz) then
 				local y = Terrain.sample(hx, hz).h
 				local rot = math.deg(math.atan2(dz, dx))
-				table.insert(roads, { ax = rx + ox * Config.COUNTY_W / 2, az = rz + oz * Config.COUNTY_W / 2, bx = hx, bz = hz, width = 10, kind = "drive", bridge = false })
+				table.insert(roads, { ax = rx, az = rz, bx = hx, bz = hz, width = 10, kind = "drive", bridge = false })
 				table.insert(buildings, { x = hx + ox * 18, z = hz + oz * 18, y = y, w = 34, d = 26, h = 16, rot = rot, style = "farmhouse", district = "rural", variant = rng:int(1, 8) })
 				table.insert(buildings, { x = hx + dx * 60 + ox * 30, z = hz + dz * 60 + oz * 30, y = y, w = 40, d = 56, h = 26, rot = rot, style = "barn", district = "rural", variant = rng:int(1, 8) })
 				if rng:next() < 0.6 then

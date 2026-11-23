@@ -21,13 +21,15 @@ except FileNotFoundError:
 BOUNDS = {
     "spacing": (150, 1800), "order": (0, 1), "curve": (0, 0.6), "branch": (0.1, 1), "cross": (0, 1),
     "deadEnd": (0, 0.6), "connect": (0.2, 0.9), "maxLen": (1, 14), "collectors": (2, 14), "aspect": (1, 3),
+    "seedEvery": (120, 720),
 }
-HALF = {"rural": 12000}
+HALF = {"rural": 12000}  # city styles: 6x6 arterial blocks, the setting City.luau uses
 
 
 def run(role, params, seed=7):
-    half = HALF.get(role, 4000)
-    json.dump({"half": half, "params": params, "seed": seed, "angle": 0.3}, open("build/p.json", "w"))
+    half = HALF.get(role, 3600)
+    mode = "open" if role == "rural" else "blocks"
+    json.dump({"half": half, "params": params, "seed": seed, "angle": 0.3, "mode": mode}, open("build/p.json", "w"))
     subprocess.run(["lune", "run", "tools/gen-streets.luau", "build/p.json", "build/s.json"], check=True)
     d = json.load(open("build/s.json"))
     return d, stats(d["roads"], d["half"])
@@ -59,11 +61,12 @@ def tune(role, evals):
         BOUNDS["order"] = (0, 1)
     rnd = random.Random(zlib.crc32(role.encode()))  # deterministic (str hash is randomized per process)
     best = clamp({"spacing": t["block_median"], "order": t["orientation_order"], "curve": 0.05, "branch": 0.7,
-                  "cross": t["cross_frac"] * 2, "deadEnd": t["dead_end_frac"] / 2, "connect": 0.5, "maxLen": 6, "collectors": 6, "aspect": 1.8})
+                  "cross": t["cross_frac"] * 2, "deadEnd": t["dead_end_frac"] / 2, "connect": 0.5, "maxLen": 6, "collectors": 6, "aspect": 1.8,
+                  "seedEvery": t["block_median"]})
     best_l = loss(run(role, best)[1], t)
     # second start shaped like a real suburb pod: curving collectors, many short cul-de-sac fingers
     pod = clamp({"spacing": t["block_median"], "order": 0.3, "curve": 0.3, "branch": 0.9, "cross": 0.1,
-                 "deadEnd": 0.6, "connect": 0.5, "maxLen": 1, "collectors": 4, "aspect": 1.5})
+                 "deadEnd": 0.6, "connect": 0.5, "maxLen": 1, "collectors": 4, "aspect": 1.5, "seedEvery": 360})
     pod_l = loss(run(role, pod)[1], t)
     if pod_l < best_l:
         best, best_l = pod, pod_l
@@ -121,7 +124,7 @@ def preview(result):
             for rd in net["roads"]:
                 pts = [((x / view + 0.5) * T, (z / view + 0.5) * T) for x, z in rd["pts"]]
                 if len(pts) > 1:
-                    td.line(pts, fill=(200, 80, 40) if rd["kind"] in ("arterial", "county") and row else (40, 40, 50), width=2 if rd["kind"] == "arterial" else 1)
+                    td.line(pts, fill=(200, 80, 40) if rd["kind"] in ("arterial", "county", "collector") and row else (40, 40, 50), width=2 if rd["kind"] in ("arterial", "collector") else 1)
             img.paste(tile, (i * T, row * (T + 22)))
             d.text((i * T + 6, row * (T + 22) + T + 3), f"{'REAL' if row == 0 else 'OURS'} {role}", fill=(0, 0, 0) if row == 0 else (150, 40, 0), font=font)
         d.line([(i * T, 0), (i * T, 2 * T + 44)], fill=(160, 160, 160), width=2)

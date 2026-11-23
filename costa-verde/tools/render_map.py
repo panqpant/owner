@@ -21,8 +21,8 @@ wl = np.array(hm["water"], dtype=float).reshape(n, n)
 rgb = np.zeros((n, n, 3), dtype=float)
 for idx, (bi, m) in enumerate(zip(hm["biome"], hm["material"])):
     c = MAT[m] if bi in ("farm", "wetland") and m in MAT else BIOME.get(bi, (90, 110, 65))
-    if hm["district"][idx] in ("downtown", "midtown", "docks", "calle", "beach", "northshore", "westside", "palmgrove", "university", "gulftown") and bi not in ("beach",):
-        c = (128, 128, 122)  # built-up ground
+    if hm["built"][idx] and bi != "beach":
+        c = (176, 172, 162)  # built-up ground (light, so streets read)
     rgb[idx // n, idx % n] = c
 biome = np.array(hm["biome"]).reshape(n, n)
 depth = np.clip((wl - h) / 40, 0, 1)[..., None]
@@ -38,11 +38,19 @@ d = ImageDraw.Draw(img)
 for p in world["parks"]:
     x, z, w = p["x"] * k, p["z"] * k, p["w"] * k / 2
     d.rectangle([x - w, z - w, x + w, z + w], fill={"lake": (25, 45, 50), "golf": (110, 160, 80), "park": (60, 110, 50)}[p["kind"]])
-for r in world["roads"]:
-    col = {"street": (85, 85, 88), "arterial": (60, 60, 64), "highway": (45, 45, 48), "runway": (150, 150, 150), "county": (150, 135, 105), "drive": (165, 150, 120)}[r["kind"]]
-    if r["bridge"]:
-        col = (200, 200, 205)
-    d.line([r["ax"] * k, r["az"] * k, r["bx"] * k, r["bz"] * k], fill=col, width=max(1, int(r["width"] * k * (1.5 if r["kind"] != "street" else 1))))
+# Road hierarchy: draw minor first, majors on top; freeways get a casing.
+ORDER = ["drive", "county", "street", "collector", "runway", "state", "arterial", "boulevard", "freeway"]
+COL = {"street": (70, 70, 76), "collector": (55, 55, 62), "arterial": (235, 200, 120), "boulevard": (245, 170, 90),
+       "state": (225, 190, 110), "freeway": (230, 120, 60), "runway": (150, 150, 150), "county": (150, 135, 105), "drive": (165, 150, 120)}
+for kind in ORDER:
+    for r in world["roads"]:
+        if r["kind"] != kind:
+            continue
+        pts = [r["ax"] * k, r["az"] * k, r["bx"] * k, r["bz"] * k]
+        w = max(1, int(r["width"] * k * (2.2 if kind in ("freeway", "boulevard", "arterial", "state") else 1.6)))
+        if kind == "freeway":
+            d.line(pts, fill=(60, 40, 30), width=w + 3)
+        d.line(pts, fill=(205, 205, 210) if r["bridge"] else COL[kind], width=w)
 STYLE = {"tower": (205, 215, 230), "midrise": (190, 190, 180), "deco": (250, 190, 200), "stucco": (240, 220, 170), "warehouse": (170, 150, 130),
          "house": (235, 235, 225), "campus": (200, 120, 100), "shack": (150, 120, 90), "farmhouse": (240, 240, 230),
          "barn": (170, 40, 35), "silo": (200, 200, 205), "store": (90, 140, 200), "gas": (230, 200, 40), "church": (255, 255, 255),

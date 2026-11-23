@@ -104,11 +104,10 @@ def terrain():
     # linear-space colours matched by eye to the USGS references
     C = {"Sand": (0.62, 0.55, 0.36), "Grass": (0.12, 0.17, 0.04), "LeafyGrass": (0.05, 0.1, 0.025), "Mud": (0.08, 0.08, 0.04), "Ground": (0.16, 0.1, 0.05)}
     B = {"mangrove": (0.02, 0.05, 0.015), "hammock": (0.025, 0.06, 0.015), "scrub": (0.09, 0.12, 0.05), "wetland": (0.16, 0.14, 0.06)}
-    urban = {"downtown", "midtown", "docks", "calle", "beach", "northshore", "westside", "palmgrove", "university", "gulftown"}
     for k, m in enumerate(hm["material"]):
         bi = hm["biome"][k]
         c = B.get(bi) if bi in B and not (bi == "wetland" and m == "Mud") else C.get(m, (0.1, 0.12, 0.05))
-        if hm["district"][k] in urban and bi != "beach":
+        if hm["built"][k] and bi != "beach":
             c = (0.2, 0.2, 0.19)  # paved city ground
         col.data[k].color = (*c, 1)
     for p in me.polygons:

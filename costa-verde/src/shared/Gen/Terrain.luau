@@ -82,6 +82,19 @@ local function keys(u: number, v: number): number
 	return best + 0.0012 * Noise.fbm(u * 300, v * 300, S + 21)
 end
 
+-- Centre line of the barrier island at a given v (normalized u): march east from the metro until the
+-- coast offset matches the band centre used by barrier() below. Roads follow it.
+function Terrain.barrierX(v: number): number
+	local B = Config.BARRIER
+	local target = B.offset + 0.004 * Noise.fbm(v * 14, 1.7, S + 31)
+	for u = 0.6, 1, 0.0005 do
+		if -outline(u, v) >= target then
+			return u
+		end
+	end
+	return 1
+end
+
 -- Barrier island chain: a band parallel to the coast (from coast distance), cut by inlets.
 local function barrier(u: number, v: number, coastDist: number): number
 	local B = Config.BARRIER
@@ -97,6 +110,17 @@ local function barrier(u: number, v: number, coastDist: number): number
 		d = math.min(d, math.abs(v - iv) - 0.0025)
 	end
 	return d
+end
+
+-- True if a straight link between two points stays on land (sampled every 20 studs).
+function Terrain.dryLink(ax: number, az: number, bx: number, bz: number): boolean
+	local n = math.max(1, math.ceil(math.sqrt((bx - ax) ^ 2 + (bz - az) ^ 2) / 20))
+	for k = 0, n do
+		if Terrain.sample(ax + (bx - ax) * k / n, az + (bz - az) * k / n).water then
+			return false
+		end
+	end
+	return true
 end
 
 function Terrain.sample(x: number, z: number): Sample

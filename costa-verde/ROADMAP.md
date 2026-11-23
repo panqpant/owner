@@ -13,12 +13,16 @@ statistics. No real place is copied.
 - 57 Easter eggs, rail lines, metro and stations.
 - Preview tools: top-down map, Blender 3D renders, real-vs-generated comparison sheets.
 
-## Phase B: Map realism pass (next)
-- Curvy suburbs: collector loops with cul-de-sac "finger" streets, learned from the real suburb networks.
-- Fields subdivide the land between the new county roads (they still use the old section grid).
-- Terrain: fit coast and wetland bands, gentler beach berms and lake shores, river valleys.
-- Barrier-island streets, highway interchanges and on-ramps, bridges with spans, rail stations with platforms.
-- More hamlets, roadside stops (gas stations, motels, fruit stands), marinas, trailer parks.
+## Phase B: Map realism pass (done, audited)
+- Road network built as one system: A*-routed freeways through downtown and down the Keys, a continuous
+  arterial grid with downtown boulevards and bay causeways, state roads between towns, local streets
+  grown from the major roads, loose ends stitched, cut-off pieces connected. Audit: 100% of road
+  length in one network, 0 km of road over water without a bridge, 97.6% of built-up land reached.
+- Street styles trained in the in-game block setting; curvy suburbs; fields between county roads.
+- Terrain trained on real elevation (fit error 0.29); smooth shores; flat wetlands.
+- Metro follows the arterials with a station at every major crossing; rail routed over the terrain.
+- Still to do: interchanges and on-ramps as geometry, tiny towns (Gator Hollow) get streets, real
+  cul-de-sac share in suburbs (the stitch pass joins most loose streets on purpose).
 
 ## Phase C: Roblox world builder (needs you in Studio)
 - Server script that runs the generator: terrain voxels in chunks (WriteVoxels), water at each lake's level,
