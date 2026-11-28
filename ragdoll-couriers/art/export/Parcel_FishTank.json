@@ -1,0 +1,19 @@
+{
+ "triangles": 1668,
+ "parts": {
+  "Parcel": {
+   "triangles": 1668,
+   "centre": [
+    0.0,
+    0.0,
+    -0.0
+   ]
+  }
+ },
+ "size_studs": [
+  2.4,
+  1.6,
+  1.4
+ ],
+ "tier": "chaotic"
+}

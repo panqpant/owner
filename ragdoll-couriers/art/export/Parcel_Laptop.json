@@ -1,0 +1,19 @@
+{
+ "triangles": 648,
+ "parts": {
+  "Parcel": {
+   "triangles": 648,
+   "centre": [
+    0.0,
+    0.021,
+    0.223
+   ]
+  }
+ },
+ "size_studs": [
+  1.8,
+  1.14,
+  1.7
+ ],
+ "tier": "fragile"
+}

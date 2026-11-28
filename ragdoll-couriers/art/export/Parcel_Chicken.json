@@ -1,0 +1,19 @@
+{
+ "triangles": 2776,
+ "parts": {
+  "Parcel": {
+   "triangles": 2776,
+   "centre": [
+    -0.0,
+    0.095,
+    -0.069
+   ]
+  }
+ },
+ "size_studs": [
+  1.08,
+  1.55,
+  1.67
+ ],
+ "tier": "legendary"
+}

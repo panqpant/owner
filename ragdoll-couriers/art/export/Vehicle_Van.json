@@ -1,0 +1,150 @@
+{
+ "triangles": 9060,
+ "parts": {
+  "Paint": {
+   "triangles": 728,
+   "centre": [
+    0.0,
+    1.925,
+    0.178
+   ]
+  },
+  "Body": {
+   "triangles": 4876,
+   "centre": [
+    0.0,
+    1.825,
+    0.09
+   ]
+  },
+  "FrontLeft": {
+   "triangles": 864,
+   "centre": [
+    -2.55,
+    -0.65,
+    -3.9
+   ]
+  },
+  "FrontRight": {
+   "triangles": 864,
+   "centre": [
+    2.55,
+    -0.65,
+    -3.9
+   ]
+  },
+  "RearLeft": {
+   "triangles": 864,
+   "centre": [
+    -2.55,
+    -0.65,
+    3.6
+   ]
+  },
+  "RearRight": {
+   "triangles": 864,
+   "centre": [
+    2.55,
+    -0.65,
+    3.6
+   ]
+  }
+ },
+ "size_studs": [
+  7.45,
+  6.0,
+  13.22
+ ],
+ "seat": [
+  -1.4,
+  1.2,
+  -3.6
+ ],
+ "parcelAnchors": [
+  [
+   -1.5,
+   1.4,
+   1.3
+  ],
+  [
+   1.5,
+   1.4,
+   1.3
+  ],
+  [
+   -1.5,
+   1.4,
+   4.2
+  ],
+  [
+   1.5,
+   1.4,
+   4.2
+  ]
+ ],
+ "wheels": {
+  "FrontLeft": {
+   "centre": [
+    -2.55,
+    -0.65,
+    -3.9
+   ],
+   "radius": 1.15
+  },
+  "FrontRight": {
+   "centre": [
+    2.55,
+    -0.65,
+    -3.9
+   ],
+   "radius": 1.15
+  },
+  "RearLeft": {
+   "centre": [
+    -2.55,
+    -0.65,
+    3.6
+   ],
+   "radius": 1.15
+  },
+  "RearRight": {
+   "centre": [
+    2.55,
+    -0.65,
+    3.6
+   ],
+   "radius": 1.15
+  }
+ },
+ "rayPoints": [
+  [
+   -2.5,
+   -0.6,
+   -3.9
+  ],
+  [
+   2.5,
+   -0.6,
+   -3.9
+  ],
+  [
+   -2.5,
+   -0.6,
+   3.6
+  ],
+  [
+   2.5,
+   -0.6,
+   3.6
+  ]
+ ],
+ "capacity": 4,
+ "sizeClass": 3,
+ "rideHeight": 2.2,
+ "groundY": -1.8,
+ "boxInnerSize": [
+  5.7,
+  2.5,
+  7.2
+ ]
+}

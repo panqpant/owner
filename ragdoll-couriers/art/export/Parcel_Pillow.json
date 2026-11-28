@@ -1,0 +1,19 @@
+{
+ "triangles": 536,
+ "parts": {
+  "Parcel": {
+   "triangles": 536,
+   "centre": [
+    0.0,
+    0.0,
+    -0.0
+   ]
+  }
+ },
+ "size_studs": [
+  2.24,
+  0.9,
+  1.6
+ ],
+ "tier": "easy"
+}

@@ -1,0 +1,19 @@
+{
+ "triangles": 1124,
+ "parts": {
+  "Parcel": {
+   "triangles": 1124,
+   "centre": [
+    0.0,
+    -0.1,
+    -0.0
+   ]
+  }
+ },
+ "size_studs": [
+  4.25,
+  2.0,
+  1.8
+ ],
+ "tier": "coop"
+}

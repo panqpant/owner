@@ -1,0 +1,19 @@
+{
+ "triangles": 688,
+ "parts": {
+  "Parcel": {
+   "triangles": 688,
+   "centre": [
+    0.0,
+    0.035,
+    -0.0
+   ]
+  }
+ },
+ "size_studs": [
+  2.19,
+  0.77,
+  2.19
+ ],
+ "tier": "event"
+}
