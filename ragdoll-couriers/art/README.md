@@ -90,3 +90,22 @@ are now rounded (`Road_Corner`).
    The offset keeps the city clear of the kill test road at the origin. Once the game code moves to the
    city, build it with no argument.
 3. Save the place. Re-run after importing more models or changing the plan; it replaces `workspace.City`.
+
+## Sky, signs and effects (batch 8)
+```sh
+python textures/build_textures.py   # Pillow only: 39 decals + 9 particle textures -> export/textures/
+python sky/build_sky.py             # Blender: day and sunset skyboxes -> export/sky/<mood>/Skybox*.png
+```
+- **Decals:** depot, garage and lodge signs, 8 shop signs, district signs, 6 billboard ads, posters,
+  road arrows and SLOW, graffiti, and parcel crack decals (3 strengths). Text is Fredoka One
+  (`fonts/`, OFL licence), the same font Roblox uses for the UI.
+- **Particles:** dust, smoke, spark, crash star, confetti, coin, water splash, speed line, shockwave. White on
+  transparent, so a ParticleEmitter's Color tints them (the coin is gold already).
+- **Skies:** 1024 px faces. `previews/_sky_*.png` shows them unfolded. If the top seam looks wrong in
+  Studio, rotate `SkyboxUp` in 90° steps.
+
+**Hooking them up:** upload `export/textures` and `export/sky` in Studio (Asset Manager, bulk import), paste each
+ID into `src/map/DecalIds.luau` (written once by `build_map.py`, never overwritten), then rebuild the city:
+`require(game.ServerStorage.Map.MapBuilder).build(Vector3.new(3000, 0, 0), "day")`. Signs, shop fronts,
+billboards and the leaderboard header pick up their images, and the sky is set (`"sunset"` for the other one).
+Anything without an ID yet is skipped.

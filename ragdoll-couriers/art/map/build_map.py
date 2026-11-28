@@ -444,6 +444,40 @@ def place_all(p):
         g.objects.link(e)
 
 
+# Where decals go on each asset: (decal, centre, (width, height)) in Blender asset space, all facing +Y
+# (the asset's front, Roblox's Front face). Each sits 0.05 studs in front of its sign board.
+# "shop" and "ad" rotate through the shop signs and the billboard ads.
+SLOTS = {
+    "Hub_Depot": [("sign_depot", (0, 12.75, 13), (29.6, 4.2))],
+    "Hub_Garage": [("sign_garage", (0, 12.75, 11.6), (25.6, 3.2))],
+    "Hub_VIPGarage": [("sign_vip", (0, 12.75, 11.6), (25.6, 3.2))],
+    "Hub_Leaderboard": [("sign_leaderboard", (0, 0.85, 16.1), (15.6, 1.5))],
+    "OldTown_Shop": [("shop", (0, 6.5, 9.8), (12.6, 2.2))],
+    "Docks_FishMarket": [("sign_shop_8", (0, 10.35, 12.4), (23.6, 2.4))],
+    "Mountain_Lodge": [("sign_lodge", (0, 9.5, 8.4), (9.8, 1.1))],
+    "Street_Billboard": [("ad", (0, 0.4, 16), (23.8, 11.8))],
+}
+DECAL_IDS = os.path.join(os.path.dirname(ART), "src", "map", "DecalIds.luau")
+
+
+def write_decal_ids():
+    """A template for the uploaded image IDs. Written only if missing, so filled-in IDs are never lost."""
+    if os.path.exists(DECAL_IDS):
+        return
+    import glob
+
+    names = sorted(os.path.splitext(os.path.basename(f))[0] for f in glob.glob(os.path.join(lib.EXPORT, "textures", "*", "*.png")))
+    sky = sorted(f"sky_{os.path.basename(os.path.dirname(f))}_{os.path.splitext(os.path.basename(f))[0][6:]}" for f in glob.glob(os.path.join(lib.EXPORT, "sky", "*", "*.png")))
+    with open(DECAL_IDS, "w") as f:
+        f.write("-- Image IDs for art/export/textures and art/export/sky, after uploading them (Asset Manager, bulk import).\n")
+        f.write('-- Paste each as "rbxassetid://123..." and rebuild the city; anything left "" is simply skipped.\n')
+        f.write("return {\n")
+        for n in names + sky:
+            f.write(f'\t{n} = "",\n')
+        f.write("}\n")
+    print("wrote", DECAL_IDS)
+
+
 def write_layout(p, kit_info, extra_items=()):
     def rb(x, y, z=0.0):
         return [round(x, 2), round(z, 2), round(-y, 2)]
@@ -459,6 +493,8 @@ def write_layout(p, kit_info, extra_items=()):
         # free-form roads as centrelines (every 8 studs), for routing and the no-import fallback
         "freeRoads": [{"n": r["name"], "w": r["width"], "c": bool(r.get("closed")), "p": [rb(x, y, z) for x, y, z in r["points"][::2]]} for r in p["free_roads"]],
         "links": [[[a[0], -a[1]], [b[0], -b[1]]] for a, b in p["links"]],
+        "slots": {a: [{"d": d, "c": [c[0], c[2], -c[1]], "s": list(sz)} for d, c, sz in v] for a, v in SLOTS.items()},
+        "ads": ["billboard_couriers", "billboard_bubblewrap", "billboard_rocket", "billboard_insurance", "billboard_lodge", "billboard_fish"],
         "water": terrain.WATER,
         "extent": terrain.EXTENT,
         "addresses": [{"d": a["district"], "p": rb(a["x"], a["y"]), "b": a["building"]} for a in p["addresses"]],
@@ -499,7 +535,7 @@ def setup_render(samples, res_x, res_y):
 ONLY = {a for a in sys.argv[1:] if not a.startswith("--")}  # e.g. `build_map.py oldtown topdown`
 
 
-def shot(name, location, target, lens=None, ortho=None, samples=48, res=(1600, 900)):
+def shot(name, location, target, lens=None, ortho=None, samples=16, res=(1280, 720)):  # previews are for checking: fast over pretty
     if ONLY and name not in ONLY:
         return
     setup_render(samples, *res)
@@ -531,13 +567,14 @@ def main(render=True):
     wire_info, wire_items = build_power_lines(p)
     place_all(p)
     write_layout(p, {**kit_info, **terrain_info, **road_info, **wire_info}, terrain_items + road_items + wire_items)
+    write_decal_ids()
     setup_render(8, 64, 64)
     bpy.ops.wm.save_as_mainfile(filepath=os.path.join(HERE, "city.blend"))
     if not render:
         return
     C = city.CELL
-    shot("topdown", (0, 0, 3000), (0, 0, 0), ortho=2100, samples=24, res=(2048, 2048))
-    shot("world", (0, 0, 4000), (0, 0, 0), ortho=3000, samples=24, res=(2048, 2048))
+    shot("topdown", (0, 0, 3000), (0, 0, 0), ortho=2100, samples=12, res=(1536, 1536))
+    shot("world", (0, 0, 4000), (0, 0, 0), ortho=3000, samples=12, res=(1536, 1536))
     shot("hub", (230, -220, 150), (0, 60, 10), lens=28)
     shot("mountain", (300, 260, 90), (870, 840, 140), lens=30)
     shot("lake", (430, -380, 70), (700, -640, 0), lens=30)

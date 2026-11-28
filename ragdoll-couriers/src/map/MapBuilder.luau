@@ -54,8 +54,71 @@ local function block(name: string, size: Vector3, cf: CFrame, colour: Color3): P
 	return p
 end
 
-function MapBuilder.build(offset: Vector3?)
+-- Puts each sign's image on an invisible board just in front of the model's sign. Images come from
+-- DecalIds (filled in after uploading art/export/textures); signs without an ID yet are skipped.
+local function addDecals(layout, ids, counters, item: Item, target: CFrame, folder: Instance)
+	local slots = layout.slots[item.a]
+	if not slots then
+		return
+	end
+	for _, slot in slots do
+		local name = slot.d
+		if name == "shop" then
+			counters.shop = counters.shop % 7 + 1 -- shops 1-7; 8 is the fish market's
+			name = "sign_shop_" .. counters.shop
+		elseif name == "ad" then
+			counters.ad = counters.ad % #layout.ads + 1
+			name = layout.ads[counters.ad]
+		end
+		local id = ids[name]
+		if id and id ~= "" then
+			local board = block("Sign_" .. name, Vector3.new(slot.s[1], slot.s[2], 0.05), target * CFrame.new(v3(slot.c)), Color3.new(1, 1, 1))
+			board.Transparency = 1
+			board.CanCollide = false
+			board.CanQuery = false
+			board.CanTouch = false
+			local decal = Instance.new("Decal")
+			decal.Face = Enum.NormalId.Front
+			decal.Texture = id
+			decal.Parent = board
+			board.Parent = folder
+		end
+	end
+end
+
+-- Sets Lighting's sky from DecalIds (sky_<mood>_Ft and so on) once all six faces have IDs.
+local function applySky(ids, mood: string)
+	local faces = { "Bk", "Dn", "Ft", "Lf", "Rt", "Up" }
+	for _, face in faces do
+		local id = ids["sky_" .. mood .. "_" .. face]
+		if not id or id == "" then
+			return false
+		end
+	end
+	local Lighting = game:GetService("Lighting")
+	local old = Lighting:FindFirstChildOfClass("Sky")
+	if old then
+		old:Destroy()
+	end
+	local sky = Instance.new("Sky")
+	for _, face in faces do
+		(sky :: any)["Skybox" .. face] = ids["sky_" .. mood .. "_" .. face]
+	end
+	sky.Parent = Lighting
+	return true
+end
+
+function MapBuilder.build(offset: Vector3?, mood: string?)
 	local layout = HttpService:JSONDecode(require(script.Parent.Layout))
+	local ids = {}
+	local idModule = script.Parent:FindFirstChild("DecalIds")
+	if idModule then
+		local ok, loaded = pcall(require, idModule)
+		if ok and type(loaded) == "table" then
+			ids = loaded
+		end
+	end
+	local counters = { shop = 0, ad = 0 }
 	local origin = CFrame.new(offset or Vector3.zero)
 	local templates = ServerStorage:FindFirstChild("CityAssets")
 
@@ -118,6 +181,7 @@ function MapBuilder.build(offset: Vector3?)
 			end
 			placeModel(model, target, v3(asset.centre))
 			recolour(model, item.c)
+			addDecals(layout, ids, counters, item, target, model)
 			if item.d == "Wires" then
 				for _, d in model:GetDescendants() do
 					if d:IsA("BasePart") then
@@ -142,6 +206,7 @@ function MapBuilder.build(offset: Vector3?)
 			local colour = if item.c then Color3.fromHex(item.c) else Color3.fromRGB(170, 170, 180)
 			local stand = block(item.a, v3(asset.size), target * CFrame.new(v3(asset.centre)), colour)
 			stand.Parent = folder
+			addDecals(layout, ids, counters, item, target, folder)
 		end
 	end
 
@@ -191,6 +256,9 @@ function MapBuilder.build(offset: Vector3?)
 	spawn.Parent = city
 
 	city.Parent = workspace
+	if applySky(ids, mood or "day") then
+		print(`Sky set to {mood or "day"}.`)
+	end
 	local names = {}
 	for name in missing do
 		table.insert(names, name)
