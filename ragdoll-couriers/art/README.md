@@ -51,3 +51,26 @@ python build.py                 # everything (about 90 s on a laptop CPU)
 python build.py Parcel_Cake     # just one
 ```
 All colours live in the `PALETTE` table in `lib.py`.
+
+## The city map (batch 3)
+`map/plan.py` designs the whole city on a 40-stud grid (about 2,000 × 2,000 studs): the road network,
+district plots, buildings, props, hazards and delivery addresses. `map/test_plan.py` checks that every
+road connects, tiles join up correctly, nothing sits on a road and every address is reachable.
+
+```sh
+python3 map/test_plan.py         # plain Python, no Blender needed
+python map/build_map.py          # builds map/city.blend, renders previews/map_*.png, writes src/map/Layout.luau
+```
+
+**Open the city in Blender:** `map/city.blend`. Each piece is a linked instance of the kit (the `Kit`
+collection), so editing one house edits every copy. Paint colours come from each instance's object colour.
+
+**Put it in Studio:**
+1. Import the models you have into **ServerStorage → CityAssets**, one Model per asset, named like its FBX
+   (`House_A`, `Road_Straight`, ...). You don't need all of them: anything missing is drawn as a block of the
+   right size and colour.
+2. In edit mode (not Play), run in the command bar:
+   `require(game.ServerStorage.Map.MapBuilder).build(Vector3.new(3000, 0, 0))`
+   The offset keeps the city clear of the kill test road at the origin. Once the game code moves to the
+   city, build it with no argument.
+3. Save the place. Re-run after importing more models or changing the plan; it replaces `workspace.City`.
