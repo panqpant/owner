@@ -109,3 +109,28 @@ ID into `src/map/DecalIds.luau` (written once by `build_map.py`, never overwritt
 `require(game.ServerStorage.Map.MapBuilder).build(Vector3.new(3000, 0, 0), "day")`. Signs, shop fronts,
 billboards and the leaderboard header pick up their images, and the sky is set (`"sunset"` for the other one).
 Anything without an ID yet is skipped.
+
+## Icons, logo and thumbnails (batch 9)
+
+Run in this order (each needs Blender's Python module and Pillow):
+
+1. `python marketing/build_logo.py`: renders the 3D lettering to `export/marketing/`. That's `logo.png`, `tagline_*.png` and the badge pills `pill_*.png`, all transparent.
+2. `python marketing/build_icons.py`: renders 44 store and UI icons to `export/icons/` (512 × 512, transparent). Covers every vehicle, parcel, upgrade, game pass and developer product, with the 3D badge pills where needed. Contact sheet: `previews/_icons.png`.
+3. `python marketing/build_thumbnails.py [names...] [--draft]`: needs `map/city.blend`. Renders, staged in the real city:
+   - 8 thumbnails (1920 × 1080);
+   - `_title` variants carrying the logo and tagline;
+   - `icon.png` (512);
+   - `loading_screen.png`.
+   Contact sheet: `previews/_thumbnails.png`.
+
+Upload notes:
+- Game icon: `icon.png`.
+- Thumbnails: upload several and turn on thumbnail personalisation, so Roblox tests which ones get played. The `_title` versions are the ones with the name on them.
+- Game pass and product images: `export/icons/pass_*` and `export/icons/product_*`.
+- Loading screen: use it as an ImageLabel in a ScreenGui (`ReplicatedFirst`).
+
+Style follows what top Roblox thumbnails share:
+- one big courier with a readable shocked face;
+- saturated colour grading with a soft vignette;
+- chunky bevelled lettering with a dark outline;
+- a short hook line.
