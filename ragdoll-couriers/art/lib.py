@@ -231,6 +231,31 @@ class Mesh:
             v.co *= 1 + rnd.uniform(-lumpiness, lumpiness)
         return self._merge(tmp, colour, _matrix(loc, (0, 0, rnd.uniform(0, 360)), scale), 0, 1)
 
+    def sweep(self, path, radius, colour, segments=10):
+        """One continuous tube along a path of (x, y, z) points: no seams where short tubes would meet."""
+        tmp = bmesh.new()
+        pts = [Vector(p) for p in path]
+        rings, side = [], None
+        for k, p in enumerate(pts):
+            t = (pts[min(k + 1, len(pts) - 1)] - pts[max(k - 1, 0)]).normalized()
+            if side is None:
+                side = t.cross(Vector((0, 0, 1)))
+                if side.length < 1e-3:
+                    side = t.cross(Vector((1, 0, 0)))
+            else:  # carry the previous ring's orientation along (parallel transport): no flips, no pinches
+                side = side - t * side.dot(t)
+            side.normalize()
+            up = side.cross(t)
+            rings.append([tmp.verts.new(p + (side * math.cos(a) + up * math.sin(a)) * radius) for a in (i * math.tau / segments for i in range(segments))])
+        for r0, r1 in zip(rings, rings[1:]):
+            for i in range(segments):
+                j = (i + 1) % segments
+                tmp.faces.new((r0[i], r0[j], r1[j], r1[i]))
+        tmp.faces.new(rings[0][::-1])
+        tmp.faces.new(rings[-1])
+        bmesh.ops.recalc_face_normals(tmp, faces=tmp.faces)
+        return self._merge(tmp, colour, Matrix.Identity(4), 0, 1)
+
     def strip(self, left, right, colour, thickness=1.0):
         """A solid ribbon between two matching polylines of (x, y, z) top points; `thickness` hangs below."""
         tmp = bmesh.new()

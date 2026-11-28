@@ -1,0 +1,20 @@
+{
+ "triangles": 732,
+ "parts": {
+  "BananaPeel": {
+   "triangles": 732,
+   "centre": [
+    0.0,
+    0.4,
+    -0.0
+   ]
+  }
+ },
+ "size_studs": [
+  2.88,
+  0.8,
+  2.91
+ ],
+ "kind": "item",
+ "note": "ragdolls the next rider to touch it"
+}

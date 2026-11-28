@@ -1,0 +1,19 @@
+{
+ "triangles": 5508,
+ "parts": {
+  "Spring": {
+   "triangles": 5508,
+   "centre": [
+    0.0,
+    2.374,
+    -0.0
+   ]
+  }
+ },
+ "size_studs": [
+  2.6,
+  4.75,
+  2.6
+ ],
+ "kind": "icon"
+}

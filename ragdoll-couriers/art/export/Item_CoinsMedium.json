@@ -1,0 +1,19 @@
+{
+ "triangles": 2754,
+ "parts": {
+  "Coins": {
+   "triangles": 2754,
+   "centre": [
+    0.122,
+    0.3,
+    -0.003
+   ]
+  }
+ },
+ "size_studs": [
+  4.36,
+  0.61,
+  4.47
+ ],
+ "kind": "icon"
+}

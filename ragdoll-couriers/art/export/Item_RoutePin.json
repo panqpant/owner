@@ -1,0 +1,19 @@
+{
+ "triangles": 776,
+ "parts": {
+  "Pin": {
+   "triangles": 776,
+   "centre": [
+    0.0,
+    2.2,
+    -0.0
+   ]
+  }
+ },
+ "size_studs": [
+  3.2,
+  4.4,
+  3.2
+ ],
+ "kind": "icon"
+}

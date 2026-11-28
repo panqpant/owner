@@ -1,0 +1,19 @@
+{
+ "triangles": 852,
+ "parts": {
+  "Hourglass": {
+   "triangles": 852,
+   "centre": [
+    0.0,
+    2.15,
+    -0.0
+   ]
+  }
+ },
+ "size_studs": [
+  2.8,
+  4.3,
+  2.8
+ ],
+ "kind": "icon"
+}

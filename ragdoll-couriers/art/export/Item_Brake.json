@@ -1,0 +1,19 @@
+{
+ "triangles": 948,
+ "parts": {
+  "Brake": {
+   "triangles": 948,
+   "centre": [
+    0.243,
+    2.2,
+    -0.0
+   ]
+  }
+ },
+ "size_studs": [
+  4.49,
+  4.0,
+  1.0
+ ],
+ "kind": "icon"
+}

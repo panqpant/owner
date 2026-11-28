@@ -1,0 +1,19 @@
+{
+ "triangles": 3512,
+ "parts": {
+  "BubbleWrap": {
+   "triangles": 3512,
+   "centre": [
+    0.108,
+    0.65,
+    -0.0
+   ]
+  }
+ },
+ "size_studs": [
+  5.22,
+  0.97,
+  3.54
+ ],
+ "kind": "icon"
+}

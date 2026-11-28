@@ -1,0 +1,19 @@
+{
+ "triangles": 148,
+ "parts": {
+  "Shield": {
+   "triangles": 148,
+   "centre": [
+    0.0,
+    0.171,
+    -0.762
+   ]
+  }
+ },
+ "size_studs": [
+  3.6,
+  4.85,
+  3.03
+ ],
+ "kind": "icon"
+}

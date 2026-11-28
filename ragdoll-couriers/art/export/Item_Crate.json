@@ -1,0 +1,19 @@
+{
+ "triangles": 1280,
+ "parts": {
+  "Crate": {
+   "triangles": 1280,
+   "centre": [
+    0.0,
+    2.0,
+    -0.185
+   ]
+  }
+ },
+ "size_studs": [
+  4.1,
+  4.1,
+  4.47
+ ],
+ "kind": "icon"
+}

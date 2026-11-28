@@ -1,0 +1,19 @@
+{
+ "triangles": 1464,
+ "parts": {
+  "StarterPack": {
+   "triangles": 1464,
+   "centre": [
+    -0.542,
+    1.904,
+    -0.388
+   ]
+  }
+ },
+ "size_studs": [
+  5.28,
+  4.18,
+  4.03
+ ],
+ "kind": "icon"
+}

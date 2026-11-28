@@ -1,0 +1,19 @@
+{
+ "triangles": 664,
+ "parts": {
+  "Crown": {
+   "triangles": 664,
+   "centre": [
+    0.1,
+    1.35,
+    -0.0
+   ]
+  }
+ },
+ "size_studs": [
+  3.4,
+  2.7,
+  3.47
+ ],
+ "kind": "icon"
+}

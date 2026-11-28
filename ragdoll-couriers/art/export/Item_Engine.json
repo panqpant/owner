@@ -1,0 +1,19 @@
+{
+ "triangles": 1164,
+ "parts": {
+  "Engine": {
+   "triangles": 1164,
+   "centre": [
+    -0.244,
+    1.863,
+    -0.321
+   ]
+  }
+ },
+ "size_studs": [
+  4.59,
+  3.12,
+  2.84
+ ],
+ "kind": "icon"
+}
