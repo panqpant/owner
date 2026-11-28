@@ -10,10 +10,11 @@ from lib import Mesh
 
 # joint -> (position relative to the hips, colour) ; limbs hang down from their joint
 POSES = {
-    # rotations in degrees (x, y, z) per joint; root is the whole body
+    # rotations in degrees (x, y, z) per joint; root is the whole body. +Y swings an arm out to -X: left arms
+    # (at -X) take +Y, right arms -Y, or they cross the face
     "ride": {"l_arm": (-75, 0, 8), "r_arm": (-75, 0, -8), "l_leg": (-85, 0, 6), "r_leg": (-85, 0, -6), "head": (-5, 0, 0), "torso": (12, 0, 0)},
-    "fly": {"l_arm": (-20, -150, 0), "r_arm": (30, 140, 0), "l_leg": (35, -28, 0), "r_leg": (-60, 22, 0), "head": (25, 0, 15), "torso": (-15, 10, 0)},
-    "tumble": {"l_arm": (-160, -40, 0), "r_arm": (60, 100, 0), "l_leg": (-30, -40, 0), "r_leg": (70, 30, 0), "head": (-20, 20, 0), "torso": (20, 0, -10)},
+    "fly": {"l_arm": (-20, 140, 0), "r_arm": (30, -130, 0), "l_leg": (35, -28, 0), "r_leg": (-60, 22, 0), "head": (25, 0, 15), "torso": (-15, 10, 0)},
+    "tumble": {"l_arm": (-160, 40, 0), "r_arm": (60, -100, 0), "l_leg": (-30, -40, 0), "r_leg": (70, 30, 0), "head": (-20, 20, 0), "torso": (20, 0, -10)},
     "wave": {"l_arm": (0, 0, 0), "r_arm": (0, 160, 0), "l_leg": (0, 0, 0), "r_leg": (0, 0, 0), "head": (0, 0, 10), "torso": (0, 0, 0)},
 }
 
@@ -27,7 +28,8 @@ def _part(name, builder, loc, parent):
     return obj
 
 
-def courier(pose="fly", location=(0, 0, 0), rotation=(0, 0, 0), shirt="orange", scale=1.0):
+def courier(pose="fly", location=(0, 0, 0), rotation=(0, 0, 0), shirt="orange", scale=1.0, face=None):
+    face = face or ("smile" if pose in ("ride", "wave") else "shock")
     """Builds a posed courier. Returns the root empty (move/rotate it) and the list of mesh objects."""
     root = bpy.data.objects.new("Courier", None)
     root.location = location
@@ -45,9 +47,17 @@ def courier(pose="fly", location=(0, 0, 0), rotation=(0, 0, 0), shirt="orange", 
 
     def head(m):
         m.box((1.25, 1.2, 1.2), (0, 0, 0.6), "skin", bevel=0.3, segments=3)
-        for sx in (-1, 1):
-            m.sphere(0.11, (sx * 0.27, 0.6, 0.72), "black", segments=8, rings=6)  # eyes
-        m.box((0.45, 0.05, 0.1), (0, 0.61, 0.38), "darkbrown", bevel=0.03)  # smile
+        if face == "shock":  # the thumbnail face: wide eyes, brows up, mouth open (reads at phone size)
+            for sx in (-1, 1):
+                m.sphere(0.2, (sx * 0.28, 0.6, 0.74), "white", scale=(1, 0.5, 1.15), segments=12, rings=8)
+                m.sphere(0.09, (sx * 0.26, 0.69, 0.74), "black", segments=8, rings=6)
+                m.box((0.34, 0.08, 0.09), (sx * 0.3, 0.62, 1.02), "darkbrown", rot=(0, sx * -18, 0), bevel=0.03)
+            m.sphere(0.2, (0, 0.6, 0.34), "darkbrown", scale=(1.1, 0.4, 0.9), segments=12, rings=8)
+            m.sphere(0.12, (0, 0.65, 0.27), "red", scale=(1.2, 0.4, 0.6), segments=10, rings=6)  # tongue
+        else:
+            for sx in (-1, 1):
+                m.sphere(0.11, (sx * 0.27, 0.6, 0.72), "black", segments=8, rings=6)  # eyes
+            m.box((0.45, 0.05, 0.1), (0, 0.61, 0.38), "darkbrown", bevel=0.03)  # smile
         m.box((1.35, 1.3, 0.45), (0, 0, 1.32), "red", bevel=0.18)  # cap
         m.box((1.1, 0.7, 0.12), (0, 0.85, 1.12), "red", bevel=0.05)  # brim
         m.box((0.5, 0.06, 0.3), (0, 0.66, 1.35), "white", bevel=0.02)  # cap badge

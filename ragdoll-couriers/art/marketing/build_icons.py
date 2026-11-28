@@ -109,19 +109,16 @@ def frame(objs):
 
 
 def badge(path, text, colour):
-    """A rounded pill in the corner with Fredoka text: the plan's UI style (dark outline, bright fill)."""
-    from PIL import Image, ImageDraw, ImageFont
+    """The 3D pill from marketing/build_logo.py (PILLS sets its colour) in the bottom-right corner."""
+    import re
+
+    from PIL import Image
 
     img = Image.open(path).convert("RGBA")
-    d = ImageDraw.Draw(img)
-    f = ImageFont.truetype(FONT, 96 if len(text) <= 2 else 70)
-    l, t, r, b = d.textbbox((0, 0), text, font=f, stroke_width=6)
-    w, h = r - l + 50, b - t + 30
-    x0, y0 = 512 - w - 18, 512 - h - 18
-    fill = tuple(bytes.fromhex(colour)) + (255,)
-    d.rounded_rectangle((x0 + 6, y0 + 8, x0 + w + 6, y0 + h + 8), radius=h // 2, fill=(0, 0, 0, 90))  # shadow
-    d.rounded_rectangle((x0, y0, x0 + w, y0 + h), radius=h // 2, fill=fill, outline=(27, 28, 33, 255), width=6)
-    d.text((x0 + 25 - l, y0 + 15 - t), text, font=f, fill=(255, 255, 255, 255), stroke_width=6, stroke_fill=(27, 28, 33, 255))
+    pill = Image.open(os.path.join(lib.EXPORT, "marketing", "pill_" + (re.sub(r"[^a-z0-9]+", "_", text.lower()).strip("_") or "plus") + ".png")).convert("RGBA")
+    k = min((150 if len(text) <= 2 else 120) / pill.height, 300 / pill.width)  # keep the aspect, cap long words
+    pill = pill.resize((int(pill.width * k), int(pill.height * k)), Image.LANCZOS)
+    img.alpha_composite(pill, (512 - pill.width - 14, 512 - pill.height - 14))
     img.save(path)
 
 

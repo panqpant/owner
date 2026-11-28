@@ -125,7 +125,7 @@ def causeway_frame(frac):
 
 
 # ---------------------------------------------------------------- scenes
-def crash(cam, target, vehicle_kind, parcel_kind, colour, pose="fly", near=13.0, lens=30, spin=0):
+def crash(cam, target, vehicle_kind, parcel_kind, colour, pose="fly", near=13.0, lens=30, spin=0, shift=(0, 0)):
     """A crash composed around the camera, so the action fills the frame wherever it's staged:
     courier `near` studs out on the line of sight, the parcel flying past nearer the lens to one side,
     the vehicle tumbling further back to the other."""
@@ -133,21 +133,22 @@ def crash(cam, target, vehicle_kind, parcel_kind, colour, pose="fly", near=13.0,
     f = (t - c).normalized()
     r = f.cross(Vector((0, 0, 1))).normalized()
     u = r.cross(f)
-    yaw = math.degrees(math.atan2(f.y, f.x)) + 90  # the courier faces back toward the camera
-    courier_mod.courier(pose, location=tuple(c + f * near - u * 1.5), rotation=(-25, 20 + spin, yaw + 160))
-    parcel(parcel_kind, tuple(c + f * (near - 4) + r * 4.2 + u * 2.6), (30, 40, yaw + 20))
+    c = c + r * shift[0] + u * shift[1]  # slides the whole group across the frame (room for the logo)
+    yaw = math.degrees(math.atan2(f.y, f.x)) + 90  # turns the courier's front (+Y) back toward the camera: we see the face
+    courier_mod.courier(pose, location=tuple(c + f * near - u * 1.5), rotation=(-25, 20 + spin, yaw + 15))
+    parcel(parcel_kind, tuple(c + f * (near - 3) + r * 3.0 + u * 1.8), (30, 40, yaw + 20))  # close, but inside the frame
     vehicle(vehicle_kind, tuple(c + f * (near + 9) - r * 6 - u * 2.5), (45, -30, yaw + 130), colour)
     return cam, target, lens
 
 
 def scene_hub_ramp():
     sky("day")  # from the ramp's landing side looking back at the ramp and the depot
-    return crash((10, -62, 5), (-2, -10, 12), "Vehicle_Scooter", "Parcel_TV", "e8443a")
+    return crash((10, -62, 5), (-2, -10, 12), "Vehicle_Scooter", "Parcel_TV", "e8443a", shift=(2.5, -1.4))  # group right and down, clear of the logo
 
 
 def scene_oldtown():
     sky("day")
-    return crash((160, 606, 4), (160, 660, 9), "Vehicle_EBike", "Parcel_FishTank", "3a7bf0", pose="tumble", spin=40)
+    return crash((160, 606, 4), (160, 660, 9), "Vehicle_EBike", "Parcel_FishTank", "3a7bf0", pose="tumble", spin=40, shift=(2.0, -0.6))  # right of the logo
 
 
 def scene_mountain():
@@ -163,7 +164,7 @@ def scene_mountain():
 
 def scene_docks():
     sky("day")  # off the end of the quay, the ship behind
-    return crash((-880, 60, 5), (-905, 110, 9), "Vehicle_Scooter", "Parcel_Chicken", "ffd23f", spin=-30)
+    return crash((-878, 170, 5), (-905, 100, 9), "Vehicle_Scooter", "Parcel_Chicken", "ffd23f", spin=-30)  # looking down the quay at the ship
 
 
 def scene_skeleton():
@@ -183,7 +184,7 @@ def scene_causeway():
 
 def scene_piano():
     sky("day")  # down the middle of the Downtown avenue
-    return crash((0, -540, 4), (0, -480, 12), "Vehicle_CargoBike", "Parcel_Piano", "ff9a2e", pose="tumble", near=14, spin=60)
+    return crash((0, -620, 4), (0, -560, 12), "Vehicle_CargoBike", "Parcel_Piano", "ff9a2e", pose="tumble", near=15, spin=60)  # a block clear of the road ramp
 
 
 def scene_legendary():
@@ -208,17 +209,47 @@ SCENES = {
 }
 
 
-def title(path, out, line2="DELIVER ANYTHING!"):
-    from PIL import Image, ImageDraw, ImageFont
+def grade(path):
+    """The punchy Roblox-thumbnail look: richer colour, a touch more contrast, a soft vignette."""
+    from PIL import Image, ImageChops, ImageDraw, ImageEnhance, ImageFilter
 
     img = Image.open(path).convert("RGB")
-    d = ImageDraw.Draw(img)
+    img = ImageEnhance.Contrast(ImageEnhance.Color(img).enhance(1.2)).enhance(1.07)
+    w, h = img.size
+    mask = Image.new("L", (w, h), 0)
+    ImageDraw.Draw(mask).ellipse((-w * 0.15, -h * 0.2, w * 1.15, h * 1.2), fill=255)
+    mask = mask.filter(ImageFilter.GaussianBlur(w // 12)).point(lambda v: 185 + v * 70 // 255)
+    img = ImageChops.multiply(img, Image.merge("RGB", (mask, mask, mask)))
+    img.save(path)
+
+
+def stick(img, layer_path, x, y, width):
+    """Composites a transparent logo layer (from build_logo.py) with a soft drop shadow."""
+    from PIL import Image, ImageFilter
+
+    layer = Image.open(layer_path).convert("RGBA")
+    layer = layer.resize((int(width), int(layer.height * width / layer.width)), Image.LANCZOS)
+    shadow = Image.new("RGBA", layer.size, (0, 0, 0, 0))
+    shadow.putalpha(layer.getchannel("A").point(lambda a: a * 110 // 255))
+    shadow = shadow.filter(ImageFilter.GaussianBlur(max(2, layer.width // 90)))
+    off = max(3, layer.width // 70)
+    img.alpha_composite(shadow, (int(x + off), int(y + off)))
+    img.alpha_composite(layer, (int(x), int(y)))
+    return layer.height
+
+
+def title(path, out, line2="DELIVER ANYTHING!"):
+    """The 3D logo top left and the tagline banner under it (run marketing/build_logo.py first)."""
+    import re
+
+    from PIL import Image
+
+    img = Image.open(path).convert("RGBA")
     s = img.width / 1920
-    f1, f2 = ImageFont.truetype(FONT, int(150 * s)), ImageFont.truetype(FONT, int(80 * s))
-    d.text((int(60 * s), int(40 * s)), "RAGDOLL", font=f1, fill=(255, 210, 63), stroke_width=int(12 * s), stroke_fill=(27, 28, 33))
-    d.text((int(60 * s), int(190 * s)), "COURIERS", font=f1, fill=(255, 255, 255), stroke_width=int(12 * s), stroke_fill=(27, 28, 33))
-    d.text((int(66 * s), int(350 * s)), line2, font=f2, fill=(255, 154, 46), stroke_width=int(9 * s), stroke_fill=(27, 28, 33))
-    img.save(out)
+    h = stick(img, os.path.join(OUT, "logo.png"), 50 * s, 30 * s, 760 * s)
+    tag = os.path.join(OUT, "tagline_" + re.sub(r"[^a-z0-9]+", "_", line2.lower()).strip("_") + ".png")
+    stick(img, tag, 90 * s, 30 * s + h + 4 * s, 560 * s)
+    img.convert("RGB").save(out)
 
 
 def render_scene(name, fn, res=(1920, 1080)):
@@ -228,6 +259,7 @@ def render_scene(name, fn, res=(1920, 1080)):
     path = os.path.join(OUT, name + ".png")
     bpy.context.scene.render.filepath = path
     bpy.ops.render.render(write_still=True)
+    grade(path)
     print("rendered", name)
     return path
 
@@ -246,10 +278,11 @@ def main(only):
     if not only or "icon" in only:  # the game icon: the ramp crash, close and square
         bpy.ops.wm.open_mainfile(filepath=os.path.join(ART, "map", "city.blend"))
         sky("day")  # the icon: a tight crash against open sky, readable at phone size
-        cam = crash((0, -40, 2), (0, 10, 12), "Vehicle_Scooter", "Parcel_TV", "e8443a", near=9)
-        camera(cam[0], cam[1], 24, (512, 512))
+        cam = crash((0, -40, 2), (0, 0, 18), "Vehicle_Scooter", "Parcel_TV", "e8443a", near=9)  # low, looking up: courier against open sky
+        camera(cam[0], cam[1], 26, (512, 512))
         bpy.context.scene.render.filepath = os.path.join(OUT, "icon.png")
         bpy.ops.render.render(write_still=True)
+        grade(os.path.join(OUT, "icon.png"))
         done.append("icon")
         print("rendered icon")
     if not only or "loading" in only:  # loading screen: the city from above the hub, title on top
@@ -259,6 +292,7 @@ def main(only):
         path = os.path.join(OUT, "loading_screen.png")
         bpy.context.scene.render.filepath = path
         bpy.ops.render.render(write_still=True)
+        grade(path)
         title(path, path, "LOADING THE CITY...")
         done.append("loading_screen")
         print("rendered loading")
