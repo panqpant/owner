@@ -1,8 +1,8 @@
 {
- "triangles": 1280,
+ "triangles": 896,
  "parts": {
   "Crate": {
-   "triangles": 1280,
+   "triangles": 896,
    "centre": [
     0.0,
     2.0,

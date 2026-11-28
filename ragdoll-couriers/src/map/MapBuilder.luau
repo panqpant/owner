@@ -72,7 +72,12 @@ local function addDecals(layout, ids, counters, item: Item, target: CFrame, fold
 		end
 		local id = ids[name]
 		if id and id ~= "" then
-			local board = block("Sign_" .. name, Vector3.new(slot.s[1], slot.s[2], 0.05), target * CFrame.new(v3(slot.c)), Color3.new(1, 1, 1))
+			local board = block(
+				"Sign_" .. name,
+				Vector3.new(slot.s[1], slot.s[2], 0.05),
+				target * CFrame.new(v3(slot.c)),
+				Color3.new(1, 1, 1)
+			)
 			board.Transparency = 1
 			board.CanCollide = false
 			board.CanQuery = false
@@ -136,7 +141,12 @@ function MapBuilder.build(offset: Vector3?, mood: string?)
 	groundFolder.Parent = city
 	local half = layout.extent / 2
 	for _, q in { { -1, -1 }, { -1, 1 }, { 1, -1 }, { 1, 1 } } do
-		local water = block("Water", Vector3.new(layout.extent, 1, layout.extent), origin * CFrame.new(q[1] * half, layout.water - 0.5, q[2] * half), Color3.fromHex("3f9be0"))
+		local water = block(
+			"Water",
+			Vector3.new(layout.extent, 1, layout.extent),
+			origin * CFrame.new(q[1] * half, layout.water - 0.5, q[2] * half),
+			Color3.fromHex("3f9be0")
+		)
 		water.Material = Enum.Material.Glass
 		water.Transparency = 0.2
 		water.CanCollide = false -- ride off the quay and the parcel is lost
@@ -150,8 +160,12 @@ function MapBuilder.build(offset: Vector3?, mood: string?)
 		for _, name in { "Outskirts", "Hub", "Suburbs", "OldTown", "Docks", "Downtown", "Mountain" } do
 			local r = layout.districts[name].rect
 			layer += 1
-			local g =
-				block(name, Vector3.new(r[3] - r[1], 1, r[4] - r[2]), origin * CFrame.new((r[1] + r[3]) / 2, -0.6 + layer * 0.002, (r[2] + r[4]) / 2), Color3.fromHex(layout.districts[name].colour))
+			local g = block(
+				name,
+				Vector3.new(r[3] - r[1], 1, r[4] - r[2]),
+				origin * CFrame.new((r[1] + r[3]) / 2, -0.6 + layer * 0.002, (r[2] + r[4]) / 2),
+				Color3.fromHex(layout.districts[name].colour)
+			)
 			g.Material = Enum.Material.Grass
 			g.Parent = groundFolder
 		end
@@ -196,6 +210,27 @@ function MapBuilder.build(offset: Vector3?, mood: string?)
 						d.CollisionFidelity = Enum.CollisionFidelity.PreciseConvexDecomposition -- hills need real collision, not a box
 					end
 				end
+			else
+				-- Cheap physics for the thousands of static props: nothing on the map listens for Touched,
+				-- small props collide as boxes, tiny ones cast no shadow, birds are scenery only.
+				-- Road tiles, ramps and buildings keep Default collision (kerbs and slopes must be right).
+				local biggest = math.max(asset.size[1], asset.size[2], asset.size[3])
+				local isRoad = string.sub(item.a, 1, 5) == "Road_" or item.a == "Ramp" or item.a == "SpeedBump"
+				for _, d in model:GetDescendants() do
+					if d:IsA("BasePart") then
+						d.CanTouch = false
+						if string.sub(item.a, 1, 5) == "Bird_" then
+							d.CanCollide = false
+							d.CanQuery = false
+						end
+						if biggest < 3 then
+							d.CastShadow = false
+						end
+						if d:IsA("MeshPart") and biggest <= 6 and not isRoad then
+							d.CollisionFidelity = Enum.CollisionFidelity.Box
+						end
+					end
+				end
 			end
 			model.Parent = folder
 			imported += 1
@@ -226,7 +261,12 @@ function MapBuilder.build(offset: Vector3?, mood: string?)
 		for k = 1, count do
 			local a, b = v3(pts[k]), v3(pts[k % #pts + 1])
 			local mid = (a + b) / 2
-			local seg = block("Road", Vector3.new(road.w, 1, (b - a).Magnitude + 1), origin * CFrame.lookAt(mid, b) * CFrame.new(0, -0.5, 0), Color3.fromRGB(64, 66, 74))
+			local seg = block(
+				"Road",
+				Vector3.new(road.w, 1, (b - a).Magnitude + 1),
+				origin * CFrame.lookAt(mid, b) * CFrame.new(0, -0.5, 0),
+				Color3.fromRGB(64, 66, 74)
+			)
 			seg.Material = Enum.Material.Asphalt
 			seg.Parent = folder
 		end

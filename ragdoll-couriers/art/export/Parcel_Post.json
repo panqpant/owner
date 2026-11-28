@@ -1,8 +1,8 @@
 {
- "triangles": 576,
+ "triangles": 256,
  "parts": {
   "Parcel": {
-   "triangles": 576,
+   "triangles": 256,
    "centre": [
     0.0,
     0.0,

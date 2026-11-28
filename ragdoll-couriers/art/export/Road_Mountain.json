@@ -1,5 +1,5 @@
 {
- "triangles": 22326,
+ "triangles": 21430,
  "parts": {
   "Mountain_0": {
    "triangles": 3238,
@@ -18,7 +18,7 @@
    ]
   },
   "Mountain_2": {
-   "triangles": 5256,
+   "triangles": 4360,
    "centre": [
     1096.467,
     80.55,

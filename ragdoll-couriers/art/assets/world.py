@@ -239,7 +239,7 @@ def townhouse(floors=4):
             _window(m, x, d / 2, z, w=2.4, h=3.4, frame="stone")
             m.box((2.4, 0.9, 0.6), (x, d / 2 + 0.6, z - 2.3), "darkgreen", bevel=0.05)  # flower box
             for k in (-0.8, 0, 0.8):
-                m.sphere(0.35, (x + k, d / 2 + 0.6, z - 1.9), "pink" if k else "red", segments=8, rings=5)
+                m.sphere(0.35, (x + k, d / 2 + 0.6, z - 1.9), "pink" if k else "red", segments=6, rings=4)
     for z in [4.2] + uppers:
         for x in (-3, 3):
             _window(m, x, -d / 2, z, w=2.4, h=3.4, frame="stone", face="-Y")
@@ -296,7 +296,7 @@ def container():
     paint.box((w, d, h), (0, 0, h / 2), bevel=0.15)
     for k in range(-9, 10):
         for sx in (-1, 1):
-            paint.box((0.3, 0.5, h - 1.2), (sx * w / 2, k, h / 2), bevel=0.05)  # corrugation
+            paint.box((0.3, 0.5, h - 1.2), (sx * w / 2, k, h / 2), bevel=0)  # corrugation (353 placed: kept flat)
     for sx in (-1, 1):
         for sy in (-1, 1):
             for z in (0.4, h - 0.4):
@@ -805,7 +805,7 @@ def car_hatch():
     body.box((1.8, 0.1, 0.6), (0, 5.82, 1.2), "white", bevel=0.03)
     for sx in (-1, 1):
         for y in (3.5, -3.5):
-            body.tire(1.15, 0.9, (sx * 2.75, y, 1.15))
+            body.tire(1.15, 0.9, (sx * 2.75, y, 1.15), segments=16)  # traffic: hundreds placed
     return [paint.done(), body.done()], {"kind": "hazard"}
 
 

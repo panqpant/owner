@@ -1,8 +1,8 @@
 {
- "triangles": 9060,
+ "triangles": 6948,
  "parts": {
   "Paint": {
-   "triangles": 728,
+   "triangles": 536,
    "centre": [
     0.0,
     1.925,
@@ -10,7 +10,7 @@
    ]
   },
   "Body": {
-   "triangles": 4876,
+   "triangles": 2956,
    "centre": [
     0.0,
     1.825,

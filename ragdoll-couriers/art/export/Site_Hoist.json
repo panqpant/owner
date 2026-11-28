@@ -1,8 +1,8 @@
 {
- "triangles": 764,
+ "triangles": 508,
  "parts": {
   "Mast": {
-   "triangles": 512,
+   "triangles": 384,
    "centre": [
     0.0,
     27.97,
@@ -10,7 +10,7 @@
    ]
   },
   "Cage": {
-   "triangles": 252,
+   "triangles": 124,
    "centre": [
     0.0,
     2.875,

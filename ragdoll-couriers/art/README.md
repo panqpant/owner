@@ -135,3 +135,18 @@ Style follows what top Roblox thumbnails share:
 - saturated colour grading with a soft vignette;
 - chunky bevelled lettering with a dark outline;
 - a short hook line.
+
+## Performance (batch 10)
+
+- `python map/budget.py` counts placed triangles and parts per district into `BUDGET.md`. It fails if a district goes over 3.5M triangles or the city goes over 12,000 parts. Run it after `map/build_map.py`.
+- **Triangles: 12.7M down to 7.1M, with no visible change.** Before/after renders were checked zoomed in.
+  - Bevels of 0.1 studs or less are now single chamfers.
+  - Container ribs are flat.
+  - Traffic tyres have 16 sides.
+  - Window-box flowers use lighter spheres.
+- **MapBuilder physics:** static props have CanTouch off (nothing on the map uses Touched).
+  - Props up to 6 studs collide as boxes, and props under 3 studs cast no shadow.
+  - Birds have no collision.
+  - Terrain and free roads keep precise collision. Road tiles, ramps and buildings keep Default.
+  - Everything you can drive on stays queryable, since the suspension raycasts need it.
+- **Streaming is on** (`default.project.json`), with target radius 1024 and minimum radius 256 so fast riders never reach unloaded road. If Rojo live sync refuses to set these, set them once on Workspace in Studio.

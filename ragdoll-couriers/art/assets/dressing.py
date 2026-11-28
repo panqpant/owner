@@ -34,7 +34,7 @@ def bus():
     body.box((w + 0.3, 1, 1.2), (0, -L / 2, 1.2), "charcoal", bevel=0.3)
     for sx in (-1, 1):
         for y in (9.5, -9.5):
-            body.tire(1.5, 1.0, (sx * 3.5, y, 1.5))
+            body.tire(1.5, 1.0, (sx * 3.5, y, 1.5), segments=16)
     return [paint.done(), body.done()], {"kind": "hazard"}
 
 
@@ -57,7 +57,7 @@ def taxi():
     body.box((6.4, 0.6, 0.8), (0, -5.5, 1.2), "charcoal", bevel=0.25)
     for sx in (-1, 1):
         for y in (3.5, -3.5):
-            body.tire(1.15, 0.9, (sx * 2.75, y, 1.15))
+            body.tire(1.15, 0.9, (sx * 2.75, y, 1.15), segments=16)
     return [paint.done(), body.done()], {"kind": "hazard"}
 
 
@@ -73,7 +73,7 @@ def van():
         body.box((0.8, 0.2, 0.8), (sx * 2.8, -8.05, 2.4), "taillight", bevel=0.05)
         body.box((0.3, 6, 3), (sx * 3.55, -2.5, 6), "white", bevel=0.1)  # side panel for a logo decal
         for y in (5, -5.5):
-            body.tire(1.3, 0.9, (sx * 3.0, y, 1.3))
+            body.tire(1.3, 0.9, (sx * 3.0, y, 1.3), segments=16)
     body.box((7.2, 0.6, 1), (0, 8.2, 1.4), "charcoal", bevel=0.25)
     body.box((7.2, 0.6, 1), (0, -8.2, 1.4), "charcoal", bevel=0.25)
     body.box((6.6, 0.1, 6.8), (0, -8.05, 5), "lightgrey", bevel=0.05)  # roller door

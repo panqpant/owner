@@ -23,6 +23,13 @@
       "Map": {
         "$path": "src/map"
       }
+    },
+    "Workspace": {
+      "$properties": {
+        "StreamingEnabled": true,
+        "StreamingMinRadius": 256,
+        "StreamingTargetRadius": 1024
+      }
     }
   }
 }

@@ -1,8 +1,8 @@
 {
- "triangles": 1024,
+ "triangles": 640,
  "parts": {
   "Scaffold": {
-   "triangles": 1024,
+   "triangles": 640,
    "centre": [
     0.0,
     7.925,

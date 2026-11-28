@@ -168,6 +168,8 @@ class Mesh:
         tmp = bmesh.new()
         bmesh.ops.create_cube(tmp, size=1)
         bmesh.ops.scale(tmp, vec=Vector(size), verts=tmp.verts)
+        if bevel <= 0.1:
+            segments = 1  # a chamfer this small looks the same as a round at play distance, at a third of the triangles
         return self._merge(tmp, colour, _matrix(loc, rot), min(bevel, min(size) * 0.45), segments)
 
     def wedge(self, size, loc=(0, 0, 0), colour="white", rot=(0, 0, 0), bevel=0.05):

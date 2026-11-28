@@ -1,16 +1,16 @@
 {
- "triangles": 9148,
+ "triangles": 7688,
  "parts": {
   "Paint": {
-   "triangles": 1272,
+   "triangles": 1080,
    "centre": [
     0.0,
     0.234,
-    -0.421
+    -0.417
    ]
   },
   "Body": {
-   "triangles": 6148,
+   "triangles": 4880,
    "centre": [
     0.0,
     0.668,
@@ -37,7 +37,7 @@
  "size_studs": [
   3.3,
   4.14,
-  6.34
+  6.33
  ],
  "seat": [
   0,
