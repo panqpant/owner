@@ -203,27 +203,29 @@ def house_c():
     return [paint.done(), body.done()], {"kind": "building", "footprint": [w + 2, d + 6]}
 
 
-def townhouse():
-    """Old Town: tall narrow brick house."""
-    m = Mesh("Building")
-    w, d, h = 12, 12, 26
-    m.box((w, d, h), (0, 0, h / 2), "brick", bevel=0.1)
+def townhouse(floors=4):
+    """Old Town: tall narrow terraced house. Walls are `Paint` so a street can mix brick and painted fronts."""
+    paint, m = Mesh("Paint"), Mesh("Body")
+    w, d = 12, 12
+    h = 8.5 + (floors - 1) * 5.75
+    paint.box((w, d, h), (0, 0, h / 2), bevel=0.1)
     m.box((w + 0.8, d + 0.8, 1.0), (0, 0, h + 0.5), "stone", bevel=0.2)  # cornice
     m.box((w + 0.4, d + 0.4, 0.5), (0, 0, 8.5), "stone", bevel=0.1)
     m.cyl(math.hypot(w, d) / 2 + 0.6, 5, (0, 0, h + 3.5), "charcoal", rot=(0, 0, 45), segments=4, r2=0.4, bevel=0.15)
     _door(m, -2.5, d / 2, colour="red", h=6.5)
     _window(m, 3, d / 2, 4.2, w=2.4, frame="stone")
-    for z in (12, 17.5, 23):
+    uppers = [12 + k * 5.75 for k in range(floors - 1)]
+    for z in uppers:
         for x in (-3, 3):
             _window(m, x, d / 2, z, w=2.4, h=3.4, frame="stone")
             m.box((2.4, 0.9, 0.6), (x, d / 2 + 0.6, z - 2.3), "darkgreen", bevel=0.05)  # flower box
             for k in (-0.8, 0, 0.8):
                 m.sphere(0.35, (x + k, d / 2 + 0.6, z - 1.9), "pink" if k else "red", segments=8, rings=5)
-    for z in (4.2, 12, 17.5, 23):
+    for z in [4.2] + uppers:
         for x in (-3, 3):
             _window(m, x, -d / 2, z, w=2.4, h=3.4, frame="stone", face="-Y")
     m.box((1.4, 1.4, 4), (3, -3, h + 4), "brick", bevel=0.06)
-    return _one(m, "building", footprint=[w + 1, d + 2])
+    return [paint.done(), m.done()], {"kind": "building", "footprint": [w + 1, d + 2]}
 
 
 def shop():
@@ -762,6 +764,7 @@ ASSETS = {
     "House_B": house_b,
     "House_C": house_c,
     "OldTown_Townhouse": townhouse,
+    "OldTown_TownhouseLow": lambda: townhouse(floors=3),
     "OldTown_Shop": shop,
     "OldTown_MarketStall": market_stall,
     "Docks_Container": container,

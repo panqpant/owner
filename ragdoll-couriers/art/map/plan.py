@@ -126,6 +126,7 @@ def _sizes() -> dict:
 
 
 HOUSE_PAINT = ["fff1d6", "ffd6d6", "d6ecff", "e3ffd6", "fff3b0", "ffe0c2", "e8dcff", "f4f4f8", "cfe8e0"]
+TERRACE_PAINT = ["b9553f", "b9553f", "a4452f", "c86a4e", "efe3c8", "dfe9e2", "c9d6e8", "e8cfa0", "d9b8b0", "f4f4f8"]  # brick reds weighted, then painted fronts
 SHOP_PAINT = ["f6c26b", "8fc1e3", "e98b7d", "b5d99c", "f4f4f8", "d4a5c9"]
 CONTAINER_PAINT = ["e8443a", "3a7bf0", "43b85c", "ff9a2e", "1fb5a8", "8b5cf6", "ffd23f"]
 CAR_PAINT = ["e8443a", "3a7bf0", "ffd23f", "f4f4f8", "43b85c", "3a3d46", "ff8fc7"]
@@ -211,6 +212,8 @@ def plan(seed: int = 7) -> dict:
         dx, dy = DIRS[side]
         px, py = -dy, dx
         widths = {"OldTown_Shop": 16, "OldTown_Townhouse": 12}
+        units = [u if u != "OldTown_Townhouse" or rnd.random() < 0.6 else "OldTown_TownhouseLow" for u in units]
+        widths["OldTown_TownhouseLow"] = 12
         pos = start
         for asset in units:
             w = widths[asset]
@@ -219,7 +222,7 @@ def plan(seed: int = 7) -> dict:
             depth = 12
             off = CELL / 2 - 1.5 - depth / 2
             x, y = i * CELL + dx * off + px * along, j * CELL + dy * off + py * along
-            place(asset, x, y, FACING_ROT[side], "OldTown", rnd.choice(SHOP_PAINT) if asset == "OldTown_Shop" else None)
+            place(asset, x, y, FACING_ROT[side], "OldTown", rnd.choice(SHOP_PAINT if asset == "OldTown_Shop" else TERRACE_PAINT))
             ax, ay = i * CELL + dx * (CELL / 2 + 2.5) + px * along, j * CELL + dy * (CELL / 2 + 2.5) + py * along
             addresses.append({"district": "OldTown", "x": round(ax, 2), "y": round(ay, 2), "building": asset})
 

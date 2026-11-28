@@ -2,6 +2,7 @@
 
 Run:  python map/build_map.py            (needs bpy, like build.py; about 10 minutes, mostly rendering)
       python map/build_map.py --no-render
+      python map/build_map.py oldtown hub   (render only these shots)
 
 Outputs
   map/city.blend                      the city, every piece a linked instance of the kit (open it in Blender)
@@ -31,7 +32,12 @@ LAYOUT = os.path.join(os.path.dirname(ART), "src", "map", "Layout.luau")
 
 
 def hexcol(h: str, alpha=1.0):
-    return tuple(int(h[k : k + 2], 16) / 255 for k in (0, 2, 4)) + (alpha,)
+    """Hex (sRGB, as Roblox reads it) to the linear colour Blender's shaders expect."""
+
+    def lin(c):
+        return c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4
+
+    return tuple(lin(int(h[k : k + 2], 16) / 255) for k in (0, 2, 4)) + (alpha,)
 
 
 def paint_material():
@@ -172,7 +178,12 @@ def setup_render(samples, res_x, res_y):
         sc.collection.objects.link(sun)
 
 
+ONLY = {a for a in sys.argv[1:] if not a.startswith("--")}  # e.g. `build_map.py oldtown topdown`
+
+
 def shot(name, location, target, lens=None, ortho=None, samples=48, res=(1600, 900)):
+    if ONLY and name not in ONLY:
+        return
     setup_render(samples, *res)
     cam = bpy.data.objects.get("Cam") or bpy.data.objects.new("Cam", bpy.data.cameras.new("Cam"))
     if cam.name not in bpy.context.scene.collection.objects:
