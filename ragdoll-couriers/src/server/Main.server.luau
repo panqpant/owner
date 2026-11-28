@@ -1,8 +1,7 @@
--- Ragdoll Couriers kill test (server).
--- Builds a test road, gives every player a scooter with a parcel, and decides everything
--- worth money: crashes, parcel damage and payouts. The client only steers.
--- Note: the scooter is simulated on the rider's device, so a cheater can fake a smooth ride.
--- The server can only check what it sees (speeds, times); good enough for a kill test.
+-- Ragdoll Couriers (server): jobs, crashes, parcel damage, payouts, pedestrians' effects on all of it.
+-- The client only steers and reports pedestrian contact; everything worth money is decided here.
+-- Note: the scooter is simulated on the rider's device, so a cheater can fake a smooth ride. The server
+-- checks what it can see (speeds, times, distances).
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -11,559 +10,32 @@ local RunService = game:GetService("RunService")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared.Config)
 local Formula = require(Shared.Formula)
-local WalkMath = require(Shared.WalkMath)
-
-local remote = Instance.new("RemoteEvent")
-remote.Name = "KillTest"
-remote.Parent = ReplicatedStorage
-
----------------------------------------------------------------------------- map
-
-local map = Instance.new("Folder")
-map.Name = "Map"
-map.Parent = workspace
-local vehiclesFolder = Instance.new("Folder")
-vehiclesFolder.Name = "Vehicles"
-vehiclesFolder.Parent = workspace
-local parcelsFolder = Instance.new("Folder")
-parcelsFolder.Name = "Parcels"
-parcelsFolder.Parent = workspace
-
-local function part(props: { [string]: any }, class: string?): BasePart
-	local p = Instance.new(class or "Part") :: BasePart
-	p.Anchored = true
-	p.TopSurface = Enum.SurfaceType.Smooth
-	p.BottomSurface = Enum.SurfaceType.Smooth
-	p.Material = Enum.Material.SmoothPlastic
-	for key, value in props do
-		if key ~= "Parent" then
-			(p :: any)[key] = value
-		end
-	end
-	p.Parent = props.Parent or map
-	return p
-end
-
-local function sign(parent: BasePart, text: string, offsetY: number)
-	local gui = Instance.new("BillboardGui")
-	gui.Size = UDim2.fromOffset(260, 70)
-	gui.StudsOffset = Vector3.new(0, offsetY, 0)
-	gui.MaxDistance = 400
-	local label = Instance.new("TextLabel")
-	label.Size = UDim2.fromScale(1, 1)
-	label.BackgroundTransparency = 1
-	label.Text = text
-	label.TextScaled = true
-	label.Font = Enum.Font.FredokaOne
-	label.TextColor3 = Color3.new(1, 1, 1)
-	label.TextStrokeTransparency = 0
-	label.Parent = gui
-	gui.Parent = parent
-end
-
-local ROAD_W = 30
-local DEPOT_Z, HOUSE_Z = -20, 590
-
-part({
-	Name = "Ground",
-	Size = Vector3.new(1000, 2, 1400),
-	Position = Vector3.new(0, -1, 300),
-	Material = Enum.Material.Grass,
-	Color = Color3.fromRGB(90, 170, 80),
-})
-part({
-	Name = "Road",
-	Size = Vector3.new(ROAD_W, 1, 680),
-	Position = Vector3.new(0, -0.4, 290),
-	Color = Color3.fromRGB(55, 55, 60),
-	Material = Enum.Material.Asphalt,
-})
-
--- Depot (start) and house (address)
-local depot = part({
-	Name = "Depot",
-	Size = Vector3.new(50, 14, 14),
-	Position = Vector3.new(0, 7, DEPOT_Z - 28),
-	Color = Color3.fromRGB(255, 170, 60),
-})
-sign(depot, "DEPOT", 10)
-local spawn = Instance.new("SpawnLocation")
-spawn.Anchored = true
-spawn.Size = Vector3.new(10, 1, 10)
-spawn.Position = Vector3.new(-25, 0, DEPOT_Z)
-spawn.Transparency = 1
-spawn.CanCollide = false
-spawn.Duration = 0
-spawn.Parent = map
-local house = part({
-	Name = "House",
-	Size = Vector3.new(30, 18, 20),
-	Position = Vector3.new(0, 9, HOUSE_Z + 26),
-	Color = Color3.fromRGB(230, 120, 120),
-})
-part({
-	Name = "Roof",
-	Size = Vector3.new(32, 8, 22),
-	CFrame = house.CFrame * CFrame.new(0, 13, 0),
-	Color = Color3.fromRGB(120, 60, 50),
-}, "WedgePart")
-sign(house, "42 FRAGILE LANE", 16)
-
--- Destinations live in a persistent model: with streaming on, the client always has them for its guide beam.
-local zonesModel = Instance.new("Model")
-zonesModel.Name = "Zones"
-zonesModel.ModelStreamingMode = Enum.ModelStreamingMode.Persistent
-zonesModel.Parent = workspace
-
-local function zoneCFrame(at: Vector3): CFrame
-	return CFrame.new(at + Vector3.new(0, 0.15, 0)) * CFrame.Angles(0, 0, math.rad(90))
-end
-
-local function dropZoneAt(name: string, at: Vector3): BasePart
-	return part({
-		Name = name,
-		Parent = zonesModel,
-		Shape = Enum.PartType.Cylinder,
-		Size = Vector3.new(0.4, 24, 24),
-		CFrame = zoneCFrame(at),
-		Color = Color3.fromRGB(80, 255, 120),
-		Material = Enum.Material.Neon,
-		Transparency = 0.4,
-		CanCollide = false,
-		CanQuery = false,
-	})
-end
-local zones = {
-	depot = dropZoneAt("DepotZone", Vector3.new(0, 0, DEPOT_Z + 6)),
-	house = dropZoneAt("HouseZone", Vector3.new(0, 0, HOUSE_Z)),
-}
-
----------------------------------------------------------------------------- the city (when it's built)
-
--- With workspace.City built (art/README.md), riders start at the Hub depot and deliver to the city's
--- addresses, to customers on foot, and chase parcel thieves. Without it, the test road above is used.
-local city = workspace:FindFirstChild("City")
-local cityOrigin = city and city:GetAttribute("Origin") :: Vector3?
-local cityAddresses: { BasePart } = {}
-local citySpawn = city and city:FindFirstChild("CitySpawn") :: BasePart?
-local walks: { WalkMath.Walk } = {}
-if city and cityOrigin then
-	local folder = city:FindFirstChild("Addresses")
-	for _, a in if folder then folder:GetChildren() else {} do
-		if a:IsA("BasePart") then
-			table.insert(cityAddresses, a)
-		end
-	end
-	walks = WalkMath.load(cityOrigin)
-end
-local cityMode = #cityAddresses > 0 and citySpawn ~= nil
-
-local function flatDistance(a: Vector3, b: Vector3): number
-	return ((a - b) * Vector3.new(1, 0, 1)).Magnitude
-end
-
--- "Docks_FishMarket" -> "Fish Market", "OldTown_TownhouseLow" -> "Townhouse", "House_C" -> "House"
-local function friendly(building: string?): string
-	if not building then
-		return "Address"
-	end
-	if string.sub(building, 1, 5) == "House" then
-		return "House"
-	end
-	local rest = string.match(building, "^[^_]+_(.+)$") or building
-	for _, suffix in { "Low", "Short", "Tall" } do
-		rest = string.gsub(rest, suffix .. "$", "")
-	end
-	return (string.gsub(rest, "(%l)(%u)", "%1 %2"))
-end
-
-local function pickAddress(from: Vector3): BasePart
-	local options = {}
-	for _, a in cityAddresses do
-		local d = flatDistance(a.Position, from)
-		if d >= Config.JobMinDistance and d <= Config.JobMaxDistance then
-			table.insert(options, a)
-		end
-	end
-	local list = if #options > 0 then options else cityAddresses
-	return list[math.random(#list)]
-end
-
-local function pickWalk(from: Vector3): WalkMath.Walk
-	local options, total = {}, 0
-	for _, w in walks do
-		local d = flatDistance(WalkMath.at(w, w.length / 2), from)
-		if d >= Config.JobMinDistance and d <= Config.JobMaxDistance then
-			table.insert(options, w)
-			total += w.weight
-		end
-	end
-	if #options == 0 then
-		return walks[math.random(#walks)]
-	end
-	local pick = math.random() * total
-	for _, w in options do
-		pick -= w.weight
-		if pick <= 0 then
-			return w
-		end
-	end
-	return options[#options]
-end
-
----------------------------------------------------------------------------- shared pedestrians (customers, thieves)
-
--- Every client draws these from the same path, speed and server-clock start time, so they match.
-type Actor = {
-	id: number,
-	kind: string,
-	model: string,
-	path: WalkMath.Path,
-	speed: number,
-	t0: number,
-	s0: number,
-	dir: number,
-	once: boolean,
-}
-local PED_MODELS =
-	{ "Ped_Shopper", "Ped_Business", "Ped_Elder", "Ped_Kid", "Ped_Jogger", "Ped_Tourist", "Ped_Worker", "Ped_Student" }
-local actors: { [number]: Actor } = {}
-local nextActorId = 0
-
-local function actorData(a: Actor)
-	return {
-		id = a.id,
-		kind = a.kind,
-		model = a.model,
-		points = a.path.points,
-		speed = a.speed,
-		t0 = a.t0,
-		s0 = a.s0,
-		dir = a.dir,
-		once = a.once,
-	}
-end
-
-local function addActor(kind: string, path: WalkMath.Path, speed: number, s0: number, dir: number, once: boolean): Actor
-	nextActorId += 1
-	local a: Actor = {
-		id = nextActorId,
-		kind = kind,
-		model = PED_MODELS[math.random(#PED_MODELS)],
-		path = path,
-		speed = speed,
-		t0 = workspace:GetServerTimeNow(),
-		s0 = s0,
-		dir = dir,
-		once = once,
-	}
-	actors[a.id] = a
-	remote:FireAllClients("Actor", actorData(a))
-	return a
-end
-
-local function removeActor(a: Actor)
-	if actors[a.id] then
-		actors[a.id] = nil
-		remote:FireAllClients("ActorGone", a.id)
-	end
-end
-
-local function actorPos(a: Actor): Vector3
-	local elapsed = workspace:GetServerTimeNow() - a.t0
-	local s = if a.once
-		then math.min(a.s0 + a.speed * elapsed, a.path.length)
-		else (WalkMath.pingPong(a.path.length, a.s0, a.dir, a.speed, elapsed))
-	return (WalkMath.at(a.path, s))
-end
-
--- A thief's getaway: along the walk away from the rider, then across the junction to the nearest
--- walk end and on along that one, until the route is long enough for Config.ThiefSeconds.
-local function getawayRoute(from: Vector3, rider: Vector3): WalkMath.Path?
-	local best, bestWalk, bestS = math.huge, nil :: WalkMath.Walk?, 0
-	for _, w in walks do
-		for k = 2, #w.points do
-			local a, b = w.points[k - 1], w.points[k]
-			local ab = b - a
-			local t = if ab.Magnitude > 0 then math.clamp((from - a):Dot(ab) / ab:Dot(ab), 0, 1) else 0
-			local d = (a + ab * t - from).Magnitude
-			if d < best then
-				best, bestWalk, bestS = d, w, w.cum[k - 1] + ab.Magnitude * t
-			end
-		end
-	end
-	if not bestWalk or best > 40 then
-		return nil
-	end
-	local walk = bestWalk :: WalkMath.Walk
-	local ahead = WalkMath.at(walk, math.min(bestS + 4, walk.length))
-	local behind = WalkMath.at(walk, math.max(bestS - 4, 0))
-	local forward = (ahead - rider).Magnitude >= (behind - rider).Magnitude -- run away from the rider
-	local points = { (WalkMath.at(walk, bestS)) }
-	local function follow(w: WalkMath.Walk, fwd: boolean, fromS: number)
-		if fwd then
-			for k = 1, #w.points do
-				if w.cum[k] > fromS then
-					table.insert(points, w.points[k])
-				end
-			end
-		else
-			for k = #w.points, 1, -1 do
-				if w.cum[k] < fromS then
-					table.insert(points, w.points[k])
-				end
-			end
-		end
-	end
-	follow(walk, forward, bestS)
-	local used = { [walk] = true }
-	local need = Config.ThiefSpeed * Config.ThiefSeconds
-	while WalkMath.path(points).length < need do
-		local here = points[#points]
-		local nextWalk, nextFwd, nextD = nil :: WalkMath.Walk?, true, 60
-		for _, w in walks do
-			if not used[w] then
-				local ds, de = (w.points[1] - here).Magnitude, (w.points[#w.points] - here).Magnitude
-				if ds < nextD then
-					nextWalk, nextFwd, nextD = w, true, ds
-				end
-				if de < nextD then
-					nextWalk, nextFwd, nextD = w, false, de
-				end
-			end
-		end
-		if not nextWalk then
-			break -- a dead end: the thief gets away early
-		end
-		local w = nextWalk :: WalkMath.Walk
-		used[w] = true
-		follow(w, nextFwd, if nextFwd then -1 else w.length + 1)
-	end
-	return if #points >= 2 then WalkMath.path(points) else nil
-end
-
--- Speed bumps: half-buried cylinders, smooth to ride over, rough on a TV at speed.
-for z = 70, 130, 20 do
-	part({
-		Name = "SpeedBump",
-		Shape = Enum.PartType.Cylinder,
-		Size = Vector3.new(ROAD_W, 2.6, 2.6),
-		Position = Vector3.new(0, -0.5, z),
-		Color = Color3.fromRGB(240, 200, 40),
-	})
-end
-
--- Loose crates to smash through (unanchored, so they scatter).
-for i = 0, 9 do
-	local p = part({
-		Name = "Crate",
-		Size = Vector3.new(3, 3, 3),
-		Position = Vector3.new(8 + (i % 2) * 3.2, 1.5 + math.floor(i / 2) * 3.1, 160),
-		Color = Color3.fromRGB(170, 120, 70),
-		Material = Enum.Material.WoodPlanks,
-	})
-	p.Anchored = false
-end
-
--- Ramp: the first run almost guarantees a funny crash (the pillow survives it).
-part({
-	Name = "Ramp",
-	Size = Vector3.new(18, 1, 26),
-	CFrame = CFrame.new(-4, 3, 210) * CFrame.Angles(math.rad(-15), 0, 0),
-	Color = Color3.fromRGB(255, 120, 40),
-})
-
--- Cobbles: lots of small uneven stones.
-local rng = Random.new(7)
-for z = 270, 340, 3.2 do
-	for x = -13.5, 13.5, 3 do
-		part({
-			Name = "Cobble",
-			Size = Vector3.new(2.8, 1, 3),
-			Position = Vector3.new(x, -0.3 + rng:NextNumber(0, 0.55), z),
-			Color = Color3.fromRGB(130 + rng:NextInteger(-15, 15), 125, 115),
-			Material = Enum.Material.Cobblestone,
-		})
-	end
-end
-
--- Narrow alley: walls pinch the road to 10 studs. Hit a wall, fly off.
-for _, s in { -1, 1 } do
-	part({
-		Name = "AlleyWall",
-		Size = Vector3.new(10, 12, 50),
-		Position = Vector3.new(s * 10, 6, 405),
-		Color = Color3.fromRGB(180, 170, 150),
-		Material = Enum.Material.Brick,
-	})
-end
-
--- Hill with a crest you can get air off.
-part({
-	Name = "HillUp",
-	Size = Vector3.new(ROAD_W, 1, 34),
-	CFrame = CFrame.new(0, 3.6, 470) * CFrame.Angles(math.rad(-12), 0, 0),
-	Color = Color3.fromRGB(70, 70, 75),
-})
-part({
-	Name = "HillDown",
-	Size = Vector3.new(ROAD_W, 1, 34),
-	CFrame = CFrame.new(0, 3.6, 502) * CFrame.Angles(math.rad(12), 0, 0),
-	Color = Color3.fromRGB(70, 70, 75),
-})
-
----------------------------------------------------------------------------- vehicle
-
-local function weld(a: BasePart, b: BasePart)
-	local w = Instance.new("WeldConstraint")
-	w.Part0, w.Part1 = a, b
-	w.Parent = a
-end
-
-local function buildScooter(owner: Player, at: CFrame): Model
-	local model = Instance.new("Model")
-	model.Name = owner.Name
-	local body = part({
-		Name = "Body",
-		Size = Vector3.new(2.4, 0.8, 5.6),
-		CFrame = at,
-		Color = Color3.fromRGB(255, 90, 60),
-		Parent = model,
-	})
-	body.Anchored = false
-	body.CustomPhysicalProperties = PhysicalProperties.new(1.5, 0.3, 0.2)
-	model.PrimaryPart = body
-
-	local function piece(
-		name: string,
-		size: Vector3,
-		offset: CFrame,
-		color: Color3,
-		props: { [string]: any }?
-	): BasePart
-		local p = part({
-			Name = name,
-			Size = size,
-			CFrame = at * offset,
-			Color = color,
-			Parent = model,
-			CanCollide = false,
-			Massless = true,
-		})
-		p.Anchored = false
-		for k, v in props or {} do
-			(p :: any)[k] = v
-		end
-		weld(body, p)
-		return p
-	end
-
-	local wheelColor = Color3.fromRGB(30, 30, 30)
-	piece(
-		"FrontWheel",
-		Vector3.new(0.6, 1.8, 1.8),
-		CFrame.new(0, -0.9, -2.4),
-		wheelColor,
-		{ Shape = Enum.PartType.Cylinder }
-	)
-	piece(
-		"RearWheel",
-		Vector3.new(0.6, 1.8, 1.8),
-		CFrame.new(0, -0.9, 2.4),
-		wheelColor,
-		{ Shape = Enum.PartType.Cylinder }
-	)
-	piece("Stem", Vector3.new(0.4, 3.6, 0.4), CFrame.new(0, 1.8, -2.5), Color3.fromRGB(200, 200, 210))
-	piece("Bars", Vector3.new(2.6, 0.3, 0.3), CFrame.new(0, 3.6, -2.5), Color3.fromRGB(40, 40, 40))
-
-	-- Cargo box behind the rider. Walls collide so the parcel rattles around inside.
-	local boxColor = Color3.fromRGB(250, 230, 120)
-	local boxCenter = CFrame.new(0, 1.9, 1.6)
-	piece("BoxFloor", Vector3.new(3, 0.3, 2.8), boxCenter * CFrame.new(0, -1.1, 0), boxColor, { CanCollide = true })
-	piece("BoxBack", Vector3.new(3, 2, 0.3), boxCenter * CFrame.new(0, -0.1, 1.4), boxColor, { CanCollide = true })
-	piece("BoxFront", Vector3.new(3, 2, 0.3), boxCenter * CFrame.new(0, -0.1, -1.4), boxColor, { CanCollide = true })
-	piece("BoxLeft", Vector3.new(0.3, 2, 2.8), boxCenter * CFrame.new(-1.5, -0.1, 0), boxColor, { CanCollide = true })
-	piece("BoxRight", Vector3.new(0.3, 2, 2.8), boxCenter * CFrame.new(1.5, -0.1, 0), boxColor, { CanCollide = true })
-	local anchor = Instance.new("Attachment")
-	anchor.Name = "ParcelAnchor"
-	anchor.CFrame = boxCenter
-	anchor.Parent = body
-
-	local seat = Instance.new("Seat")
-	seat.Name = "Seat"
-	seat.Size = Vector3.new(2, 0.4, 1.6)
-	seat.CFrame = at * CFrame.new(0, 0.6, -0.6)
-	seat.Color = Color3.fromRGB(30, 30, 30)
-	seat.Massless = true
-	seat.TopSurface = Enum.SurfaceType.Smooth
-	seat.Parent = model
-	weld(body, seat)
-
-	-- Suspension ray origins; the client raycasts down from these.
-	for i, offset in
-		{
-			Vector3.new(-1, -0.4, -2.4),
-			Vector3.new(1, -0.4, -2.4),
-			Vector3.new(-1, -0.4, 2.4),
-			Vector3.new(1, -0.4, 2.4),
-		}
-	do
-		local a = Instance.new("Attachment")
-		a.Name = "Ray" .. i
-		a.Position = offset
-		a.Parent = body
-	end
-
-	model.Parent = vehiclesFolder
-	body:SetNetworkOwner(owner)
-	return model
-end
-
----------------------------------------------------------------------------- ragdoll
-
--- Ball sockets sit ready on every joint; a crash swaps the motors for them.
-local function rigRagdoll(character: Model)
-	local humanoid = character:FindFirstChildOfClass("Humanoid") :: Humanoid
-	humanoid.BreakJointsOnDeath = false
-	for _, motor in character:GetDescendants() do
-		if
-			motor:IsA("Motor6D")
-			and motor.Name ~= "Root"
-			and motor.Name ~= "RootJoint"
-			and motor.Part0
-			and motor.Part1
-		then
-			local a0 = Instance.new("Attachment")
-			a0.Name = "RagA0"
-			a0.CFrame = motor.C0
-			a0.Parent = motor.Part0
-			local a1 = Instance.new("Attachment")
-			a1.Name = "RagA1"
-			a1.CFrame = motor.C1
-			a1.Parent = motor.Part1
-			local socket = Instance.new("BallSocketConstraint")
-			socket.Name = "RagSocket"
-			socket.Attachment0, socket.Attachment1 = a0, a1
-			socket.LimitsEnabled = true
-			socket.UpperAngle = 50
-			socket.TwistLimitsEnabled = true
-			socket.TwistLowerAngle = -45
-			socket.TwistUpperAngle = 45
-			socket.Enabled = false
-			socket.Parent = motor.Parent
-		end
-	end
-end
-
-local function setRagdoll(character: Model, on: boolean)
-	for _, d in character:GetDescendants() do
-		if d:IsA("Motor6D") and d.Name ~= "Root" and d.Name ~= "RootJoint" then
-			d.Enabled = not on
-		elseif d:IsA("BallSocketConstraint") and d.Name == "RagSocket" then
-			d.Enabled = on
-		end
-	end
-end
+local Services = script.Parent:WaitForChild("Services")
+local remote = require(Services.Net)
+local Data = require(Services.Data)
+local World = require(Services.World)
+local Actors = require(Services.Actors)
+local Vehicles = require(Services.Vehicles)
+local Ragdoll = require(Services.Ragdoll)
+local parcelsFolder, part, DEPOT_Z, zoneCFrame, dropZoneAt, zones, citySpawn, walks, cityMode, flatDistance, friendly, pickAddress, pickWalk =
+	World.parcelsFolder,
+	World.part,
+	World.DEPOT_Z,
+	World.zoneCFrame,
+	World.dropZoneAt,
+	World.zones,
+	World.citySpawn,
+	World.walks,
+	World.cityMode,
+	World.flatDistance,
+	World.friendly,
+	World.pickAddress,
+	World.pickWalk
+local actors, actorData, addActor, removeActor, actorPos, getawayRoute =
+	Actors.actors, Actors.actorData, Actors.addActor, Actors.removeActor, Actors.actorPos, Actors.getawayRoute
+local buildScooter = Vehicles.buildScooter
+local rigRagdoll, setRagdoll = Ragdoll.rigRagdoll, Ragdoll.setRagdoll
+type Actor = Actors.Actor
 
 ---------------------------------------------------------------------------- state
 
@@ -787,6 +259,7 @@ local function crash(player: Player, state: State, velocity: Vector3)
 		return
 	end
 	state.ragdolled = true
+	Data.bump(player, "crashes")
 	state.tiltSince = nil
 	if state.job then
 		state.job.crashed = true
@@ -864,8 +337,15 @@ local function deliver(player: Player, state: State)
 		warn(player.Name, "delivered impossibly fast; no pay")
 		result.total = 0
 	end
-	local coins = (player:FindFirstChild("leaderstats") :: Folder):FindFirstChild("Coins") :: IntValue
-	coins.Value += result.total
+	Data.addCoins(player, result.total)
+	local profile = Data.get(player)
+	if profile then
+		profile.deliveries += 1
+		profile.stats.bestCondition = math.max(profile.stats.bestCondition, math.floor(state.condition + 0.5))
+		if job.kind == "customer" then
+			profile.stats.customersServed += 1
+		end
+	end
 	remote:FireClient(player, "Delivered", {
 		name = def.name,
 		condition = math.floor(state.condition + 0.5),
@@ -901,6 +381,9 @@ local function cleanup(state: State)
 end
 
 local function onCharacter(player: Player, character: Model)
+	if not Data.wait(player) then
+		return -- left before their save loaded
+	end
 	local old = states[player]
 	if old then
 		cleanup(old)
@@ -933,20 +416,30 @@ local function onCharacter(player: Player, character: Model)
 	startJob(player, state, "depot")
 end
 
-Players.PlayerAdded:Connect(function(player)
+local function onPlayerAdded(player: Player)
 	local stats = Instance.new("Folder")
 	stats.Name = "leaderstats"
 	local coins = Instance.new("IntValue")
 	coins.Name = "Coins"
 	coins.Parent = stats
 	stats.Parent = player
+	task.spawn(function()
+		coins.Value = Data.load(player).coins
+	end)
 	for _, a in actors do
 		remote:FireClient(player, "Actor", actorData(a))
 	end
 	player.CharacterAdded:Connect(function(character)
 		onCharacter(player, character)
 	end)
-end)
+	if player.Character then
+		task.spawn(onCharacter, player, player.Character)
+	end
+end
+Players.PlayerAdded:Connect(onPlayerAdded)
+for _, player in Players:GetPlayers() do -- anyone who joined while the modules were loading
+	task.spawn(onPlayerAdded, player)
+end
 
 Players.PlayerRemoving:Connect(function(player)
 	local state = states[player]
@@ -957,9 +450,6 @@ Players.PlayerRemoving:Connect(function(player)
 end)
 
 local lastReset: { [Player]: number } = {}
-local function coinsOf(player: Player): IntValue
-	return (player:FindFirstChild("leaderstats") :: Folder):FindFirstChild("Coins") :: IntValue
-end
 
 -- Pedestrians live on each client, so hits and near misses are reported by the client.
 -- A hit only costs the reporter. shortcut: near misses are trusted within limits (rider speed checked
@@ -996,7 +486,8 @@ local function onNearMiss(player: Player, state: State)
 	end
 	state.lastNearMiss = now
 	job.nearMisses += 1
-	coinsOf(player).Value += Config.NearMissCoins
+	Data.addCoins(player, Config.NearMissCoins)
+	Data.bump(player, "nearMisses")
 	remote:FireClient(player, "Bonus", "Near miss! +" .. Config.NearMissCoins)
 end
 
@@ -1073,7 +564,8 @@ RunService.Heartbeat:Connect(function()
 				parcel.Anchored = false
 				attachParcel(state)
 				parcel:SetNetworkOwner(player)
-				coinsOf(player).Value += Config.ThiefCatchCoins
+				Data.addCoins(player, Config.ThiefCatchCoins)
+				Data.bump(player, "thievesCaught")
 				remote:FireClient(player, "Bonus", "Caught the thief! +" .. Config.ThiefCatchCoins)
 			elseif workspace:GetServerTimeNow() - thief.t0 > thief.path.length / thief.speed + 0.5 then
 				failJob(player, state, "The thief got away!")

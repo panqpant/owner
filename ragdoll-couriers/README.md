@@ -36,3 +36,23 @@ Every number is in `src/shared/Config.luau`: driving presets, how hard a hit has
 
 ## Tests
 `lune run tests/formula.spec.luau` checks the damage and payout maths.
+
+## Code layout
+- `src/server/Main.server.luau`: the game loop: jobs, crashes, parcel damage, payouts, pedestrian effects.
+- `src/server/Services/`:
+  - `Net`: the one RemoteEvent, `ReplicatedStorage.Couriers`.
+  - `World`: the test road, plus the city's addresses, spawn and walks when `workspace.City` exists.
+  - `Actors`: customers and thieves.
+  - `Vehicles`.
+  - `Ragdoll`.
+  - `Data`: saving.
+  - `Profile`: the save format.
+- `src/shared/`: `Config` (all tuning), `Formula` (pay maths), `WalkMath` and `Walks` (pedestrian paths).
+- `src/client/`: the HUD and driving (`KillTest.client`), and pedestrians.
+
+## Saving
+`Services/Data` keeps each player's coins, XP and level, deliveries, vehicles, upgrades, districts, settings, stats, daily-reward state and processed purchase receipts in the DataStore `Couriers_v1`.
+- Session-locked, so two servers never overwrite each other when a player hops.
+- Retried on errors, autosaved every 2 minutes, and saved on leave and on shutdown.
+- To save while testing in Studio, turn on **Game Settings → Security → Enable Studio Access to API Services**. Without it, progress lasts for the session only, with one warning.
+- New fields added to `Services/Profile.luau` appear in old saves automatically. Test: `lune run tests/profile.spec.luau`.

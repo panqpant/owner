@@ -10,7 +10,7 @@ local ContextActionService = game:GetService("ContextActionService")
 local TweenService = game:GetService("TweenService")
 
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
-local remote = ReplicatedStorage:WaitForChild("KillTest") :: RemoteEvent
+local remote = ReplicatedStorage:WaitForChild("Couriers") :: RemoteEvent
 local player = Players.LocalPlayer
 local controls = require(player:WaitForChild("PlayerScripts"):WaitForChild("PlayerModule")):GetControls()
 local camera = workspace.CurrentCamera

@@ -17,7 +17,7 @@ local TweenService = game:GetService("TweenService")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared:WaitForChild("Config"))
 local WalkMath = require(Shared:WaitForChild("WalkMath"))
-local remote = ReplicatedStorage:WaitForChild("KillTest") :: RemoteEvent
+local remote = ReplicatedStorage:WaitForChild("Couriers") :: RemoteEvent
 local player = Players.LocalPlayer
 local camera = workspace.CurrentCamera
 
