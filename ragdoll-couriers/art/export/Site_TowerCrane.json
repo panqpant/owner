@@ -1,0 +1,25 @@
+{
+ "triangles": 2472,
+ "parts": {
+  "Crane": {
+   "triangles": 2472,
+   "centre": [
+    0.2,
+    33.25,
+    -12.991
+   ]
+  }
+ },
+ "size_studs": [
+  8.4,
+  66.5,
+  54.04
+ ],
+ "kind": "prop",
+ "hook": [
+  0,
+  42,
+  -28.0
+ ],
+ "note": "hook in Roblox space relative to the base centre"
+}

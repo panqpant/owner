@@ -1,0 +1,20 @@
+{
+ "triangles": 320,
+ "parts": {
+  "Boulder": {
+   "triangles": 320,
+   "centre": [
+    0.062,
+    -0.003,
+    0.015
+   ]
+  }
+ },
+ "size_studs": [
+  5.92,
+  6.26,
+  6.21
+ ],
+ "kind": "hazard",
+ "note": "rolls down the mountain road; use a Ball collision"
+}

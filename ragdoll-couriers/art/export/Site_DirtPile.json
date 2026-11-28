@@ -1,0 +1,20 @@
+{
+ "triangles": 160,
+ "parts": {
+  "Dirt": {
+   "triangles": 160,
+   "centre": [
+    0.138,
+    0.557,
+    0.023
+   ]
+  }
+ },
+ "size_studs": [
+  12.04,
+  5.47,
+  12.24
+ ],
+ "kind": "prop",
+ "note": "doubles as a small jump"
+}

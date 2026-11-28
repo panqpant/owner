@@ -1,0 +1,19 @@
+{
+ "triangles": 864,
+ "parts": {
+  "Barrier": {
+   "triangles": 864,
+   "centre": [
+    0.0,
+    1.65,
+    -0.0
+   ]
+  }
+ },
+ "size_studs": [
+  1.8,
+  3.3,
+  10.0
+ ],
+ "kind": "prop"
+}

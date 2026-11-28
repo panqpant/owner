@@ -1,0 +1,21 @@
+{
+ "triangles": 1404,
+ "parts": {
+  "Crate": {
+   "triangles": 1404,
+   "centre": [
+    0.0,
+    1.5,
+    0.0
+   ]
+  }
+ },
+ "size_studs": [
+  3.26,
+  3.0,
+  3.26
+ ],
+ "kind": "prop",
+ "physics": true,
+ "note": "the kill test's smashable crates"
+}

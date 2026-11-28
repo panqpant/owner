@@ -1,0 +1,19 @@
+{
+ "triangles": 3654,
+ "parts": {
+  "Stall": {
+   "triangles": 3654,
+   "centre": [
+    0.0,
+    4.007,
+    -0.0
+   ]
+  }
+ },
+ "size_studs": [
+  8.6,
+  8.01,
+  4.57
+ ],
+ "kind": "prop"
+}

@@ -1,0 +1,20 @@
+{
+ "triangles": 2024,
+ "parts": {
+  "JobBoard": {
+   "triangles": 2024,
+   "centre": [
+    0.0,
+    4.84,
+    -0.4
+   ]
+  }
+ },
+ "size_studs": [
+  11.6,
+  9.68,
+  2.56
+ ],
+ "kind": "prop",
+ "note": "ProximityPrompt on the cork face opens the Jobs screen"
+}

@@ -1,0 +1,31 @@
+{
+ "triangles": 3336,
+ "parts": {
+  "Paint": {
+   "triangles": 2160,
+   "centre": [
+    0.0,
+    8.0,
+    -0.125
+   ]
+  },
+  "Body": {
+   "triangles": 1176,
+   "centre": [
+    0.0,
+    9.995,
+    -0.0
+   ]
+  }
+ },
+ "size_studs": [
+  41.5,
+  19.99,
+  32.08
+ ],
+ "kind": "building",
+ "footprint": [
+  42,
+  32
+ ]
+}

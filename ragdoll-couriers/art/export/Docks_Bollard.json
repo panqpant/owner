@@ -1,0 +1,19 @@
+{
+ "triangles": 564,
+ "parts": {
+  "Bollard": {
+   "triangles": 564,
+   "centre": [
+    0.0,
+    1.275,
+    -0.0
+   ]
+  }
+ },
+ "size_studs": [
+  2.2,
+  2.55,
+  2.2
+ ],
+ "kind": "prop"
+}

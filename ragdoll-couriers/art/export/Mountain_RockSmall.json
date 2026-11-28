@@ -1,0 +1,19 @@
+{
+ "triangles": 160,
+ "parts": {
+  "Rock": {
+   "triangles": 160,
+   "centre": [
+    0.032,
+    1.048,
+    -0.159
+   ]
+  }
+ },
+ "size_studs": [
+  6.29,
+  3.78,
+  4.81
+ ],
+ "kind": "prop"
+}

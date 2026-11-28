@@ -1,0 +1,28 @@
+{
+ "triangles": 5200,
+ "parts": {
+  "Paint": {
+   "triangles": 4212,
+   "centre": [
+    0.0,
+    4.25,
+    -0.0
+   ]
+  },
+  "Body": {
+   "triangles": 988,
+   "centre": [
+    0.0,
+    4.25,
+    -0.06
+   ]
+  }
+ },
+ "size_studs": [
+  8.3,
+  8.5,
+  20.42
+ ],
+ "kind": "prop",
+ "stackable": true
+}

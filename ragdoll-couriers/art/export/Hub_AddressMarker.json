@@ -1,0 +1,20 @@
+{
+ "triangles": 604,
+ "parts": {
+  "Marker": {
+   "triangles": 604,
+   "centre": [
+    0.0,
+    4.975,
+    -0.0
+   ]
+  }
+ },
+ "size_studs": [
+  24.0,
+  9.95,
+  24.0
+ ],
+ "kind": "prop",
+ "note": "spin + bob the parcel icon in code"
+}

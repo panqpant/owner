@@ -1,0 +1,25 @@
+{
+ "triangles": 5436,
+ "parts": {
+  "Tile": {
+   "triangles": 5436,
+   "centre": [
+    0.0,
+    -0.3,
+    -0.0
+   ]
+  }
+ },
+ "size_studs": [
+  40.0,
+  1.4,
+  40.0
+ ],
+ "kind": "roadTile",
+ "tile": 40,
+ "road": 30,
+ "open": [
+  "N",
+  "S"
+ ]
+}

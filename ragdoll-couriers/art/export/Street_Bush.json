@@ -1,0 +1,19 @@
+{
+ "triangles": 60,
+ "parts": {
+  "Bush": {
+   "triangles": 60,
+   "centre": [
+    0.119,
+    1.31,
+    -0.028
+   ]
+  }
+ },
+ "size_studs": [
+  5.54,
+  3.78,
+  3.09
+ ],
+ "kind": "prop"
+}

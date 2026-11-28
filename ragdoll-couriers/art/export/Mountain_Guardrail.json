@@ -1,0 +1,20 @@
+{
+ "triangles": 648,
+ "parts": {
+  "Guardrail": {
+   "triangles": 648,
+   "centre": [
+    0.15,
+    1.5,
+    -0.0
+   ]
+  }
+ },
+ "size_studs": [
+  0.7,
+  3.0,
+  10.0
+ ],
+ "kind": "prop",
+ "note": "10 studs long; break it to fly off the cliff"
+}

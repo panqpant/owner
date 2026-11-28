@@ -1,0 +1,23 @@
+{
+ "triangles": 5084,
+ "parts": {
+  "Building": {
+   "triangles": 5084,
+   "centre": [
+    0.0,
+    15.925,
+    -0.65
+   ]
+  }
+ },
+ "size_studs": [
+  12.8,
+  32.15,
+  14.1
+ ],
+ "kind": "building",
+ "footprint": [
+  13,
+  14
+ ]
+}

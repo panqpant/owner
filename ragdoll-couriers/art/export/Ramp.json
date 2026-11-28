@@ -1,0 +1,19 @@
+{
+ "triangles": 1032,
+ "parts": {
+  "Ramp": {
+   "triangles": 1032,
+   "centre": [
+    0.0,
+    3.593,
+    -0.0
+   ]
+  }
+ },
+ "size_studs": [
+  18.86,
+  7.19,
+  26.2
+ ],
+ "kind": "hazard"
+}

@@ -1,0 +1,20 @@
+{
+ "triangles": 620,
+ "parts": {
+  "Mailbox": {
+   "triangles": 620,
+   "centre": [
+    0.05,
+    2.45,
+    -0.225
+   ]
+  }
+ },
+ "size_studs": [
+  1.3,
+  4.9,
+  2.05
+ ],
+ "kind": "prop",
+ "note": "marks delivery addresses"
+}

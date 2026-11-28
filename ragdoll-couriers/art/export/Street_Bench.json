@@ -1,0 +1,19 @@
+{
+ "triangles": 1188,
+ "parts": {
+  "Bench": {
+   "triangles": 1188,
+   "centre": [
+    0.0,
+    1.627,
+    0.272
+   ]
+  }
+ },
+ "size_studs": [
+  6.0,
+  3.25,
+  2.24
+ ],
+ "kind": "prop"
+}

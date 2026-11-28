@@ -1,0 +1,20 @@
+{
+ "triangles": 244,
+ "parts": {
+  "Sign": {
+   "triangles": 244,
+   "centre": [
+    1.8,
+    4.0,
+    -1.8
+   ]
+  }
+ },
+ "size_studs": [
+  4.5,
+  8.0,
+  4.5
+ ],
+ "kind": "prop",
+ "note": "put SurfaceGuis on the two boards for district names"
+}

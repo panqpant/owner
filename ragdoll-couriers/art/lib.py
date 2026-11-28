@@ -218,14 +218,25 @@ class Mesh:
         self.cyl(rr, width * 0.9, loc, hub, rot, segments=segments, bevel=0.06)
         return self.cyl(rr * 0.35, width * 1.05, loc, "charcoal", rot, segments=12, bevel=0.03)
 
-    def done(self, location=(0, 0, 0)) -> bpy.types.Object:
+    def rock(self, r, loc=(0, 0, 0), colour="stone", scale=(1, 1, 1), seed=1, lumpiness=0.22, subdivisions=2):
+        """Faceted lumpy rock (icosphere with each vertex pushed in or out)."""
+        import random
+
+        rnd = random.Random(seed)
+        tmp = bmesh.new()
+        bmesh.ops.create_icosphere(tmp, subdivisions=subdivisions, radius=r)
+        for v in tmp.verts:
+            v.co *= 1 + rnd.uniform(-lumpiness, lumpiness)
+        return self._merge(tmp, colour, _matrix(loc, (0, 0, rnd.uniform(0, 360)), scale), 0, 1)
+
+    def done(self, location=(0, 0, 0), sharp=35) -> bpy.types.Object:
         me = bpy.data.meshes.new(self.name)
         bmesh.ops.remove_doubles(self.bm, verts=self.bm.verts, dist=0.0001)
         self.bm.to_mesh(me)
         self.bm.free()
         for p in me.polygons:
             p.use_smooth = True
-        me.set_sharp_from_angle(angle=math.radians(35))
+        me.set_sharp_from_angle(angle=math.radians(sharp))
         me.materials.append(material())
         obj = bpy.data.objects.new(self.name, me)
         obj.location = location

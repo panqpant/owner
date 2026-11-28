@@ -1,0 +1,20 @@
+{
+ "triangles": 980,
+ "parts": {
+  "Barrel": {
+   "triangles": 980,
+   "centre": [
+    0.0,
+    1.735,
+    -0.0
+   ]
+  }
+ },
+ "size_studs": [
+  2.5,
+  3.47,
+  2.5
+ ],
+ "kind": "prop",
+ "physics": true
+}

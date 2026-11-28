@@ -1,0 +1,19 @@
+{
+ "triangles": 384,
+ "parts": {
+  "Tree": {
+   "triangles": 384,
+   "centre": [
+    0.442,
+    6.87,
+    -0.027
+   ]
+  }
+ },
+ "size_studs": [
+  10.07,
+  13.74,
+  8.15
+ ],
+ "kind": "prop"
+}

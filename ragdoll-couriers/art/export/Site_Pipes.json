@@ -1,0 +1,19 @@
+{
+ "triangles": 1512,
+ "parts": {
+  "Pipes": {
+   "triangles": 1512,
+   "centre": [
+    0.0,
+    2.443,
+    -0.0
+   ]
+  }
+ },
+ "size_studs": [
+  8.5,
+  4.89,
+  12.0
+ ],
+ "kind": "prop"
+}

@@ -11,9 +11,9 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import lib  # noqa: E402
-from assets import parcels, vehicles  # noqa: E402
+from assets import parcels, vehicles, world  # noqa: E402
 
-GROUPS = {"vehicles": vehicles.ASSETS, "parcels": parcels.ASSETS}
+GROUPS = {"vehicles": vehicles.ASSETS, "parcels": parcels.ASSETS, "world": world.ASSETS}
 TRIANGLE_BUDGET = 10000  # per MeshPart; Roblox's hard limit is 20k, phones like far less
 
 
@@ -33,7 +33,8 @@ def main(only):
             built.append(name)
             print(f"built {name}: {info['triangles']} tris, size {info['size_studs']}")
         if built and not only:
-            lib.contact_sheet(built, f"_{group}.png")
+            for i in range(0, len(built), 25):  # 25 per sheet keeps them readable
+                lib.contact_sheet(built[i : i + 25], f"_{group}.png" if len(built) <= 25 else f"_{group}_{i // 25 + 1}.png")
 
 
 if __name__ == "__main__":

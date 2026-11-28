@@ -1,0 +1,19 @@
+{
+ "triangles": 624,
+ "parts": {
+  "TrafficLight": {
+   "triangles": 624,
+   "centre": [
+    0.0,
+    5.45,
+    -0.599
+   ]
+  }
+ },
+ "size_studs": [
+  1.4,
+  10.9,
+  1.8
+ ],
+ "kind": "prop"
+}

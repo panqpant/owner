@@ -1,0 +1,19 @@
+{
+ "triangles": 5192,
+ "parts": {
+  "Forklift": {
+   "triangles": 5192,
+   "centre": [
+    0.0,
+    4.425,
+    -1.6
+   ]
+  }
+ },
+ "size_studs": [
+  5.14,
+  8.85,
+  10.4
+ ],
+ "kind": "hazard"
+}

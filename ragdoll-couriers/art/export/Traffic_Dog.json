@@ -1,0 +1,19 @@
+{
+ "triangles": 3456,
+ "parts": {
+  "Dog": {
+   "triangles": 3456,
+   "centre": [
+    0.0,
+    1.867,
+    -0.294
+   ]
+  }
+ },
+ "size_studs": [
+  1.84,
+  3.92,
+  5.65
+ ],
+ "kind": "hazard"
+}

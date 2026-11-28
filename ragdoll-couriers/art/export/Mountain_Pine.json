@@ -1,0 +1,19 @@
+{
+ "triangles": 428,
+ "parts": {
+  "Pine": {
+   "triangles": 428,
+   "centre": [
+    0.0,
+    6.65,
+    -0.124
+   ]
+  }
+ },
+ "size_studs": [
+  8.12,
+  13.3,
+  8.0
+ ],
+ "kind": "prop"
+}
