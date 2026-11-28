@@ -1,0 +1,60 @@
+{
+ "triangles": 1456,
+ "parts": {
+  "Torso": {
+   "triangles": 216,
+   "centre": [
+    0.0,
+    2.16,
+    0.252
+   ]
+  },
+  "Head": {
+   "triangles": 376,
+   "centre": [
+    0.0,
+    3.377,
+    -0.014
+   ]
+  },
+  "LArm": {
+   "triangles": 216,
+   "centre": [
+    -1.08,
+    2.162,
+    -0.0
+   ]
+  },
+  "RArm": {
+   "triangles": 216,
+   "centre": [
+    1.08,
+    2.162,
+    -0.0
+   ]
+  },
+  "LLeg": {
+   "triangles": 216,
+   "centre": [
+    -0.36,
+    0.724,
+    -0.072
+   ]
+  },
+  "RLeg": {
+   "triangles": 216,
+   "centre": [
+    0.36,
+    0.724,
+    -0.072
+   ]
+  }
+ },
+ "size_studs": [
+  2.85,
+  3.85,
+  1.37
+ ],
+ "kind": "pedestrian",
+ "note": "limbs swing from the top of their bounds; head from the bottom"
+}

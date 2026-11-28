@@ -149,6 +149,36 @@ for it in items:
         across = abs(it["x"] - cell[0] * CELL) if straight[cell] else abs(it["y"] - cell[1] * CELL)
         assert across >= 15, f"{it['asset']} is on the asphalt at {cell} ({across:.1f} from the centre line)"
 
+# Pedestrian walks: every point, sampled every half stud, has both feet on the pavement of a straight
+# street and the walker's body clear of every placed thing (poles get BODY clearance, nothing else is skipped).
+import walks as walks_mod  # noqa: E402
+
+ws = walks_mod.walks(p)
+assert len(ws) > 200, len(ws)
+obs = walks_mod.obstacles(items, sizes)
+straight = {(round(it["x"] / CELL), round(it["y"] / CELL)): it["rot"] % 180 == 0 for it in items if it["asset"] in ("Road_Straight", "Road_Cobble")}
+grid = {}
+for o in obs:  # bucket rects by cell so the check stays quick
+    for gi in range(math.floor(o[0] / CELL), math.floor(o[2] / CELL) + 1):
+        for gj in range(math.floor(o[1] / CELL), math.floor(o[3] / CELL) + 1):
+            grid.setdefault((gi, gj), []).append(o)
+for w in ws:
+    pts = [(q[0], -q[2]) for q in w["p"]]
+    for (x0, y0), (x1, y1) in zip(pts, pts[1:]):
+        n = max(1, int(math.dist((x0, y0), (x1, y1)) / 0.5))
+        for k in range(n + 1):
+            x, y = x0 + (x1 - x0) * k / n, y0 + (y1 - y0) * k / n
+            ns = abs(y1 - y0) > abs(x1 - x0)
+            ci, cj = round(x / CELL), round(y / CELL)
+            lat = abs(x - ci * CELL) if ns else abs(y - cj * CELL)
+            cell = (ci, cj)
+            assert straight.get(cell) == ns, f"walk off a straight street at ({x:.1f}, {y:.1f})"
+            assert walks_mod.PAVE_IN + walks_mod.FOOT - 0.01 <= lat <= walks_mod.PAVE_OUT - walks_mod.FOOT + 0.01, f"feet off the pavement at ({x:.1f}, {y:.1f}): {lat:.2f}"
+            hx, hy = (walks_mod.BODY, walks_mod.DEPTH) if ns else (walks_mod.DEPTH, walks_mod.BODY)
+            for o in grid.get((math.floor(x / CELL), math.floor(y / CELL)), []):
+                assert not (x + hx - 0.01 > o[0] and x - hx + 0.01 < o[2] and y + hy - 0.01 > o[1] and y - hy + 0.01 < o[3]), f"walker hits {o[4]} at ({x:.1f}, {y:.1f})"
+print(f"walks ok: {len(ws)} walks, {round(sum(walks_mod._length(w) for w in ws))} studs")
+
 counts = {}
 for it in items:
     counts[it["asset"]] = counts.get(it["asset"], 0) + 1
