@@ -125,20 +125,29 @@ def causeway_frame(frac):
 
 
 # ---------------------------------------------------------------- scenes
+def crash(cam, target, vehicle_kind, parcel_kind, colour, pose="fly", near=13.0, lens=30, spin=0):
+    """A crash composed around the camera, so the action fills the frame wherever it's staged:
+    courier `near` studs out on the line of sight, the parcel flying past nearer the lens to one side,
+    the vehicle tumbling further back to the other."""
+    c, t = Vector(cam), Vector(target)
+    f = (t - c).normalized()
+    r = f.cross(Vector((0, 0, 1))).normalized()
+    u = r.cross(f)
+    yaw = math.degrees(math.atan2(f.y, f.x)) + 90  # the courier faces back toward the camera
+    courier_mod.courier(pose, location=tuple(c + f * near - u * 1.5), rotation=(-25, 20 + spin, yaw + 160))
+    parcel(parcel_kind, tuple(c + f * (near - 4) + r * 4.2 + u * 2.6), (30, 40, yaw + 20))
+    vehicle(vehicle_kind, tuple(c + f * (near + 9) - r * 6 - u * 2.5), (45, -30, yaw + 130), colour)
+    return cam, target, lens
+
+
 def scene_hub_ramp():
-    sky("day")
-    vehicle("Vehicle_Scooter", (-3, -30, 9), (40, -25, 160))
-    courier_mod.courier("fly", location=(3, -40, 13), rotation=(-25, 15, 170))
-    parcel("Parcel_TV", (-7, -46, 16.5), (30, 45, 10))
-    return (36, -84, 6.5), (0, -32, 11), 30
+    sky("day")  # from the ramp's landing side looking back at the ramp and the depot
+    return crash((10, -62, 5), (-2, -10, 12), "Vehicle_Scooter", "Parcel_TV", "e8443a")
 
 
 def scene_oldtown():
     sky("day")
-    vehicle("Vehicle_EBike", (164, 646, 1.4), (0, 82, 30), "3a7bf0")
-    courier_mod.courier("tumble", location=(157, 634, 5), rotation=(30, -20, 200))
-    parcel("Parcel_FishTank", (150, 626, 9), (25, 30, 40))
-    return (176, 598, 4.5), (157, 640, 7), 26
+    return crash((160, 606, 4), (160, 660, 9), "Vehicle_EBike", "Parcel_FishTank", "3a7bf0", pose="tumble", spin=40)
 
 
 def scene_mountain():
@@ -149,23 +158,17 @@ def scene_mountain():
     courier_mod.courier("ride", location=(x - math.sin(r) * -0.35, y + math.cos(r) * -0.35, z + 0.9), rotation=(0, 8, heading))
     parcel("Parcel_Cake", (x + math.sin(r) * 1.75, y - math.cos(r) * 1.75, z + 3.9), (0, 0, heading))
     fx, fy = -math.sin(r), math.cos(r)  # the way it's heading
-    return (x + fx * 30 + fy * 22, y + fy * 30 - fx * 22, z + 14), (x - fx * 20, y - fy * 20, z - 6), 26
+    return (x + fx * 18 + fy * 12, y + fy * 18 - fx * 12, z + 8), (x - fx * 14, y - fy * 14, z - 3), 28
 
 
 def scene_docks():
-    sky("day")
-    vehicle("Vehicle_Scooter", (-910, 120, 6), (-30, 0, 95), "ffd23f")
-    courier_mod.courier("fly", location=(-922, 118, 10), rotation=(-40, 0, 80))
-    parcel("Parcel_Chicken", (-930, 124, 13), (10, 20, 120))
-    return (-960, 60, 8), (-905, 110, 6), 28
+    sky("day")  # off the end of the quay, the ship behind
+    return crash((-880, 60, 5), (-905, 110, 9), "Vehicle_Scooter", "Parcel_Chicken", "ffd23f", spin=-30)
 
 
 def scene_skeleton():
     sky("day")
-    vehicle("Vehicle_Scooter", (80, -478, 14), (-25, 10, 180), "43b85c")
-    courier_mod.courier("fly", location=(83, -470, 20), rotation=(-30, -10, 190))
-    parcel("Parcel_Laptop", (76, -466, 24), (40, 20, 60))
-    return (130, -440, 12), (80, -500, 18), 26
+    return crash((112, -455, 10), (80, -510, 22), "Vehicle_Scooter", "Parcel_Laptop", "43b85c", near=15)
 
 
 def scene_causeway():
@@ -175,25 +178,22 @@ def scene_causeway():
     r = math.radians(heading)
     courier_mod.courier("ride", location=(x + 6 + math.sin(r) * 0.35, y - math.cos(r) * 0.35, z + 0.9), rotation=(0, 6, heading))
     parcel("Parcel_Present", (x + 6 + math.sin(r) * 1.75, y - math.cos(r) * 1.75, z + 3.6), (0, 0, heading + 15))
-    return (x + 70, y + 30, z + 6), (x, y - 10, z + 2), 30
+    return (x + 24, y - 18, z + 4), (x + 4, y + 2, z + 3), 32
 
 
 def scene_piano():
-    sky("day")
-    vehicle("Vehicle_CargoBike", (4, -470, 1.6), (0, -70, 20), "ff9a2e")
-    courier_mod.courier("tumble", location=(-2, -482, 6), rotation=(-30, 40, 30))
-    parcel("Parcel_Piano", (6, -490, 11), (25, -15, 35))
-    return (26, -520, 5), (0, -482, 9), 26
+    sky("day")  # down the middle of the Downtown avenue
+    return crash((0, -540, 4), (0, -480, 12), "Vehicle_CargoBike", "Parcel_Piano", "ff9a2e", pose="tumble", near=14, spin=60)
 
 
 def scene_legendary():
     sky("day")
     gx, gy = 560, 160  # a suburbs street
-    parcel("Parcel_GoldStatue", (gx, gy + 3, 1.3), (0, 0, 200))
+    parcel("Parcel_GoldStatue", (gx - 2, gy - 6, 1.3), (0, 0, 200))
     courier_mod.courier("wave", location=(gx + 4, gy, 0), rotation=(0, 0, 210))
-    vehicle("Vehicle_Scooter", (gx - 6, gy - 4, 1.8), (0, 0, 120))
+    vehicle("Vehicle_Scooter", (gx - 6, gy + 3, 1.8), (0, 0, 120))
     confetti((gx, gy, 6), count=90, spread=12)
-    return (gx + 26, gy - 26, 8), (gx, gy, 5), 32
+    return (gx + 22, gy - 24, 6), (gx, gy, 4), 32
 
 
 SCENES = {
@@ -245,8 +245,9 @@ def main(only):
             done.append(name + "_title")
     if not only or "icon" in only:  # the game icon: the ramp crash, close and square
         bpy.ops.wm.open_mainfile(filepath=os.path.join(ART, "map", "city.blend"))
-        scene_hub_ramp()
-        camera((14, -66, 4), (1, -40, 13), 42, (512, 512))
+        sky("day")  # the icon: a tight crash against open sky, readable at phone size
+        cam = crash((0, -40, 2), (0, 10, 12), "Vehicle_Scooter", "Parcel_TV", "e8443a", near=9)
+        camera(cam[0], cam[1], 24, (512, 512))
         bpy.context.scene.render.filepath = os.path.join(OUT, "icon.png")
         bpy.ops.render.render(write_still=True)
         done.append("icon")
