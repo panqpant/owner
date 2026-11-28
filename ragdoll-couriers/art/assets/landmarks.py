@@ -366,6 +366,8 @@ def lodge():
     for x in range(-6, 7, 3):
         body.box((0.3, 0.5, 5.5), (x, d / 2 + 0.1, 5), "wood", bevel=0)
     body.box((w + 2, 5, 0.5), (0, d / 2 + 2.5, 1.4), "wood", bevel=0.1)  # deck
+    for x in range(-13, 14, 6):  # deck posts down to the ground
+        body.box((0.5, 0.5, 1.2), (x, d / 2 + 4.6, 0.6), "darkbrown", bevel=0)
     for x in range(-13, 14, 3):
         body.box((0.3, 0.3, 2.4), (x, d / 2 + 4.8, 2.8), "wood", bevel=0)
     body.box((w + 2, 0.3, 0.3), (0, d / 2 + 4.8, 4), "wood", bevel=0)

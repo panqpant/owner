@@ -356,6 +356,18 @@ def build_free_roads(p):
     for asset, name in (("Road_Mountain", "Mountain"), ("Road_Causeway", "Causeway"), ("Road_Roundabout", "Roundabout")):
         road = by_name[name]
         objs = _ribbon(road, bridge_of[name], t)
+        if name == "Mountain":  # summit car park: starts exactly where the road ends (no overlap), kerbed, marked bays
+            x, y, z = road["points"][-1]
+            hw = road["width"] / 2
+            x0, x1, y0, y1 = x - 80, x, y - hw - 3, y + 46  # wide enough to take the road plus its shoulders
+            lot = lib.Mesh("CarPark")
+            lot.prism([(x0, y0), (x1, y0), (x1, y1), (x0, y1)], z, "asphalt", thickness=1)
+            for k in range(6):  # bay lines between the parked cars
+                bx = x - 75 + k * 10
+                lot.prism([(bx - 0.15, y + 18), (bx + 0.15, y + 18), (bx + 0.15, y + 34), (bx - 0.15, y + 34)], z + 0.03, "white", thickness=0.03)
+            for pts in (((x0, y1), (x1, y1), (x1, y1 + 2), (x0, y1 + 2)), ((x0 - 2, y0 - 2), (x0, y0 - 2), (x0, y1 + 2), (x0 - 2, y1 + 2)), ((x0, y0 - 2), (x1, y0 - 2), (x1, y0), (x0, y0))):
+                lot.prism(list(pts), z + 0.4, "concrete", thickness=1.4)  # kerbs north, west and south; the road comes in from the east
+            objs.append(lot.done(sharp=40))
         if "island" in road:
             cx, cy, r = road["island"]
             circle = [(cx + r * math.cos(a), cy + r * math.sin(a)) for a in (k * math.tau / 48 for k in range(48))]
@@ -510,9 +522,12 @@ def main(render=True):
         cam = (it["x"] + (fx + fy * side) * dist, it["y"] + (fy - fx * side) * dist, z0 + height)
         shot(name, cam, (it["x"], it["y"], z0 + height * 0.35), lens=lens)
 
+    sx, sy, sz = p["summit"]
+    shot("j_summit", (sx, sy, sz + 400), (sx, sy, sz), ortho=130, samples=16, res=(900, 900))
+    shot("j_low_summit", (sx + 75, sy - 30, sz + 8), (sx + 20, sy - 18, sz + 1), lens=24, samples=16, res=(1200, 700))
     look("lm_school", "Suburbs_School", 75, 30)
     look("lm_church", "OldTown_Church", 75, 32)
-    look("lm_clock", "OldTown_ClockTower", 60, 28)
+    look("lm_clock", "OldTown_ClockTower", 95, 60)
     look("lm_canal", "OldTown_Canal", 45, 16)
     look("lm_lodge", "Mountain_Lodge", 80, 30)
     look("lm_waterfall", "Mountain_Waterfall", 75, 30)

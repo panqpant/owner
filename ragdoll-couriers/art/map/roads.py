@@ -88,7 +88,7 @@ def make_roads(ground) -> list[dict]:
         (1100, 712), (1060, 735), (1040, 772), (1065, 805),  # leg 2, hairpin 2 (kept away from the peak's steep side)
         (1140, 818), (1190, 845), (1212, 885), (1185, 922),  # leg 3, hairpin 3
         (1120, 930), (1075, 955), (1055, 990), (1078, 1022),  # leg 4, hairpin 4
-        (1150, 1035), (1200, 1065), (1190, 1105), (1130, 1112),  # leg 5 to the summit car park
+        (1150, 1035), (1200, 1065), (1195, 1100), (1170, 1112), (1150, 1112), (1130, 1112),  # leg 5, straight in to the car park
     ]
     pts = catmull_rom([(x, y, 0.0) for x, y in ctrl])
     zs = grade_limit([ground(x, y) for x, y, _ in pts], start=0.0)

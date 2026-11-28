@@ -508,14 +508,14 @@ def place_free_road_props(result, t, rnd):
                 a = k / 8 * math.tau
                 items.append({"asset": "Street_Bush" if k % 2 else "Street_Tree", "x": round(cx + math.cos(a) * r * 0.7, 2), "y": round(cy + math.sin(a) * r * 0.7, 2), "rot": rnd.randrange(360), "district": "Outskirts", "onroad": True})
     mountain = result["free_roads"][0]
-    x, y, z = mountain["points"][-1]
-    result["summit"] = (x, y, z)
-    for k in range(5):  # summit car park, just past the end of the road
-        items.append({"asset": "Traffic_Car", "x": x - 30 + k * 10, "y": y + 26, "rot": 180, "district": "Mountain", "z": z, "paint": CAR_PAINT[k], "parked": True, "onroad": True})
-    for k in (-1, 1):
-        items.append({"asset": "Street_Bench", "x": x + k * 18, "y": y - 24, "rot": 0, "district": "Mountain", "z": z, "onroad": True})
-    items.append({"asset": "Mountain_Lodge", "x": x - 10, "y": y + 62, "rot": 180, "district": "Mountain", "z": z, "paint": "c86a4e", "onroad": True})
-    result["addresses"].append({"district": "Mountain", "x": x, "y": y, "building": "Mountain_Lodge"})
+    x, y, z = mountain["points"][-1]  # the road ends at the car park's east edge (build_map._carpark)
+    result["summit"] = (x - 40, y + 20, z)  # centre of the car park: the terrain pad goes here
+    for k in range(5):  # parked cars in the marked bays
+        items.append({"asset": "Traffic_Car", "x": x - 70 + k * 10, "y": y + 26, "rot": 180, "district": "Mountain", "z": z, "paint": CAR_PAINT[k], "parked": True, "onroad": True})
+    for k in (0, 1):
+        items.append({"asset": "Street_Bench", "x": x - 76, "y": y + k * 10 - 4, "rot": 270, "district": "Mountain", "z": z, "onroad": True})
+    items.append({"asset": "Mountain_Lodge", "x": x - 40, "y": y + 64, "rot": 180, "district": "Mountain", "z": z, "paint": "c86a4e", "onroad": True})
+    result["addresses"].append({"district": "Mountain", "x": x - 40, "y": y + 44, "building": "Mountain_Lodge"})
     # Waterfall 45 studs uphill of the road, partway up, turned to face it.
     pts = mountain["points"]
     k = int(len(pts) * 0.55)

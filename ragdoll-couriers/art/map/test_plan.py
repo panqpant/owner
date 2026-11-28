@@ -1,5 +1,6 @@
 """Checks the city plan: python3 map/test_plan.py"""
 
+import math
 import os
 import sys
 from collections import deque
@@ -69,6 +70,7 @@ for k, r in enumerate(rects):
 for a in p["addresses"]:
     cell = (round(a["x"] / CELL), round(a["y"] / CELL))
     on_free = p["terrain"].free.nearest(a["x"], a["y"])[1] < 20
+    on_free = on_free or math.dist((a["x"], a["y"]), p["summit"][:2]) < 40  # the summit car park
     assert cell in cells or on_free, f"address off the road: {a}"
 
 districts = {a["district"] for a in p["addresses"]}
@@ -104,7 +106,7 @@ for road, cell in (("Mountain", (21, 14)), ("Causeway", (16, -10))):
     assert math.dist((x, y), (cell[0] * CELL + (20 if road == "Mountain" else 0), cell[1] * CELL - (20 if road == "Causeway" else 0))) < 1, f"{road} doesn't meet its stub"
 
 # Where a free road meets a grid stub it must arrive square-on, or the join shows a wedge.
-for road, end in (("Mountain", 0), ("Causeway", 0), ("Causeway", -1)):
+for road, end in (("Mountain", 0), ("Mountain", -1), ("Causeway", 0), ("Causeway", -1)):
     pts = free[road]["points"]
     a, b = (pts[0], pts[1]) if end == 0 else (pts[-2], pts[-1])
     dx, dy = abs(b[0] - a[0]), abs(b[1] - a[1])
