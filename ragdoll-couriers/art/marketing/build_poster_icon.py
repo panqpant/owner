@@ -37,21 +37,21 @@ def face_texture(path):
     d = ImageDraw.Draw(img)
     w = 22  # outline width
     for cx, tilt in ((300, 1), (724, -1)):
-        d.ellipse((cx - 150, 250, cx + 150, 590), fill=(255, 255, 255, 255), outline=INK, width=w)  # eye
-        d.ellipse((cx - 42 + tilt * 12, 330, cx + 42 + tilt * 12, 420), fill=INK)  # pupil, shrunk with fright
-        d.ellipse((cx - 16 + tilt * 12 + 18, 345, cx + 4 + tilt * 12 + 18, 367), fill=(255, 255, 255, 255))  # catchlight
+        d.ellipse((cx - 140, 320, cx + 140, 640), fill=(255, 255, 255, 255), outline=INK, width=w)  # eye
+        d.ellipse((cx - 42 + tilt * 12, 400, cx + 42 + tilt * 12, 490), fill=INK)  # pupil, shrunk with fright
+        d.ellipse((cx - 16 + tilt * 12 + 18, 415, cx + 4 + tilt * 12 + 18, 437), fill=(255, 255, 255, 255))  # catchlight
         # brow: a thick tilted bar, high and raised toward the middle (panic)
         x0, x1 = cx - 150, cx + 150
-        y_out, y_in = 235, 165  # low enough to clear the cap's brim
+        y_out, y_in = 300, 240  # just under the Pal Hair fringe
         pts = [(x0, y_out if tilt > 0 else y_in), (x1, y_in if tilt > 0 else y_out)]
         d.line(pts, fill=INK, width=50, joint="curve")
         for p in pts:
             d.ellipse((p[0] - 25, p[1] - 25, p[0] + 25, p[1] + 25), fill=INK)
     # mouth: a wide open D, teeth along the top, tongue at the bottom
-    mouth = (372, 640, 652, 1010)  # a tall "O": a scream, not a grin
+    mouth = (392, 690, 632, 1012)  # a tall "O": a scream, not a grin
     d.ellipse(mouth, fill=(120, 20, 30, 255))
     d.chord(mouth, 205, 335, fill=(255, 255, 255, 255))  # top teeth
-    d.ellipse((430, 880, 594, 1000), fill=(240, 95, 110, 255))  # tongue
+    d.ellipse((440, 905, 584, 1004), fill=(240, 95, 110, 255))  # tongue
     d.ellipse(mouth, outline=INK, width=w)
     # sweat drops flying off
     for x, y, s in ((60, 120, 1.0), (930, 330, 0.8)):
@@ -185,7 +185,7 @@ def main():
     face = face_texture(os.path.join(OUT, "_face_scream.png"))
 
     # courier, big and central, flung back toward the camera with arms out
-    root, parts = courier_mod.courier("fly", location=(0, 0, 0), rotation=(-12, 14, 8), face="none", hair="bacon")
+    root, parts = courier_mod.courier("fly", location=(0, 0, 0), rotation=(-12, 14, 8), face="none", hair="pal")
     head = next(p for p in parts if p.name.startswith("C_Head"))
     head.scale = (1.5, 1.5, 1.5)  # cartoon big head: the face is what reads at 150 px
     face_decal(head, face)

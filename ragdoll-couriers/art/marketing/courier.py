@@ -2,6 +2,7 @@
 in game). Every limb is its own object with its origin at the joint, so poses are just rotations."""
 
 import math
+import os
 
 import bpy
 from mathutils import Euler
@@ -17,6 +18,53 @@ POSES = {
     "tumble": {"l_arm": (-160, 40, 0), "r_arm": (60, -100, 0), "l_leg": (-30, -40, 0), "r_leg": (70, 30, 0), "head": (-20, 20, 0), "torso": (20, 0, -10)},
     "wave": {"l_arm": (0, 0, 0), "r_arm": (0, 160, 0), "l_leg": (0, 0, 0), "r_leg": (0, 0, 0), "head": (0, 0, 10), "torso": (0, 0, 0)},
 }
+
+
+PAL_HAIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "third_party", "roblox", "pal_hair")
+
+
+def pal_hair(head):
+    """Roblox's own free Pal Hair (catalog 63690008), mesh and texture as downloaded. Our head is Roblox head
+    sized (1.2 tall), so it fits as is."""
+    import re
+
+    import bmesh
+
+    text = open(PAL_HAIR + ".mesh").read().split("\n")
+    assert text[0].strip() == "version 1.00", "only the old text mesh format is handled"
+    v = [tuple(map(float, t.split(","))) for t in re.findall(r"\[([^\]]+)\]", text[2])]
+    pos, uvw = v[0::3], v[2::3]
+    # Seated the way Roblox does it, with values read from the accessory file: SpecialMesh.Scale (1, 1.05, 1); the
+    # handle's HairAttachment at (0, 0.35, 0.25) meets the head's at (0, 0.6, 0), so the handle sits at (0, 0.25, -0.25)
+    # from the head's centre. Version 1.00 meshes store positions doubled. Roblox (x, y, z), -Z forward ->
+    # Blender (x, -z, y), +Y forward; our head's centre is 0.6 above its joint.
+    rx = lambda x, y, z: (x / 2, y / 2 * 1.05 + 0.25, z / 2 - 0.25)  # noqa: E731
+    verts = [(X, -Z, Y + 0.6) for X, Y, Z in (rx(*q) for q in pos)]
+    me = bpy.data.meshes.new("PalHair")
+    me.from_pydata(verts, [], [(k, k + 1, k + 2) for k in range(0, len(verts), 3)])
+    uv = me.uv_layers.new()
+    for li, loop in enumerate(me.loops):
+        u, w_, _ = uvw[loop.vertex_index]
+        uv.data[li].uv = (u, 1 - w_)  # Roblox's V runs top-down
+    bm = bmesh.new()
+    bm.from_mesh(me)
+    bmesh.ops.remove_doubles(bm, verts=bm.verts, dist=1e-4)  # one connected surface: smooth shading and clean ink outlines
+    bm.to_mesh(me)
+    bm.free()
+    for p in me.polygons:
+        p.use_smooth = True
+    m = bpy.data.materials.new("PalHair")
+    m.use_nodes = True
+    tex = m.node_tree.nodes.new("ShaderNodeTexImage")
+    tex.image = bpy.data.images.load(PAL_HAIR + ".png", check_existing=True)
+    b = m.node_tree.nodes["Principled BSDF"]
+    m.node_tree.links.new(tex.outputs["Color"], b.inputs["Base Color"])
+    b.inputs["Roughness"].default_value = 0.6
+    me.materials.append(m)
+    o = bpy.data.objects.new("C_Hair", me)
+    bpy.context.scene.collection.objects.link(o)
+    o.parent = head
+    return o
 
 
 def _part(name, builder, loc, parent):
@@ -58,16 +106,7 @@ def courier(pose="fly", location=(0, 0, 0), rotation=(0, 0, 0), shirt="orange", 
             for sx in (-1, 1):
                 m.sphere(0.11, (sx * 0.27, 0.6, 0.72), "black", segments=8, rings=6)  # eyes
             m.box((0.45, 0.05, 0.1), (0, 0.61, 0.38), "darkbrown", bevel=0.03)  # smile
-        if hair == "bacon":  # messy ginger default-avatar hair: what front-page players read as "me"
-            m.box((1.38, 1.32, 0.4), (0, -0.02, 1.28), "ginger", bevel=0.17)  # crown
-            m.box((1.36, 0.35, 1.0), (0, -0.5, 0.85), "ginger", bevel=0.15)  # back
-            for sx in (-1, 1):
-                m.box((0.16, 1.0, 0.55), (sx * 0.66, -0.05, 1.0), "ginger", bevel=0.07)  # sides
-            for k, x in enumerate((-0.5, -0.2, 0.1, 0.4)):  # fringe locks swept across the forehead
-                m.sphere(0.24, (x, 0.5, 1.36 - k * 0.03), "ginger", scale=(0.8, 0.7, 1.7), rot=(25, -40, 0), segments=10, rings=6)
-            for k, (x, y) in enumerate(((-0.35, 0.1), (0.15, -0.15), (0.45, 0.25), (-0.1, 0.35))):  # spiky top
-                m.sphere(0.22, (x, y, 1.5), "ginger", scale=(0.8, 0.8, 1.9), rot=(15 - k * 10, -35 + k * 15, 0), segments=8, rings=5)
-        else:
+        if hair != "pal":  # Roblox's Pal Hair goes on after the head is built (pal_hair)
             m.box((1.35, 1.3, 0.45), (0, 0, 1.32), "red", bevel=0.18)  # cap
             m.box((1.1, 0.7, 0.12), (0, 0.85, 1.12), "red", bevel=0.05)  # brim
             m.box((0.5, 0.06, 0.3), (0, 0.66, 1.35), "white", bevel=0.02)  # cap badge
@@ -88,6 +127,8 @@ def courier(pose="fly", location=(0, 0, 0), rotation=(0, 0, 0), shirt="orange", 
         key = {"C_Head": "head", "C_LArm": "l_arm", "C_RArm": "r_arm"}[name]
         o.rotation_euler = Euler([math.radians(a) for a in p[key]])
         parts.append(o)
+        if name == "C_Head" and hair == "pal":
+            parts.append(pal_hair(o))
     for name, key, x in (("C_LLeg", "l_leg", -0.5), ("C_RLeg", "r_leg", 0.5)):
         o = _part(name, leg, (x, 0, 2.0), root)
         o.rotation_euler = Euler([math.radians(a) for a in p[key]])

@@ -58,7 +58,6 @@ PALETTE = {
     "neonblue": ("5ce1ff", 0, 0.3, 1),
     "headlight": ("fffbe0", 0, 0.1, 1),
     "taillight": ("ff2a2a", 0, 0.2, 1),
-    "ginger": ("b5562a", 0, 0.7, 1),  # appended: new swatches go last so existing UVs never move
     "brick": ("b9553f", 0, 0.9, 1),
     "stone": ("a8a29a", 0, 0.9, 1),
     "asphalt": ("40424a", 0, 0.95, 1),

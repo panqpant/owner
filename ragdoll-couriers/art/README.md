@@ -122,7 +122,7 @@ Run in this order (each needs Blender's Python module and Pillow):
    - `loading_screen.png`.
    Contact sheet: `previews/_thumbnails.png`.
 
-4. `python marketing/build_poster_icon.py`: the game icon, `export/marketing/icon.png` (1024). It's front-page advert style: a big bacon-haired courier with a painted screaming face, ink outlines, a flying cake and the scooter, on a starburst. `previews/_icon_check.png` shows it at the 150 and 90 px sizes players actually see.
+4. `python marketing/build_poster_icon.py`: the game icon, `export/marketing/icon.png` (1024). It's front-page advert style: a big courier in Roblox's own Pal Hair (`third_party/roblox`) with a painted screaming face, ink outlines, a flying cake and the scooter, on a starburst. `previews/_icon_check.png` shows it at the 150 and 90 px sizes players actually see.
 
 Upload notes:
 - Game icon: `icon.png`.
