@@ -295,6 +295,7 @@ function MapBuilder.build(offset: Vector3?, mood: string?)
 	spawn.CFrame = origin * CFrame.new(v3(layout.spawn.p)) * CFrame.Angles(0, math.rad(layout.spawn.r), 0)
 	spawn.Parent = city
 
+	city:SetAttribute("Origin", origin.Position) -- the client places pedestrian walks relative to this
 	city.Parent = workspace
 	if applySky(ids, mood or "day") then
 		print(`Sky set to {mood or "day"}.`)

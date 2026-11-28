@@ -150,3 +150,15 @@ Style follows what top Roblox thumbnails share:
   - Terrain and free roads keep precise collision. Road tiles, ramps and buildings keep Default.
   - Everything you can drive on stays queryable, since the suspension raycasts need it.
 - **Streaming is on** (`default.project.json`), with target radius 1024 and minimum radius 256 so fast riders never reach unloaded road. If Rojo live sync refuses to set these, set them once on Workspace in Studio.
+
+## Pedestrians
+
+- **Models:** `assets/pedestrians.py` holds eight locals: Shopper, Business, Elder, Kid, Jogger, Tourist, Worker and Student. Each is six MeshParts (Torso, Head, LArm, RArm, LLeg, RLeg) with colours baked in, about 900–1,500 triangles. Preview: `previews/_pedestrians.png`.
+- **Walks:** `python map/walks.py` writes `src/shared/Walks.luau`, 485 pavement walks.
+  - Walks weave past lamp posts and tree trunks, and stop short of benches, bins and bus stops.
+  - Old Town, Downtown and the Hub are three times busier than the Docks; the Suburbs are 1.5 times.
+  - `map/test_plan.py` checks every walk point keeps the walker's feet on the pavement and their body clear of every placed item.
+- **Game:** `src/client/Pedestrians.client.luau` keeps about 36 walkers around each player. It runs on the client only, with no Humanoids and no network traffic.
+  - Walkers swing their limbs, turn round at the ends of their walk, and stop to look around now and then.
+  - Riding into one at speed ragdolls them and sends them flying. They fade out after six seconds and are recycled.
+- **Import:** bring `export/Ped_*.fbx` into Studio as Models in `ReplicatedStorage.PedAssets`, keeping the part names. Until then, block people with random colours stand in, so it all works straight away. The city must be built first (MapBuilder sets the `Origin` the walks are placed from).
