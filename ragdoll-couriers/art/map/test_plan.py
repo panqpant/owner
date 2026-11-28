@@ -42,7 +42,7 @@ for it in items:
     assert -limit <= it["x"] <= limit and -limit <= it["y"] <= limit, it
 
 # No building sits on a road cell, and no two buildings share a spot.
-buildings = [it for it in items if it["asset"].startswith(("House", "OldTown_Shop", "OldTown_Town", "Docks_Ware", "Site_Porta", "Site_Skeleton", "Downtown_", "Mountain_Cabin", "Hub_Depot"))]
+buildings = [it for it in items if it["asset"].startswith(("House", "OldTown_Shop", "OldTown_Town", "Docks_Ware", "Docks_Fish", "Site_Porta", "Site_Skeleton", "Downtown_", "Mountain_Cabin", "Hub_Depot", "Hub_Garage", "Hub_VIP", "Suburbs_School", "OldTown_Church", "OldTown_Clock"))]
 for b in buildings:
     cell = (round(b["x"] / CELL), round(b["y"] / CELL))
     assert cell not in cells, f"{b['asset']} on a road at {cell}"
@@ -81,7 +81,7 @@ from terrain import FLAT, WATER  # noqa: E402
 for cell in list(cells)[::7]:
     assert abs(t.height(cell[0] * CELL, cell[1] * CELL) - FLAT) < 0.01, f"road cell {cell} is not flat"
 for it in items:
-    if not it["asset"].startswith("Road") and it["asset"] != "Docks_QuayWall" and not it.get("onroad"):
+    if not it["asset"].startswith("Road") and it["asset"] != "Docks_QuayWall" and not it.get("onroad") and not it.get("afloat"):
         assert t.height(it["x"], it["y"]) >= WATER + 1, f"{it['asset']} is underwater"
 peak = max(t.height(x, y) for x in range(600, 1100, 25) for y in range(600, 1100, 25))
 assert peak > 200, f"mountain too low: {peak}"
@@ -109,6 +109,27 @@ for road, end in (("Mountain", 0), ("Causeway", 0), ("Causeway", -1)):
     a, b = (pts[0], pts[1]) if end == 0 else (pts[-2], pts[-1])
     dx, dy = abs(b[0] - a[0]), abs(b[1] - a[1])
     assert min(dx, dy) < 0.01 * max(dx, dy), f"{road} meets the grid at an angle ({dx:.2f}, {dy:.2f})"
+
+# Batch 6: every landmark made it onto the map, where it should be.
+names = {it["asset"] for it in items}
+for asset in ("Hub_Fountain", "Hub_Garage", "Hub_VIPGarage", "Suburbs_School", "Suburbs_Playground", "OldTown_ClockTower", "OldTown_Church",
+              "OldTown_Canal", "OldTown_Footbridge", "Docks_Lighthouse", "Docks_GantryCrane", "Docks_CargoShip", "Docks_FishMarket", "Site_Hoist",
+              "Mountain_Lodge", "Mountain_Waterfall", "House_D", "House_E"):
+    assert asset in names, f"{asset} was never placed"
+for name, cell in p["landmarks"].items():
+    assert cell is not None, f"no plot found for {name}"
+canal = next(it for it in items if it["asset"] == "OldTown_Canal")
+assert t.height(canal["x"], canal["y"]) < -6, "the ground isn't cut away under the canal"
+ship = next(it for it in items if it["asset"] == "Docks_CargoShip")
+assert t.height(ship["x"], ship["y"]) < -8, "the ship isn't in deep water"
+for it in items:
+    if it["asset"] == "Docks_GantryCrane":
+        assert (round(it["x"] / CELL), round(it["y"] / CELL)) in cells, "gantry crane isn't over the quay road"
+
+# The harbour wall runs the whole length of the docks quay, junctions included.
+quay = {round(it["y"] / CELL) for it in items if it["asset"] == "Docks_QuayWall"}
+docks_quay = {j for i, j in cells if i == -22 and -9 <= j <= 9}
+assert docks_quay <= quay, f"harbour wall missing at quay cells {sorted(docks_quay - quay)}"
 
 counts = {}
 for it in items:

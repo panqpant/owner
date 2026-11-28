@@ -1,0 +1,19 @@
+{
+ "triangles": 3348,
+ "parts": {
+  "FishMarket": {
+   "triangles": 3348,
+   "centre": [
+    0.0,
+    6.85,
+    -0.0
+   ]
+  }
+ },
+ "size_studs": [
+  32.0,
+  13.7,
+  21.69
+ ],
+ "kind": "building"
+}

@@ -1,0 +1,19 @@
+{
+ "triangles": 696,
+ "parts": {
+  "Footbridge": {
+   "triangles": 696,
+   "centre": [
+    0.0,
+    0.7,
+    -0.0
+   ]
+  }
+ },
+ "size_studs": [
+  5.2,
+  6.8,
+  19.0
+ ],
+ "kind": "prop"
+}

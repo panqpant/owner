@@ -1,0 +1,19 @@
+{
+ "triangles": 2608,
+ "parts": {
+  "Church": {
+   "triangles": 2608,
+   "centre": [
+    0.0,
+    22.925,
+    -0.475
+   ]
+  }
+ },
+ "size_studs": [
+  17.84,
+  46.15,
+  36.45
+ ],
+ "kind": "landmark"
+}

@@ -26,9 +26,9 @@ from mathutils import Vector  # noqa: E402
 
 import plan as city  # noqa: E402
 import terrain  # noqa: E402
-from assets import parcels, vehicles, world  # noqa: E402
+from assets import landmarks, parcels, vehicles, world  # noqa: E402
 
-KIT = {**world.ASSETS, **vehicles.ASSETS, **parcels.ASSETS}
+KIT = {**world.ASSETS, **landmarks.ASSETS, **vehicles.ASSETS, **parcels.ASSETS}
 LAYOUT = os.path.join(os.path.dirname(ART), "src", "map", "Layout.luau")
 
 
@@ -500,6 +500,26 @@ def main(render=True):
                                ("j_mtnfoot", (895, 565), 110), ("j_causeway", (640, -425), 60), ("j_corner", (corner["x"], corner["y"]), 70)):
         shot(name, (x, y, 600), (x, y, 0), ortho=size, samples=16, res=(900, 900))
     shot("j_low_armW", (556, -858, 9), (612, -884, 0), lens=24, samples=16, res=(1200, 700))
+
+    # Landmark checks (batch 6): each one from in front, as a rider would come up to it.
+    def look(name, asset, dist, height, lens=30, side=0.5):
+        it = next(i for i in p["items"] if i["asset"] == asset)
+        r = math.radians(it["rot"])
+        fx, fy = -math.sin(r), math.cos(r)  # the way it faces
+        z0 = it.get("z", 0)
+        cam = (it["x"] + (fx + fy * side) * dist, it["y"] + (fy - fx * side) * dist, z0 + height)
+        shot(name, cam, (it["x"], it["y"], z0 + height * 0.35), lens=lens)
+
+    look("lm_school", "Suburbs_School", 75, 30)
+    look("lm_church", "OldTown_Church", 75, 32)
+    look("lm_clock", "OldTown_ClockTower", 60, 28)
+    look("lm_canal", "OldTown_Canal", 45, 16)
+    look("lm_lodge", "Mountain_Lodge", 80, 30)
+    look("lm_waterfall", "Mountain_Waterfall", 75, 30)
+    look("lm_skeleton", "Site_Skeleton", 85, 45)
+    shot("lm_harbour", (-1000, -170, 45), (-905, 10, 8), lens=28)
+    shot("lm_lighthouse", (-860, 180, 25), (-1020, 300, 14), lens=30)
+    shot("lm_plaza", (0, -240, 55), (0, 70, 8), lens=28)
     shot("j_low_mtnfoot", (835, 548, 10), (905, 566, 3), lens=24, samples=16, res=(1200, 700))
     shot("suburbs", (12 * C - 60, 4 * C - 150, 70), (14 * C, 6 * C, 0), lens=30)
     shot("oldtown", (2 * C + 10, 11 * C, 45), (-2 * C, 15 * C, 15), lens=26)

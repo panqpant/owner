@@ -1,0 +1,28 @@
+{
+ "triangles": 764,
+ "parts": {
+  "Mast": {
+   "triangles": 512,
+   "centre": [
+    0.0,
+    27.97,
+    -0.0
+   ]
+  },
+  "Cage": {
+   "triangles": 252,
+   "centre": [
+    0.0,
+    2.875,
+    -4.2
+   ]
+  }
+ },
+ "size_studs": [
+  5.0,
+  56.06,
+  9.2
+ ],
+ "kind": "hazard",
+ "note": "move `Cage` up and down (Roblox Y, 0 to 50 studs); ride it up the skeleton"
+}

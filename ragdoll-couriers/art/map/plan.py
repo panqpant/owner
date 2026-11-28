@@ -137,6 +137,13 @@ TERRACE_PAINT = ["b9553f", "b9553f", "a4452f", "c86a4e", "efe3c8", "dfe9e2", "c9
 SHOP_PAINT = ["f6c26b", "8fc1e3", "e98b7d", "b5d99c", "f4f4f8", "d4a5c9"]
 CONTAINER_PAINT = ["e8443a", "3a7bf0", "43b85c", "ff9a2e", "1fb5a8", "8b5cf6", "ffd23f"]
 TOWER_PAINT = ["f4f4f8", "c9ccd4", "3a3d46", "e8d39a", "8a8f9c", "d6ecff", "23306b"]
+LANDMARKS = {
+    "school": (12, 1),  # Suburbs frontage plot facing the east avenue
+    "clocktower": (0, 16),  # Old Town courtyard
+    "church": (-6, 19),  # Old Town street plot
+    "canal": (2, 11),  # Old Town courtyard
+    "fishmarket": (-16, 6),  # Docks street plot
+}
 CONSTRUCTION = {"Downtown A": ((1, -15), (3, -11), (2, -13)), "Downtown B": ((-7, -21), (-5, -17), (-6, -19))}  # cells, and the skeleton's cell
 CAR_PAINT = ["e8443a", "3a7bf0", "ffd23f", "f4f4f8", "43b85c", "3a3d46", "ff8fc7"]
 
@@ -165,6 +172,10 @@ def plan(seed: int = 7) -> dict:
         if name == "Road_Straight" and district == "OldTown":
             name = "Road_Cobble"
         place(name, x, y, rot, district)
+        if i == SEA_I + 1 and district == "Docks":  # every quay cell, junctions included: no gaps in the wall
+            place("Docks_QuayWall", (SEA_I + 0.5) * CELL - 1.5, y, 90, district)  # harbour wall faces the sea
+            if j % 2 == 0 and W not in sides:  # mooring bollards on the quay edge
+                place("Docks_Bollard", x - 17.5, y, 0, district)
         straight = name in ("Road_Straight", "Road_Cobble")
         along_ns = N in sides and S in sides
         # Pavement spots either side of a straight: 17.5 studs out, the middle of the 5-stud pavement.
@@ -197,10 +208,6 @@ def plan(seed: int = 7) -> dict:
                 place("SpeedBump", x, y, 0 if along_ns else 90, district)
             if district == "Downtown" and (i, j) in ((4, -13), (-4, -19), (0, -13)):
                 place("Ramp", x, y, 0 if along_ns else 90, district)
-            if i == SEA_I + 1 and district == "Docks":
-                place("Docks_QuayWall", (SEA_I + 0.5) * CELL - 1.5, y, 90, district)  # harbour wall faces the sea
-                if j % 2 == 0:  # mooring bollards on the quay edge
-                    place("Docks_Bollard", x - 17.5, y, 0, district)
             if district == "Docks" and (i, j) == (-14, 2):
                 place("Ramp", x, y, 0, district)
         elif name in ("Road_T", "Road_Cross") and district in ("Hub", "Suburbs", "OldTown", "Downtown") and (i + j) % 2 == 0:
@@ -250,6 +257,7 @@ def plan(seed: int = 7) -> dict:
         (i0, j0), (i1, j1), centre = zone
         if (i, j) == centre:
             place("Site_Skeleton", x, y, 0, "Downtown")
+            place("Site_Hoist", x + 15.5, y, 90, "Downtown", moving=True)
             return
         if (i, j) == (centre[0], j1):
             return  # the skeleton's ramp runs into this cell
@@ -275,6 +283,32 @@ def plan(seed: int = 7) -> dict:
                 for _ in range(3):
                     place("Site_Cone", x + rnd.uniform(-14, 14), y + rnd.uniform(-14, 14), 0, "Downtown")
 
+    playground_cell, cuts = set(), []
+    nearest_cache = {}
+
+    def nearest_plot(name, district, frontage_only=False, courtyard_only=False):
+        """The non-road cell in `district` closest to LANDMARKS[name] (cached), with or without a street side."""
+        if name not in nearest_cache:
+            ti, tj = LANDMARKS[name]
+            best = None
+            for ci in range(ti - 6, ti + 7):
+                for cj in range(tj - 6, tj + 7):
+                    if (ci, cj) in road_cells or district_of(ci, cj) != district:
+                        continue
+                    has_side = bool(frontage(ci, cj))
+                    if (frontage_only and not has_side) or (courtyard_only and has_side):
+                        continue
+                    d = (ci - ti) ** 2 + (cj - tj) ** 2
+                    if best is None or d < best[0]:
+                        best = (d, (ci, cj))
+            nearest_cache[name] = best[1] if best else None
+        return nearest_cache[name]
+
+    # The school's playground goes in the plot behind it (worked out before the loop visits either cell).
+    school = nearest_plot("school", "Suburbs", frontage_only=True)
+    sdx, sdy = DIRS[frontage(*school)[0]]
+    playground_cell.add((school[0] - sdx, school[1] - sdy))
+
     hub_special = set()
     for i in range(-HALF, HALF + 1):
         for j in range(-HALF, HALF + 1):
@@ -291,7 +325,10 @@ def plan(seed: int = 7) -> dict:
             if district == "Suburbs":
                 if sides:
                     side = sides[0]
-                    asset = rnd.choices(["House_A", "House_B", "House_C"], (4, 3, 3))[0]
+                    if (i, j) == nearest_plot("school", "Suburbs", frontage_only=True):
+                        building("Suburbs_School", i, j, side, district, "f6c26b", setback=2)
+                        continue
+                    asset = rnd.choices(["House_A", "House_B", "House_C", "House_D", "House_E"], (4, 3, 3, 3, 2))[0]
                     hx, hy = building(asset, i, j, side, district, rnd.choice(HOUSE_PAINT))
                     dx, dy = DIRS[side]
                     px, py = -dy, dx  # mailbox beside the path, at the front of the yard
@@ -304,11 +341,26 @@ def plan(seed: int = 7) -> dict:
                         place("Traffic_Dog", x + dx * 6 - px * 10, y + dy * 6 - py * 10, FACING_ROT[side], district, moving=True)
                     if rnd.random() < 0.25:
                         place("Traffic_Car", x + dx * 12 + px * 13, y + dy * 12 + py * 13, FACING_ROT[side], district, rnd.choice(CAR_PAINT), parked=True)
+                elif (i, j) in playground_cell:
+                    place("Suburbs_Playground", x, y, rnd.choice((0, 90, 180, 270)), district)
                 else:
                     for _ in range(2):
                         place(rnd.choice(["Street_Tree", "Street_Bush"]), x + rnd.uniform(-14, 14), y + rnd.uniform(-14, 14), rnd.randrange(360), district)
             elif district == "OldTown":
-                if sides:
+                if sides and (i, j) == nearest_plot("church", "OldTown", frontage_only=True):
+                    building("OldTown_Church", i, j, sides[0], district, setback=1)
+                elif not sides and (i, j) == nearest_plot("clocktower", "OldTown", courtyard_only=True):
+                    place("OldTown_ClockTower", x, y, 0, district)
+                    for k in range(4):
+                        a = k * math.pi / 2 + math.pi / 4
+                        place("Street_Bench", x + math.cos(a) * 12, y + math.sin(a) * 12, (math.degrees(a) + 90) % 360, district)
+                elif not sides and (i, j) == nearest_plot("canal", "OldTown", courtyard_only=True):
+                    place("OldTown_Canal", x, y, 0, district, onroad=True)  # sits in its own cut: don't settle it
+                    place("OldTown_Footbridge", x, y, 0, district, onroad=True)
+                    cuts.append((x - 15, y - 8, x + 15, y + 8, -8.0))
+                    for sx in (-1, 1):
+                        place("Street_Lamp", x + sx * 19, y + 12, 180, district)
+                elif sides:
                     # Terraced rows: buildings touch, so the street front is continuous.
                     units = rnd.choice([["OldTown_Shop", "OldTown_Townhouse", "OldTown_Townhouse"], ["OldTown_Townhouse"] * 3])
                     rnd.shuffle(units)
@@ -324,7 +376,9 @@ def plan(seed: int = 7) -> dict:
                     place("Street_Bench", x, y + 12, 180, district)
                     place("Street_Tree", x, y - 12, 0, district)
             elif district == "Docks":
-                if sides and (i + j) % 2 == 0:
+                if sides and (i, j) == nearest_plot("fishmarket", "Docks", frontage_only=True):
+                    building("Docks_FishMarket", i, j, sides[0], district, setback=3)
+                elif sides and (i + j) % 2 == 0:
                     building("Docks_Warehouse", i, j, sides[0], district, rnd.choice(["c9ccd4", "8fc1e3", "f4f4f8"]), setback=0)
                 else:
                     stacks = 1 if sides else 2
@@ -373,8 +427,11 @@ def plan(seed: int = 7) -> dict:
     place("Ramp", 0, 0, 180, "Hub")  # rises toward the south, the way you set off
     place("Hub_JobBoard", -45, 85, 270, "Hub")
     place("Hub_Plinth", 70, 80, 0, "Hub")
-    for k, x in enumerate((-165, -130, -95)):
-        place("Hub_Leaderboard", x, 115, 180, "Hub")
+    place("Hub_Garage", 110, 125, 180, "Hub", "3a7bf0")  # buy and upgrade vehicles
+    place("Hub_VIPGarage", -110, 125, 180, "Hub", "23306b")
+    place("Hub_Fountain", 0, -80, 0, "Hub")
+    for x in (-40, 0, 40):  # leaderboards face the spawn, so they're the first thing you see
+        place("Hub_Leaderboard", x, -150, 0, "Hub")
     for k in range(8):  # courier parking beside the depot
         place("Traffic_Car", 95 + k * 10, 160, 180, "Hub", CAR_PAINT[k % len(CAR_PAINT)], parked=True)
     for x in (-25, 25):
@@ -398,6 +455,15 @@ def plan(seed: int = 7) -> dict:
             if abs(y) > 30:
                 place("Street_Tree", x, y, 0, "Hub")
 
+    # Docks set pieces: a ship moored at the quay, cranes straddling the quay road, a lighthouse offshore.
+    quay_x = (SEA_I + 0.5) * CELL
+    place("Docks_CargoShip", quay_x - 17, 0, 0, "Docks", z=-3.0, afloat=True)  # hull 2 studs off the wall; fenders fill the gap
+    for j in (-6, 6):
+        cx_, cy_ = (SEA_I + 1) * CELL, j * CELL
+        items[:] = [it for it in items if not (it["asset"] in ("Docks_Bollard", "Street_Lamp") and abs(it["x"] - cx_) < 24 and abs(it["y"] - cy_) < 12)]  # clear the crane's footprint
+        place("Docks_GantryCrane", cx_, cy_, 0, "Docks", onroad=True)
+    place("Docks_Lighthouse", quay_x - 120, 300, 0, "Docks", z=-1.0, afloat=True)
+
     result = {
         "cell": CELL,
         "half": HALF,
@@ -408,6 +474,8 @@ def plan(seed: int = 7) -> dict:
         "sea": {"i_max": SEA_I},
         "districts": {k: {"rect": [r[0] * CELL - CELL / 2, r[1] * CELL - CELL / 2, r[2] * CELL + CELL / 2, r[3] * CELL + CELL / 2], "colour": c} for k, (r, c) in DISTRICTS.items()},
         "hub_cells": sorted(hub_special),
+        "cuts": cuts,
+        "landmarks": {k: nearest_cache.get(k) for k in LANDMARKS},
     }
     settle(result)
     return result
@@ -446,7 +514,17 @@ def place_free_road_props(result, t, rnd):
         items.append({"asset": "Traffic_Car", "x": x - 30 + k * 10, "y": y + 26, "rot": 180, "district": "Mountain", "z": z, "paint": CAR_PAINT[k], "parked": True, "onroad": True})
     for k in (-1, 1):
         items.append({"asset": "Street_Bench", "x": x + k * 18, "y": y - 24, "rot": 0, "district": "Mountain", "z": z, "onroad": True})
-    result["addresses"].append({"district": "Mountain", "x": x, "y": y, "building": "Summit"})
+    items.append({"asset": "Mountain_Lodge", "x": x - 10, "y": y + 62, "rot": 180, "district": "Mountain", "z": z, "paint": "c86a4e", "onroad": True})
+    result["addresses"].append({"district": "Mountain", "x": x, "y": y, "building": "Mountain_Lodge"})
+    # Waterfall 45 studs uphill of the road, partway up, turned to face it.
+    pts = mountain["points"]
+    k = int(len(pts) * 0.55)
+    (x0, y0, _), (x1, y1, _) = pts[k], pts[k + 1]
+    n = math.hypot(x1 - x0, y1 - y0)
+    lx, ly = -(y1 - y0) / n, (x1 - x0) / n
+    side = max((1, -1), key=lambda s: t.height(x0 + lx * 45 * s, y0 + ly * 45 * s))
+    wx, wy = x0 + lx * 45 * side, y0 + ly * 45 * side
+    items.append({"asset": "Mountain_Waterfall", "x": round(wx, 2), "y": round(wy, 2), "rot": round(math.degrees(math.atan2(-(x0 - wx), y0 - wy))) % 360, "district": "Mountain"})
 
 
 def settle(result: dict):
@@ -462,7 +540,7 @@ def settle(result: dict):
     place_free_road_props(result, t, rnd)
     kept = []
     for it in result["items"]:
-        if it["asset"].startswith("Road") or it["asset"] == "Docks_QuayWall" or it.get("onroad"):
+        if it["asset"].startswith("Road") or it["asset"] == "Docks_QuayWall" or it.get("onroad") or it.get("afloat"):
             kept.append(it)
             continue
         s, d = t.free.nearest(it["x"], it["y"])

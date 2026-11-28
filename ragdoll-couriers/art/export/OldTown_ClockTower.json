@@ -1,0 +1,19 @@
+{
+ "triangles": 2564,
+ "parts": {
+  "ClockTower": {
+   "triangles": 2564,
+   "centre": [
+    0.0,
+    24.875,
+    -0.85
+   ]
+  }
+ },
+ "size_studs": [
+  9.0,
+  50.05,
+  10.7
+ ],
+ "kind": "landmark"
+}

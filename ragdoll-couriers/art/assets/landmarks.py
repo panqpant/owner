@@ -224,7 +224,7 @@ def canal():
         m.box((L, 1.2, 4.6), (0, s * 7.1, -2.3), "stone", bevel=0.1)  # side walls
         m.box((1.2, 14, 4.6), (s * (L / 2 - 0.6), 0, -2.3), "stone", bevel=0.1)  # end walls
         m.box((L + 3.6, 1.8, 0.4), (0, s * 7.3, 0.2), "concrete", bevel=0.1)  # coping all round
-        m.box((1.8, 16.4, 0.4), (s * (L / 2 + 0.9), 0, 0.2), "concrete", bevel=0.1)
+        m.box((1.8, 12.8, 0.4), (s * (L / 2 + 0.9), 0, 0.2), "concrete", bevel=0.1)  # fits between the side copings: no overlap
         for x in range(-15, 16, 6):
             m.cyl(0.25, 2.4, (x, s * 7.9, 1.6), "charcoal", segments=8, bevel=0)  # railing posts
         m.box((L, 0.18, 0.18), (0, s * 7.9, 2.7), "charcoal", bevel=0)
@@ -234,14 +234,10 @@ def canal():
 def footbridge():
     """Arched stone footbridge for the canal."""
     m = Mesh("Footbridge")
-    for k in range(9):
-        t = (k - 4) / 4
-        z = 2.2 * (1 - t * t)
-        m.box((5, 2.4, 0.6), (0, t * 9, z + 0.3), "stone", rot=(math.degrees(math.atan(-4.4 * t / 9)), 0, 0), bevel=0.05)  # follows the arch's slope
-    for s in (1, -1):
-        for k in range(9):
-            t = (k - 4) / 4
-            m.box((0.5, 2.3, 1.0), (s * 2.4, t * 9, 2.2 * (1 - t * t) + 1.0), "stone", bevel=0.05)
+    arch = [(t * 9.5, 2.4 * (1 - t * t) + 0.6) for t in (k / 12 - 1 for k in range(25))]  # smooth arch, 19 long
+    m.strip([(2.5, y, z) for y, z in arch], [(-2.5, y, z) for y, z in arch], "stone", thickness=0.9)  # deck
+    for s in (1, -1):  # parapets follow the same curve
+        m.strip([(s * 2.6, y, z + 1.1) for y, z in arch], [(s * 2.1, y, z + 1.1) for y, z in arch], "stone", thickness=1.1)
     m.box((4, 1.2, 3), (0, 0, -1.2), "stone", bevel=0.1)  # keystone pier
     return _one(m, "prop")
 
@@ -375,7 +371,7 @@ def lodge():
     body.box((w + 2, 0.3, 0.3), (0, d / 2 + 4.8, 4), "wood", bevel=0)
     _door(body, -10, d / 2, colour="red", w=2.8, h=5.4)
     body.box((3, 3, 9), (8, -4, h + 6), "stone", bevel=0.15)  # chimney
-    body.box((10, 0.4, 2.4), (0, d / 2 + 0.4, h + 3.5), "navy", bevel=0.1)  # sign
+    body.box((10, 0.4, 1.2), (0, d / 2 + 0.25, h - 0.6), "navy", bevel=0.1)  # sign on the wall above the view window
     for k in range(6):  # skis by the door
         body.box((0.25, 0.1, 5), (-14 + k * 0.5, d / 2 + 0.4, 2.8), ("red", "blue", "yellow")[k % 3], rot=(0, 8, 0), bevel=0)
     return [paint.done(), body.done()], {"kind": "building"}
@@ -388,10 +384,13 @@ def waterfall():
     rock.rock(9, (-12, -2, 6), "grey", scale=(1.1, 0.9, 1.0), seed=82, lumpiness=0.2)
     rock.rock(9, (12, -2, 6), "stone", scale=(1.1, 0.9, 1.0), seed=83, lumpiness=0.2)
     rock.rock(6, (0, 4, 30), "grey", scale=(1.6, 0.8, 0.6), seed=84, lumpiness=0.15)
-    for k in range(10):  # the fall: a stepped ribbon so it reads at any angle
-        z = 30 - k * 3
-        water.box((5 - k * 0.1, 1.2, 3.2), (0, 6.5 + k * 0.25, z), "water", bevel=0.2)
-    water.cyl(11, 0.6, (0, 12, 0.3), "water", segments=28, bevel=0)  # pool
+    water.box((5, 10, 0.8), (0, 2, 32.5), "water", bevel=0.2)  # stream over the lip
+    for k in range(11):  # the fall, out in front of the rock face, widening as it drops
+        z = 31 - k * 3
+        water.box((6 + k * 0.25, 1.6, 3.3), (0, 9.5 + k * 0.2, z), "water", bevel=0.2)
+    water.cyl(11, 0.6, (0, 13, 0.3), "water", segments=28, bevel=0)  # pool
+    for k in range(6):  # foam where it lands
+        water.sphere(1.3, (-3 + k * 1.2, 12 + (k % 2) * 1.5, 0.9), "white", scale=(1, 1, 0.5), segments=10, rings=6)
     for k in range(7):
         a = k / 7 * math.tau
         rock.rock(1.6, (math.cos(a) * 11.5, 12 + math.sin(a) * 11.5, 0.6), "stone", seed=90 + k, lumpiness=0.2, subdivisions=1)

@@ -1,0 +1,20 @@
+{
+ "triangles": 1956,
+ "parts": {
+  "Gantry": {
+   "triangles": 1956,
+   "centre": [
+    -22.018,
+    24.124,
+    -0.0
+   ]
+  }
+ },
+ "size_studs": [
+  94.04,
+  48.25,
+  15.0
+ ],
+ "kind": "landmark",
+ "note": "legs straddle a 30-stud road plus pavements"
+}

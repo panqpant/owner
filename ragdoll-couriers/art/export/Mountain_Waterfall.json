@@ -1,0 +1,28 @@
+{
+ "triangles": 2464,
+ "parts": {
+  "Rocks": {
+   "triangles": 460,
+   "centre": [
+    -0.178,
+    12.302,
+    -0.367
+   ]
+  },
+  "Water": {
+   "triangles": 2004,
+   "centre": [
+    0.0,
+    16.125,
+    -10.5
+   ]
+  }
+ },
+ "size_studs": [
+  44.75,
+  42.69,
+  48.59
+ ],
+ "kind": "landmark",
+ "note": "Water: Transparency ~0.3; add a ParticleEmitter for spray at the pool"
+}

@@ -1,0 +1,20 @@
+{
+ "triangles": 2216,
+ "parts": {
+  "Fountain": {
+   "triangles": 2216,
+   "centre": [
+    0.0,
+    6.275,
+    -0.0
+   ]
+  }
+ },
+ "size_studs": [
+  26.0,
+  12.55,
+  26.0
+ ],
+ "kind": "landmark",
+ "note": "water parts: set Transparency ~0.3 in Studio for a glassy look"
+}

@@ -11,9 +11,9 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import lib  # noqa: E402
-from assets import parcels, vehicles, world  # noqa: E402
+from assets import landmarks, parcels, vehicles, world  # noqa: E402
 
-GROUPS = {"vehicles": vehicles.ASSETS, "parcels": parcels.ASSETS, "world": world.ASSETS}
+GROUPS = {"vehicles": vehicles.ASSETS, "parcels": parcels.ASSETS, "world": world.ASSETS, "landmarks": landmarks.ASSETS}
 TRIANGLE_BUDGET = 10000  # per MeshPart; Roblox's hard limit is 20k, phones like far less
 
 

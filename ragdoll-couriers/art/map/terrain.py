@@ -59,8 +59,10 @@ class Terrain:
         self.pads = [(it["x"], it["y"], FLAT, 25) for it in p["items"] if it["asset"] == "Mountain_Cabin"]
         if "summit" in p:
             sx, sy, sz = p["summit"]
-            self.pads.append((sx, sy, sz - 0.1, 45))
+            self.pads.append((sx, sy, sz - 0.1, 85))  # car park and lodge
         from roads import RoadIndex
+
+        self.cuts = p.get("cuts", [])  # sunken rectangles (the canal basin): ground drops to z inside
 
         for road in p.get("free_roads", []):
             if "island" in road:  # level ground for the whole roundabout
@@ -145,6 +147,9 @@ class Terrain:
                 h += (pz - h) * f
                 held = held or f > 0.5
         h, road_held = self._free_road(x, y, h)
+        for x0, y0, x1, y1, z in self.cuts:
+            if x0 <= x <= x1 and y0 <= y <= y1:
+                h = min(h, z)
         return h if (held or road_held) else min(h, self.water_floor(x, y))
 
     def _free_road(self, x, y, h):

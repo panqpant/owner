@@ -1,0 +1,25 @@
+{
+ "triangles": 1842,
+ "parts": {
+  "Lighthouse": {
+   "triangles": 1842,
+   "centre": [
+    0.811,
+    15.593,
+    1.057
+   ]
+  }
+ },
+ "size_studs": [
+  22.17,
+  45.41,
+  22.39
+ ],
+ "kind": "landmark",
+ "light": [
+  0,
+  35.2,
+  0
+ ],
+ "note": "put a rotating SpotLight in the lantern"
+}

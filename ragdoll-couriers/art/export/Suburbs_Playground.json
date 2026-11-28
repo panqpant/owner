@@ -1,0 +1,20 @@
+{
+ "triangles": 1600,
+ "parts": {
+  "Playground": {
+   "triangles": 1600,
+   "centre": [
+    0.0,
+    4.089,
+    -0.178
+   ]
+  }
+ },
+ "size_studs": [
+  26.0,
+  8.22,
+  20.36
+ ],
+ "kind": "prop",
+ "note": "a place to ragdoll into on purpose"
+}

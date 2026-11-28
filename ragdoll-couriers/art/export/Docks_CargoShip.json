@@ -1,0 +1,28 @@
+{
+ "triangles": 6558,
+ "parts": {
+  "Hull": {
+   "triangles": 1374,
+   "centre": [
+    0.0,
+    11.125,
+    -4.0
+   ]
+  },
+  "Cargo": {
+   "triangles": 5184,
+   "centre": [
+    0.0,
+    11.9,
+    -7.5
+   ]
+  }
+ },
+ "size_studs": [
+  28.0,
+  36.25,
+  126.0
+ ],
+ "kind": "landmark",
+ "note": "z = 0 is the waterline: place at sea level"
+}
