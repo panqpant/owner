@@ -1,5 +1,5 @@
 {
- "triangles": 28806,
+ "triangles": 28732,
  "parts": {
   "Chunk_6_6": {
    "triangles": 134,
@@ -106,7 +106,7 @@
    ]
   },
   "Chunk_8_7": {
-   "triangles": 393,
+   "triangles": 398,
    "centre": [
     625.0,
     7.976,
@@ -114,7 +114,7 @@
    ]
   },
   "Chunk_8_8": {
-   "triangles": 590,
+   "triangles": 578,
    "centre": [
     625.0,
     76.387,
@@ -154,23 +154,23 @@
    ]
   },
   "Chunk_9_7": {
-   "triangles": 311,
+   "triangles": 336,
    "centre": [
     875.0,
-    18.861,
+    14.501,
     -375.0
    ]
   },
   "Chunk_9_8": {
-   "triangles": 1039,
+   "triangles": 1049,
    "centre": [
     875.0,
-    105.171,
+    104.421,
     -625.0
    ]
   },
   "Chunk_9_9": {
-   "triangles": 1212,
+   "triangles": 1213,
    "centre": [
     875.0,
     205.535,
@@ -210,23 +210,23 @@
    ]
   },
   "Chunk_10_8": {
-   "triangles": 1092,
+   "triangles": 1111,
    "centre": [
     1125.0,
-    80.557,
+    71.168,
     -625.0
    ]
   },
   "Chunk_10_9": {
-   "triangles": 1164,
+   "triangles": 1090,
    "centre": [
     1125.0,
-    132.864,
+    124.925,
     -875.0
    ]
   },
   "Chunk_10_10": {
-   "triangles": 1155,
+   "triangles": 1114,
    "centre": [
     1125.0,
     141.62,
@@ -258,7 +258,7 @@
    ]
   },
   "Chunk_11_8": {
-   "triangles": 1182,
+   "triangles": 1176,
    "centre": [
     1375.0,
     156.805,
@@ -266,15 +266,15 @@
    ]
   },
   "Chunk_11_9": {
-   "triangles": 1138,
+   "triangles": 1139,
    "centre": [
     1375.0,
-    171.239,
+    171.215,
     -875.0
    ]
   },
   "Chunk_11_10": {
-   "triangles": 1163,
+   "triangles": 1161,
    "centre": [
     1375.0,
     189.957,
@@ -292,7 +292,7 @@
  },
  "size_studs": [
   1500.0,
-  283.33,
+  284.83,
   1500.0
  ],
  "kind": "terrain"

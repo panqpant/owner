@@ -1,8 +1,8 @@
 {
- "triangles": 288,
+ "triangles": 1080,
  "parts": {
   "Tile": {
-   "triangles": 288,
+   "triangles": 1080,
    "centre": [
     0.0,
     -0.3,

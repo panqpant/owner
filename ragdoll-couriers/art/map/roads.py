@@ -84,7 +84,7 @@ def make_roads(ground) -> list[dict]:
     # Mountain: leaves the valley road heading east, then four hairpins up the south-east flank
     # to a summit car park just below the peak.
     ctrl = [
-        (860, 560), (960, 572), (1090, 600), (1175, 625), (1205, 665), (1180, 705),  # leg 1, hairpin 1
+        (860, 560), (880, 560), (900, 560), (960, 572), (1090, 600), (1175, 625), (1205, 665), (1180, 705),  # straight off the grid, leg 1, hairpin 1
         (1100, 712), (1060, 735), (1040, 772), (1065, 805),  # leg 2, hairpin 2 (kept away from the peak's steep side)
         (1140, 818), (1190, 845), (1212, 885), (1185, 922),  # leg 3, hairpin 3
         (1120, 930), (1075, 955), (1055, 990), (1078, 1022),  # leg 4, hairpin 4
@@ -93,10 +93,13 @@ def make_roads(ground) -> list[dict]:
     pts = catmull_rom([(x, y, 0.0) for x, y in ctrl])
     zs = grade_limit([ground(x, y) for x, y, _ in pts], start=0.0)
     roads.append({"name": "Mountain", "width": ROAD_W - 6, "edge": "rails", "points": [(x, y, round(z, 2)) for (x, y, _), z in zip(pts, zs)],
-                  "shelter": (0.33, 0.42)})  # avalanche shelter over part of leg 2 (fraction of length)
+                  "shelter": (0.33, 0.42),  # avalanche shelter over part of leg 2 (fraction of length)
+                  "taper": (12, 24, ROAD_W)})  # starts as a full-width city street with pavements, narrows to the mountain profile
 
     # Lake causeway: from the suburbs' southern street, a gentle S across the lake on a low bridge.
-    ctrl = [(640, -420), (630, -470), (622, -540), (650, -620), (660, -700), (645, -770), (640, -826)]
+    # Straight lead-in and lead-out (x = 640) so both ends meet the grid square-on. A spline needs two
+    # collinear segments to run straight; one gets bent by the next control point.
+    ctrl = [(640, -420), (640, -440), (640, -460), (630, -490), (622, -540), (650, -620), (660, -700), (645, -760), (640, -786), (640, -806), (640, -826)]
     pts = catmull_rom([(x, y, 0.0) for x, y in ctrl])
     n = len(pts)
     zs = []
@@ -109,12 +112,16 @@ def make_roads(ground) -> list[dict]:
     cx, cy, r = 640.0, -880.0, 38.0
     ring = [(cx + r * math.cos(a), cy + r * math.sin(a), 0.0) for a in (k * math.tau / 96 for k in range(96))]
     entries = (math.pi, 0.0, math.pi / 2)  # west, east, north
-    gap = math.asin((ROAD_W / 2 + 5) / (r + 11))  # the ring's pavement opens where each approach joins
+    # The ring's kerb opens for each arm: its corners land outside the arm's asphalt (|u| > 15) and
+    # inside the arm's own pavement (|u| < 20), so the two pavements overlap instead of leaving a gap.
+    # Snapped to a whole number of ring samples, so the kerb starts exactly where the arm's pavement ends.
+    step = math.tau / 96
+    gap = math.ceil(math.asin(17.5 / (r + 11 + 2.5)) / step) * step - 1e-9
     roads.append({"name": "Roundabout", "width": 22.0, "edge": "pavement", "points": ring, "closed": True, "island": (cx, cy, r - 11), "gaps": [(a, gap) for a in entries]})
     for name, a, b in (("RoundaboutW", (580, -880), (cx - r - 3, cy)), ("RoundaboutE", (700, -880), (cx + r + 3, cy)), ("RoundaboutN", (640, -826), (cx, cy + r + 3))):
-        # Approaches run their asphalt into the ring (no gap at the join); pavement stops at the ring's edge.
+        # Arms are meshed with the ring (build_map._roundabout_arms); this centreline is for routing and terrain.
         pts = [(a[0] + (b[0] - a[0]) * t / 4, a[1] + (b[1] - a[1]) * t / 4, 0.0) for t in range(5)]
-        roads.append({"name": name, "width": ROAD_W, "edge": "pavement", "points": pts, "joins": (cx, cy, r + 16), "lines": False})
+        roads.append({"name": name, "width": ROAD_W, "edge": "pavement", "points": pts, "joins": (cx, cy, r + 16)})
     return roads
 
 

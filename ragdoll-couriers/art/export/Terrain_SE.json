@@ -1,5 +1,5 @@
 {
- "triangles": 27110,
+ "triangles": 27280,
  "parts": {
   "Chunk_6_0": {
    "triangles": 1130,
@@ -106,7 +106,7 @@
    ]
   },
   "Chunk_8_1": {
-   "triangles": 1084,
+   "triangles": 1082,
    "centre": [
     625.0,
     83.601,
@@ -114,10 +114,10 @@
    ]
   },
   "Chunk_8_2": {
-   "triangles": 622,
+   "triangles": 798,
    "centre": [
     625.0,
-    18.289,
+    18.367,
     875.0
    ]
   },
@@ -130,7 +130,7 @@
    ]
   },
   "Chunk_8_4": {
-   "triangles": 410,
+   "triangles": 406,
    "centre": [
     625.0,
     1.616,

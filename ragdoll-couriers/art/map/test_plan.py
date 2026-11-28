@@ -103,6 +103,13 @@ for road, cell in (("Mountain", (21, 14)), ("Causeway", (16, -10))):
     x, y, _ = free[road]["points"][0]
     assert math.dist((x, y), (cell[0] * CELL + (20 if road == "Mountain" else 0), cell[1] * CELL - (20 if road == "Causeway" else 0))) < 1, f"{road} doesn't meet its stub"
 
+# Where a free road meets a grid stub it must arrive square-on, or the join shows a wedge.
+for road, end in (("Mountain", 0), ("Causeway", 0), ("Causeway", -1)):
+    pts = free[road]["points"]
+    a, b = (pts[0], pts[1]) if end == 0 else (pts[-2], pts[-1])
+    dx, dy = abs(b[0] - a[0]), abs(b[1] - a[1])
+    assert min(dx, dy) < 0.01 * max(dx, dy), f"{road} meets the grid at an angle ({dx:.2f}, {dy:.2f})"
+
 counts = {}
 for it in items:
     counts[it["asset"]] = counts.get(it["asset"], 0) + 1

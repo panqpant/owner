@@ -1,0 +1,59 @@
+{
+ "triangles": 22206,
+ "parts": {
+  "Mountain_0": {
+   "triangles": 3238,
+   "centre": [
+    968.87,
+    16.8,
+    -575.208
+   ]
+  },
+  "Mountain_1": {
+   "triangles": 3526,
+   "centre": [
+    1145.289,
+    54.25,
+    -653.471
+   ]
+  },
+  "Mountain_2": {
+   "triangles": 5256,
+   "centre": [
+    1096.467,
+    80.55,
+    -759.896
+   ]
+  },
+  "Mountain_3": {
+   "triangles": 3514,
+   "centre": [
+    1157.002,
+    107.99,
+    -869.065
+   ]
+  },
+  "Mountain_4": {
+   "triangles": 3504,
+   "centre": [
+    1104.96,
+    120.455,
+    -977.997
+   ]
+  },
+  "Mountain_5": {
+   "triangles": 3168,
+   "centre": [
+    1164.009,
+    134.04,
+    -1070.689
+   ]
+  }
+ },
+ "size_studs": [
+  367.03,
+  146.65,
+  587.3
+ ],
+ "kind": "road"
+}

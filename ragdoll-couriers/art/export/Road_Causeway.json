@@ -1,0 +1,27 @@
+{
+ "triangles": 7666,
+ "parts": {
+  "Causeway_0": {
+   "triangles": 4126,
+   "centre": [
+    636.762,
+    -3.846,
+    527.232
+   ]
+  },
+  "Causeway_1": {
+   "triangles": 3540,
+   "centre": [
+    649.969,
+    -3.846,
+    725.758
+   ]
+  }
+ },
+ "size_studs": [
+  80.5,
+  26.09,
+  406.0
+ ],
+ "kind": "road"
+}

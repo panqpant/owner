@@ -84,6 +84,8 @@ def road_corner():
     corner_fill = [(-TILE / 2, -TILE / 2)] + [(x, y) for x, y, _ in arc(TILE, 0)][::-1]
     m.prism(corner_fill, KERB, "concrete", thickness=1 + KERB)
     m.prism([c] + [(x, y) for x, y, _ in arc(inner, 0)], KERB, "concrete", thickness=1 + KERB)  # inner kerb
+    for r_line in (inner + 0.85, outer - 1.15):  # yellow edge lines, exactly where the straight tiles' are
+        m.strip(arc(r_line, 0.04), arc(r_line + 0.3, 0.04), "yellow", thickness=0.04)
     for k in range(0, 24, 3):  # centre dashes
         a0, a1 = k * (math.pi / 2) / 24, (k + 1.4) * (math.pi / 2) / 24
         mid = TILE / 2

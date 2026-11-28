@@ -1,0 +1,59 @@
+{
+ "triangles": 5168,
+ "parts": {
+  "Roundabout_0": {
+   "triangles": 1890,
+   "centre": [
+    640.0,
+    -0.3,
+    858.253
+   ]
+  },
+  "Roundabout_1": {
+   "triangles": 1936,
+   "centre": [
+    640.0,
+    -0.3,
+    907.0
+   ]
+  },
+  "Island": {
+   "triangles": 574,
+   "centre": [
+    640.0,
+    0.1,
+    880.0
+   ]
+  },
+  "RoundaboutW": {
+   "triangles": 260,
+   "centre": [
+    587.365,
+    -0.3,
+    880.0
+   ]
+  },
+  "RoundaboutE": {
+   "triangles": 260,
+   "centre": [
+    692.635,
+    -0.3,
+    880.0
+   ]
+  },
+  "RoundaboutN": {
+   "triangles": 248,
+   "centre": [
+    640.0,
+    -0.3,
+    829.285
+   ]
+  }
+ },
+ "size_studs": [
+  120.0,
+  2.2,
+  110.16
+ ],
+ "kind": "road"
+}
