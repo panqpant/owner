@@ -132,7 +132,11 @@ def write_layout(p, kit_info):
     data = {
         "cell": p["cell"],
         "assets": kit_info,
-        "items": [{"a": it["asset"], "p": rb(it["x"], it["y"], it.get("z", 0)), "r": it["rot"], "c": it.get("paint"), "d": it["district"]} for it in p["items"]],
+        # m = a hazard the game moves (forklift, dog, wrecking ball, boulder); k = a parked car
+        "items": [
+            {"a": it["asset"], "p": rb(it["x"], it["y"], it.get("z", 0)), "r": it["rot"], "c": it.get("paint"), "d": it["district"], "m": it.get("moving"), "k": it.get("parked")}
+            for it in p["items"]
+        ],
         "addresses": [{"d": a["district"], "p": rb(a["x"], a["y"]), "b": a["building"]} for a in p["addresses"]],
         "spawn": {"p": rb(p["spawn"]["x"], p["spawn"]["y"]), "r": p["spawn"]["rot"]},
         # rect in Roblox x/z: [xMin, zMin, xMax, zMax]

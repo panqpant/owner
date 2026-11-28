@@ -152,6 +152,8 @@ def house_a():
     for y in (-3, 3):
         for sx in (-1, 1):
             _window(body, sx * w / 2, y, 5.0, w=2.6, face="+X" if sx > 0 else "-X")
+    for x in (-4.5, 4.5):
+        _window(body, x, -d / 2, 5.0, face="-Y")
     body.box((2.2, 2.2, 7), (5, -2.5, h + 4.5), "brick", bevel=0.08)  # chimney
     body.box((2.8, 2.8, 0.5), (5, -2.5, h + 8.1), "charcoal", bevel=0.08)
     # Porch roof over the door
@@ -177,6 +179,9 @@ def house_b():
     for sx in (-1, 1):
         for z in (4.5, 12.5):
             _window(body, sx * w / 2, 0, z, face="+X" if sx > 0 else "-X")
+    for x in (-4.5, 4.5):
+        for z in (4.5, 12.5):
+            _window(body, x, -d / 2, z, face="-Y")
     body.box((1.6, 0.3, 1.2), (-5.5, d / 2 + 0.2, 7.0), "white", bevel=0.05)  # house number plate
     return [paint.done(), body.done()], {"kind": "building", "footprint": [w + 3, d + 4]}
 
@@ -214,6 +219,9 @@ def townhouse():
             m.box((2.4, 0.9, 0.6), (x, d / 2 + 0.6, z - 2.3), "darkgreen", bevel=0.05)  # flower box
             for k in (-0.8, 0, 0.8):
                 m.sphere(0.35, (x + k, d / 2 + 0.6, z - 1.9), "pink" if k else "red", segments=8, rings=5)
+    for z in (4.2, 12, 17.5, 23):
+        for x in (-3, 3):
+            _window(m, x, -d / 2, z, w=2.4, h=3.4, frame="stone", face="-Y")
     m.box((1.4, 1.4, 4), (3, -3, h + 4), "brick", bevel=0.06)
     return _one(m, "building", footprint=[w + 1, d + 2])
 
@@ -234,9 +242,10 @@ def shop():
         x = -w / 2 + 1 + i * (w - 2) / 8 + (w - 2) / 16
         body.box(((w - 2) / 8, 0.15, 0.6), (x, d / 2 + 3.15, 6.9), "red" if i % 2 else "white", bevel=0.02)
     body.box((w - 3, 0.5, 2.4), (0, d / 2 + 0.2, 9.8), "navy", bevel=0.1)  # sign board (put a SurfaceGui on +Z face)
-    for z in (11.8,):
-        for x in (-4.5, 0, 4.5):
-            _window(body, x, d / 2, z + 0.3, w=2.2, h=1.6)
+    for x in (-4.5, 0, 4.5):
+        _window(body, x, d / 2, 12.1, w=2.2, h=1.6)
+        _window(body, x, -d / 2, 12.1, w=2.2, h=1.6, face="-Y")
+        _window(body, x, -d / 2, 4.5, w=2.2, h=2.4, face="-Y")
     return [paint.done(), body.done()], {"kind": "building", "footprint": [w + 1, d + 4]}
 
 

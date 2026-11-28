@@ -49,6 +49,22 @@ for b in buildings:
 spots = [(round(b["x"]), round(b["y"])) for b in buildings]
 assert len(spots) == len(set(spots)), "two buildings overlap"
 
+# Building footprints never overlap (touching terraces are fine: 1 stud of slack for awnings and sills).
+from plan import _sizes  # noqa: E402
+
+sizes = _sizes()
+rects = []
+for b in buildings:
+    w, d = sizes[b["asset"]]
+    if b["rot"] % 180:
+        w, d = d, w
+    rects.append((b["x"] - w / 2, b["y"] - d / 2, b["x"] + w / 2, b["y"] + d / 2, b["asset"]))
+for k, r in enumerate(rects):
+    for q in rects[k + 1 :]:
+        ox = min(r[2], q[2]) - max(r[0], q[0])
+        oy = min(r[3], q[3]) - max(r[1], q[1])
+        assert ox <= 1.0 or oy <= 1.0, f"{r[4]} overlaps {q[4]} near ({r[0]:.0f}, {r[1]:.0f}) by {ox:.1f} x {oy:.1f}"
+
 # Each address is on a road cell's pavement, so a rider can reach it.
 for a in p["addresses"]:
     cell = (round(a["x"] / CELL), round(a["y"] / CELL))
