@@ -162,3 +162,14 @@ Style follows what top Roblox thumbnails share:
   - Walkers swing their limbs, turn round at the ends of their walk, and stop to look around now and then.
   - Riding into one at speed ragdolls them and sends them flying. They fade out after six seconds and are recycled.
 - **Import:** bring `export/Ped_*.fbx` into Studio as Models in `ReplicatedStorage.PedAssets`, keeping the part names. Until then, block people with random colours stand in, so it all works straight away. The city must be built first (MapBuilder sets the `Origin` the walks are placed from).
+
+## Pedestrians in the game
+
+With the city built, the server runs in city mode (it falls back to the test road if there's no `workspace.City`):
+- Riders spawn at the Hub depot. Jobs go to real addresses 250–900 studs away, with labels such as "Warehouse, Docks".
+- **Clip a pedestrian** at speed: they ragdoll, your parcel loses 10% and you lose the no-crash bonus.
+- **Near miss:** brushing past someone at 25+ studs/s within 8 studs, without touching, pays 4 coins. At most 6 per job, rate-limited, and the server checks your speed.
+- **Customers on foot:** every 4th job goes to a person walking a pavement. Your drop circle walks with them, and handing it over in person pays +30%. Every player sees the same customer.
+- **Thieves:** a crash that throws your parcel has a 35% chance of a thief grabbing it. They run along the pavements with it over their head, crossing at junctions. Catch them within 30 seconds to get the parcel back plus 15 coins, otherwise the job fails.
+
+All the numbers are in `src/shared/Config.luau` under "Pedestrians". Customers and thieves move by a shared formula (`src/shared/WalkMath.luau`): a path, a speed and a server-clock start time. Every client draws them in the same place, and the server checks hand-overs and catches against the same maths. Test: `lune run tests/walkmath.spec.luau`.

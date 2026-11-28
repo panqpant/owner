@@ -42,7 +42,10 @@ local function corner(r: number)
 	return make("UICorner", { CornerRadius = UDim.new(0, r) })
 end
 local function stroke(t: number)
-	return make("UIStroke", { Thickness = t, Color = Color3.new(0, 0, 0), ApplyStrokeMode = Enum.ApplyStrokeMode.Border })
+	return make(
+		"UIStroke",
+		{ Thickness = t, Color = Color3.new(0, 0, 0), ApplyStrokeMode = Enum.ApplyStrokeMode.Border }
+	)
 end
 
 local function text(props: { [string]: any }): TextLabel
@@ -54,37 +57,111 @@ local function text(props: { [string]: any }): TextLabel
 	return make("TextLabel", props)
 end
 
-local gui = make("ScreenGui", { Name = "KillTestHud", ResetOnSpawn = false, IgnoreGuiInset = false, Parent = player:WaitForChild("PlayerGui") })
+local gui = make(
+	"ScreenGui",
+	{ Name = "KillTestHud", ResetOnSpawn = false, IgnoreGuiInset = false, Parent = player:WaitForChild("PlayerGui") }
+)
 
-local coinsLabel = text({ Size = UDim2.fromOffset(260, 46), Position = UDim2.new(0.5, -130, 0, 8), Text = "COINS 0", TextColor3 = Color3.fromRGB(255, 220, 80), Parent = gui })
+local coinsLabel = text({
+	Size = UDim2.fromOffset(260, 46),
+	Position = UDim2.new(0.5, -130, 0, 8),
+	Text = "COINS 0",
+	TextColor3 = Color3.fromRGB(255, 220, 80),
+	Parent = gui,
+})
 
 local card = make(
 	"Frame",
-	{ Size = UDim2.fromOffset(250, 92), Position = UDim2.fromOffset(12, 60), BackgroundColor3 = Color3.fromRGB(30, 30, 45), BackgroundTransparency = 0.15, Parent = gui },
+	{
+		Size = UDim2.fromOffset(250, 92),
+		Position = UDim2.fromOffset(12, 60),
+		BackgroundColor3 = Color3.fromRGB(30, 30, 45),
+		BackgroundTransparency = 0.15,
+		Parent = gui,
+	},
 	{ corner(12), stroke(3) }
 )
-local jobLabel = text({ Size = UDim2.new(1, -16, 0, 30), Position = UDim2.fromOffset(8, 6), Text = "", TextXAlignment = Enum.TextXAlignment.Left, Parent = card })
-local barBack = make("Frame", { Size = UDim2.new(1, -16, 0, 22), Position = UDim2.fromOffset(8, 40), BackgroundColor3 = Color3.fromRGB(60, 20, 20), Parent = card }, { corner(8) })
-local barFill = make("Frame", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.fromRGB(90, 230, 110), Parent = barBack }, { corner(8) })
+local jobLabel = text({
+	Size = UDim2.new(1, -16, 0, 30),
+	Position = UDim2.fromOffset(8, 6),
+	Text = "",
+	TextXAlignment = Enum.TextXAlignment.Left,
+	Parent = card,
+})
+local barBack = make(
+	"Frame",
+	{
+		Size = UDim2.new(1, -16, 0, 22),
+		Position = UDim2.fromOffset(8, 40),
+		BackgroundColor3 = Color3.fromRGB(60, 20, 20),
+		Parent = card,
+	},
+	{ corner(8) }
+)
+local barFill = make(
+	"Frame",
+	{ Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.fromRGB(90, 230, 110), Parent = barBack },
+	{ corner(8) }
+)
 local condLabel = text({ Size = UDim2.fromScale(1, 1), Text = "100%", ZIndex = 2, Parent = barBack })
-local distLabel =
-	text({ Size = UDim2.new(1, -16, 0, 20), Position = UDim2.fromOffset(8, 66), Text = "", TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = Color3.fromRGB(200, 200, 220), Parent = card })
+local distLabel = text({
+	Size = UDim2.new(1, -16, 0, 20),
+	Position = UDim2.fromOffset(8, 66),
+	Text = "",
+	TextXAlignment = Enum.TextXAlignment.Left,
+	TextColor3 = Color3.fromRGB(200, 200, 220),
+	Parent = card,
+})
 
-local popup = text({ Size = UDim2.new(0.8, 0, 0, 90), Position = UDim2.new(0.1, 0, 0.22, 0), Text = "", Visible = false, Parent = gui })
-local breakdown = text({ Size = UDim2.new(0.6, 0, 0, 80), Position = UDim2.new(0.2, 0, 0.22, 95), Text = "", Visible = false, TextColor3 = Color3.fromRGB(230, 230, 240), Parent = gui })
+local popup = text({
+	Size = UDim2.new(0.8, 0, 0, 90),
+	Position = UDim2.new(0.1, 0, 0.22, 0),
+	Text = "",
+	Visible = false,
+	Parent = gui,
+})
+local breakdown = text({
+	Size = UDim2.new(0.6, 0, 0, 80),
+	Position = UDim2.new(0.2, 0, 0.22, 95),
+	Text = "",
+	Visible = false,
+	TextColor3 = Color3.fromRGB(230, 230, 240),
+	Parent = gui,
+})
 
 local function button(label: string, color: Color3, size: UDim2, pos: UDim2): TextButton
 	local b = make(
 		"TextButton",
-		{ Size = size, Position = pos, BackgroundColor3 = color, Text = label, Font = Enum.Font.FredokaOne, TextScaled = true, TextColor3 = Color3.new(1, 1, 1), AutoButtonColor = true, Parent = gui },
+		{
+			Size = size,
+			Position = pos,
+			BackgroundColor3 = color,
+			Text = label,
+			Font = Enum.Font.FredokaOne,
+			TextScaled = true,
+			TextColor3 = Color3.new(1, 1, 1),
+			AutoButtonColor = true,
+			Parent = gui,
+		},
 		{ corner(16), stroke(3) }
 	)
-	make("UIPadding", { PaddingTop = UDim.new(0, 8), PaddingBottom = UDim.new(0, 8), PaddingLeft = UDim.new(0, 8), PaddingRight = UDim.new(0, 8), Parent = b })
+	make(
+		"UIPadding",
+		{
+			PaddingTop = UDim.new(0, 8),
+			PaddingBottom = UDim.new(0, 8),
+			PaddingLeft = UDim.new(0, 8),
+			PaddingRight = UDim.new(0, 8),
+			Parent = b,
+		}
+	)
 	return b
 end
 
-local feelButton = button("Feel: " .. tune.name, Color3.fromRGB(110, 90, 220), UDim2.fromOffset(170, 44), UDim2.new(1, -182, 0, 60))
-local resetButton = button("Reset (R)", Color3.fromRGB(90, 90, 110), UDim2.fromOffset(170, 44), UDim2.new(1, -182, 0, 112))
+local feelButton =
+	button("Feel: " .. tune.name, Color3.fromRGB(110, 90, 220), UDim2.fromOffset(170, 44), UDim2.new(1, -182, 0, 60))
+local resetButton =
+	button("Reset (R)", Color3.fromRGB(90, 90, 110), UDim2.fromOffset(170, 44), UDim2.new(1, -182, 0, 112))
 feelButton.Activated:Connect(function()
 	presetIndex = presetIndex % #Config.Presets + 1
 	tune = Config.Presets[presetIndex]
@@ -221,7 +298,8 @@ RunService.PreSimulation:Connect(function(dt)
 	if not model or not body or ragdolled or not seated() then
 		return
 	end
-	rayParams.FilterDescendantsInstances = { model, player.Character :: Instance, workspace:FindFirstChild("Parcels") :: Instance }
+	rayParams.FilterDescendantsInstances =
+		{ model, player.Character :: Instance, workspace:FindFirstChild("Parcels") :: Instance }
 
 	local mass = body.AssemblyMass
 	local g = workspace.Gravity
@@ -262,9 +340,13 @@ RunService.PreSimulation:Connect(function(dt)
 		local vl = v:Dot(right)
 		local dvF
 		if throttle > 0.05 then
-			dvF = if vf < 0 then math.min(tune.brake * dt, -vf) else math.clamp(tune.maxSpeed * throttle - vf, -tune.brake * dt, tune.accel * dt)
+			dvF = if vf < 0
+				then math.min(tune.brake * dt, -vf)
+				else math.clamp(tune.maxSpeed * throttle - vf, -tune.brake * dt, tune.accel * dt)
 		elseif throttle < -0.05 then
-			dvF = if vf > 1 then -math.min(tune.brake * dt, vf) else math.max(-tune.accel * dt, -tune.reverseSpeed * -throttle - vf)
+			dvF = if vf > 1
+				then -math.min(tune.brake * dt, vf)
+				else math.max(-tune.accel * dt, -tune.reverseSpeed * -throttle - vf)
 		else
 			dvF = -math.sign(vf) * math.min(math.abs(vf), 8 * dt) -- coasting drag
 		end
@@ -310,7 +392,8 @@ local function updateGuide()
 		guideA0 = make("Attachment", { Position = Vector3.new(0, 3, 0), Parent = body })
 	end
 	local zone = job.zone
-	local a1 = zone:FindFirstChild("GuideTarget") :: Attachment? or make("Attachment", { Name = "GuideTarget", Parent = zone })
+	local a1 = zone:FindFirstChild("GuideTarget") :: Attachment?
+		or make("Attachment", { Name = "GuideTarget", Parent = zone })
 	if not guideBeam then
 		guideBeam = make("Beam", {
 			Color = ColorSequence.new(Color3.fromRGB(90, 255, 140)),
@@ -339,12 +422,18 @@ local function attachParcelGui()
 	if parcelGui then
 		parcelGui:Destroy()
 	end
-	local bb = make("BillboardGui", { Size = UDim2.fromOffset(90, 40), StudsOffset = Vector3.new(0, 2.5, 0), AlwaysOnTop = true, Parent = parcel })
+	local bb = make(
+		"BillboardGui",
+		{ Size = UDim2.fromOffset(90, 40), StudsOffset = Vector3.new(0, 2.5, 0), AlwaysOnTop = true, Parent = parcel }
+	)
 	local label = text({ Size = UDim2.fromScale(1, 1), Text = "100%", Parent = bb })
 	local function show()
 		local cond = parcel:GetAttribute("Condition") or 100
 		label.Text = cond .. "%"
-		label.TextColor3 = if cond > 60 then Color3.fromRGB(120, 255, 140) elseif cond > 25 then Color3.fromRGB(255, 210, 80) else Color3.fromRGB(255, 80, 80)
+		label.TextColor3 = if cond > 60
+			then Color3.fromRGB(120, 255, 140)
+			elseif cond > 25 then Color3.fromRGB(255, 210, 80)
+			else Color3.fromRGB(255, 80, 80)
 		barFill.Size = UDim2.fromScale(math.clamp(cond / 100, 0, 1), 1)
 		barFill.BackgroundColor3 = label.TextColor3
 		condLabel.Text = cond .. "%"
@@ -371,8 +460,15 @@ remote.OnClientEvent:Connect(function(kind: string, data: any)
 	if kind == "Job" then
 		job = data
 		local def = Config.Parcels[data.parcelId]
-		jobLabel.Text = "Deliver: " .. def.name .. (if data.to == "house" then " → House" else " → Depot")
-		if def.fragility >= 1 then
+		jobLabel.Text = "Deliver: " .. def.name .. " → " .. (data.label or data.to)
+		if data.kind == "customer" then
+			showPopup(
+				"CUSTOMER ON FOOT!",
+				"Follow the beam: they're walking. Hand it over up close.",
+				Color3.fromRGB(120, 255, 160),
+				3
+			)
+		elseif def.fragility >= 1 then
 			showPopup("FRAGILE!", "Slow down on bumps.", Color3.fromRGB(255, 200, 80), 2.5)
 		end
 	elseif kind == "Hit" then
@@ -401,7 +497,9 @@ remote.OnClientEvent:Connect(function(kind: string, data: any)
 			end
 		end
 		root.AssemblyLinearVelocity = data
-		root:ApplyAngularImpulse(Vector3.new(math.random(-1, 1), math.random(-1, 1), math.random(-1, 1)) * root.AssemblyMass * 20)
+		root:ApplyAngularImpulse(
+			Vector3.new(math.random(-1, 1), math.random(-1, 1), math.random(-1, 1)) * root.AssemblyMass * 20
+		)
 		shake = 1
 		camera.FieldOfView = 90
 		sound(Config.Sounds.crash, 0.9 + math.random() * 0.3)
@@ -428,10 +526,17 @@ remote.OnClientEvent:Connect(function(kind: string, data: any)
 		if data.cleanBonus > 0 then
 			table.insert(lines, "No crash +" .. data.cleanBonus)
 		end
+		if (data.handoffBonus or 0) > 0 then
+			table.insert(lines, "In person +" .. data.handoffBonus)
+		end
 		showPopup("+" .. data.total .. " COINS", table.concat(lines, "\n"), Color3.fromRGB(255, 220, 80), 3)
 		coinsLabel.Size = UDim2.fromOffset(320, 60)
-		TweenService:Create(coinsLabel, TweenInfo.new(0.4, Enum.EasingStyle.Back), { Size = UDim2.fromOffset(260, 46) }):Play()
+		TweenService:Create(coinsLabel, TweenInfo.new(0.4, Enum.EasingStyle.Back), { Size = UDim2.fromOffset(260, 46) })
+			:Play()
 	elseif kind == "Lost" then
 		showPopup(data, nil, Color3.fromRGB(255, 90, 90), 2)
+	elseif kind == "Bonus" then
+		sound(Config.Sounds.deliver, 1.4)
+		showPopup(data, nil, Color3.fromRGB(255, 220, 80), 1.2)
 	end
 end)

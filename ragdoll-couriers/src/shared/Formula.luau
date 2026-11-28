@@ -10,7 +10,15 @@ end
 export type Payout = { total: number, base: number, speedBonus: number, cleanBonus: number }
 
 -- condition is 0-100.
-function Formula.payout(pay: number, condition: number, seconds: number, parSeconds: number, crashed: boolean, speedBonus: number, cleanBonus: number): Payout
+function Formula.payout(
+	pay: number,
+	condition: number,
+	seconds: number,
+	parSeconds: number,
+	crashed: boolean,
+	speedBonus: number,
+	cleanBonus: number
+): Payout
 	local base = math.floor(pay * math.clamp(condition, 0, 100) / 100 + 0.5)
 	local speed = if seconds <= parSeconds and base > 0 then math.floor(base * speedBonus + 0.5) else 0
 	local clean = if not crashed and base > 0 then math.floor(base * cleanBonus + 0.5) else 0

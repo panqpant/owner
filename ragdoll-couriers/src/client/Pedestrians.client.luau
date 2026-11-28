@@ -1,6 +1,10 @@
--- Pedestrians (client only): locals stroll the pavement walks from art/map/walks.py around the player,
--- limbs swinging. Clip one at speed and they ragdoll and fly; a few seconds later they're recycled.
--- Everything is local to each player: no Humanoids, no network, a couple of hundred anchored parts.
+-- Pedestrians (client): locals stroll the pavement walks from art/map/walks.py around the player,
+-- limbs swinging. Clip one at speed and they ragdoll and fly (and the server docks your parcel);
+-- brush past fast without touching and it's a near miss (coins). These locals are each player's own:
+-- no Humanoids, no network.
+--
+-- Customers on foot and parcel thieves are different: the server announces them ("Actor") with a path,
+-- speed and server-clock start time, and every client draws them in the same place from that.
 --
 -- Models: ReplicatedStorage.PedAssets.Ped_* (import art/export/Ped_*.fbx there: six MeshParts each,
 -- named Torso, Head, LArm, RArm, LLeg, RLeg, front facing -Z). Until then, block people stand in.
@@ -10,7 +14,10 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 
-local Walks = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Walks"))
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Config = require(Shared:WaitForChild("Config"))
+local WalkMath = require(Shared:WaitForChild("WalkMath"))
+local remote = ReplicatedStorage:WaitForChild("KillTest") :: RemoteEvent
 local player = Players.LocalPlayer
 local camera = workspace.CurrentCamera
 
@@ -20,35 +27,24 @@ local SPAWN_MIN = 70 -- ...but not right under the player's nose
 local DESPAWN_RADIUS = 320
 local CELL = 120 -- spatial buckets for finding walks near the camera
 local HIT_RADIUS = 4.5
-local HIT_SPEED = 10 -- studs/s of rider speed needed to send someone flying
 local RAGDOLL_TIME = 6
 local LIMBS = { "Torso", "Head", "LArm", "RArm", "LLeg", "RLeg" }
 
 local city = workspace:WaitForChild("City")
 local origin = (city:GetAttribute("Origin") :: Vector3?) or Vector3.zero
 
----------------------------------------------------------------------------- walks, measured and bucketed
+---------------------------------------------------------------------------- walks, bucketed
 
-type Walk = { points: { Vector3 }, cum: { number }, length: number, weight: number }
-local walks: { Walk } = {}
-local buckets: { [number]: { Walk } } = {}
+local walks = WalkMath.load(origin)
+local buckets: { [number]: { WalkMath.Walk } } = {}
 
 local function bucketKey(i: number, j: number): number
 	return (i + 1000) * 10000 + (j + 1000) -- numbers, not Vector2: userdata keys compare by identity
 end
 
-for _, w in Walks.walks do
-	local pts, cum = {}, { 0 }
-	for k, p in w.p do
-		pts[k] = origin + Vector3.new(p[1], p[2], p[3])
-		if k > 1 then
-			cum[k] = cum[k - 1] + (pts[k] - pts[k - 1]).Magnitude
-		end
-	end
-	local walk: Walk = { points = pts, cum = cum, length = cum[#cum], weight = (Walks.density[w.d] or 1) * cum[#cum] }
-	table.insert(walks, walk)
+for _, walk in walks do
 	local seen = {}
-	for _, p in pts do
+	for _, p in walk.points do
 		local key = bucketKey(math.floor(p.X / CELL), math.floor(p.Z / CELL))
 		if not seen[key] then
 			seen[key] = true
@@ -58,19 +54,6 @@ for _, w in Walks.walks do
 	end
 end
 
-local function pointAt(walk: Walk, s: number): (Vector3, Vector3)
-	local cum, pts = walk.cum, walk.points
-	for k = 2, #pts do
-		if s <= cum[k] or k == #pts then
-			local seg = cum[k] - cum[k - 1]
-			local a = if seg > 0 then math.clamp((s - cum[k - 1]) / seg, 0, 1) else 0
-			local dir = pts[k] - pts[k - 1]
-			return pts[k - 1]:Lerp(pts[k], a), if dir.Magnitude > 0 then dir.Unit else Vector3.zAxis
-		end
-	end
-	return pts[1], Vector3.zAxis
-end
-
 ---------------------------------------------------------------------------- people
 
 type Ped = {
@@ -78,21 +61,25 @@ type Ped = {
 	parts: { BasePart },
 	rest: { CFrame }, -- each part relative to the feet, standing still
 	joints: { Vector3 }, -- each part's joint in the same frame (limbs hang from it)
-	walk: Walk,
+	walk: WalkMath.Path,
 	s: number,
 	dir: number,
 	speed: number,
 	pause: number,
 	phase: number,
 	yaw: number,
+	missed: boolean, -- a near miss already counted for this one
+	hit: boolean,
 }
 
-local templates: { Model } = {}
+local templates: { [string]: Model } = {}
+local templateList: { Model } = {}
 local folder = ReplicatedStorage:FindFirstChild("PedAssets")
 if folder then
 	for _, m in folder:GetChildren() do
 		if m:IsA("Model") and m:FindFirstChild("Torso") then
-			table.insert(templates, m)
+			templates[m.Name] = m
+			table.insert(templateList, m)
 		end
 	end
 end
@@ -131,8 +118,10 @@ local pedFolder = Instance.new("Folder")
 pedFolder.Name = "Pedestrians"
 pedFolder.Parent = workspace
 
-local function newPed(walk: Walk, s: number): Ped
-	local model = if #templates > 0 then templates[math.random(#templates)]:Clone() else blockPerson()
+local function newPed(walk: WalkMath.Path, s: number, modelName: string?): Ped
+	local template = if modelName then templates[modelName] else nil
+	template = template or (if #templateList > 0 then templateList[math.random(#templateList)] else nil)
+	local model = if template then template:Clone() else blockPerson()
 	local box, size = model:GetBoundingBox()
 	local feet = box * CFrame.new(0, -size.Y / 2, 0)
 	local parts, rest, joints = {}, {}, {}
@@ -162,12 +151,33 @@ local function newPed(walk: Walk, s: number): Ped
 		pause = 0,
 		phase = math.random() * math.pi * 2,
 		yaw = 0,
+		missed = false,
+		hit = false,
 	}
 end
 
----------------------------------------------------------------------------- spawning
+-- Feet at `here`, turning toward `face`, limbs swinging (legs and arms in opposition) while moving.
+local moveParts: { BasePart } = {}
+local moveCFrames: { CFrame } = {}
+local function pose(ped: Ped, here: Vector3, face: Vector3, moving: boolean, dt: number)
+	local targetYaw = math.atan2(-face.X, -face.Z)
+	local turn = (targetYaw - ped.yaw + math.pi) % (2 * math.pi) - math.pi
+	ped.yaw += turn * math.min(1, dt * 8)
+	ped.phase += dt * (if moving then ped.speed * 1.7 else 0)
+	local swing = math.sin(ped.phase) * (if moving then math.min(0.6, ped.speed * 0.09) else 0)
+	local bob = if moving then math.abs(math.cos(ped.phase)) * 0.12 else 0
+	local base = CFrame.new(here + Vector3.new(0, bob, 0)) * CFrame.Angles(0, ped.yaw, 0)
+	local angles = { 0, 0, swing * 0.8, -swing * 0.8, -swing, swing }
+	for k, p in ped.parts do
+		local j = ped.joints[k]
+		table.insert(moveParts, p)
+		table.insert(moveCFrames, base * CFrame.new(j) * CFrame.Angles(angles[k], 0, 0) * CFrame.new(-j) * ped.rest[k])
+	end
+end
 
-local function nearbyWalks(at: Vector3): { Walk }
+---------------------------------------------------------------------------- spawning locals
+
+local function nearbyWalks(at: Vector3): { WalkMath.Walk }
 	local out, seen = {}, {}
 	local r = math.ceil(SPAWN_RADIUS / CELL)
 	local cx, cz = math.floor(at.X / CELL), math.floor(at.Z / CELL)
@@ -204,8 +214,7 @@ local function trySpawn(at: Vector3)
 			end
 		end
 		local s = math.random() * walk.length
-		local pos = pointAt(walk, s)
-		local d = (pos - at).Magnitude
+		local d = (WalkMath.at(walk, s) - at).Magnitude
 		if d >= SPAWN_MIN and d <= SPAWN_RADIUS then
 			table.insert(live, newPed(walk, s))
 			return
@@ -216,6 +225,7 @@ end
 ---------------------------------------------------------------------------- ragdolls
 
 local function ragdoll(ped: Ped, hitVelocity: Vector3)
+	ped.hit = true
 	local torso = ped.parts[1]
 	for k, p in ped.parts do
 		if k > 1 then
@@ -249,11 +259,58 @@ local function ragdoll(ped: Ped, hitVelocity: Vector3)
 	end)
 end
 
+---------------------------------------------------------------------------- customers and thieves (from the server)
+
+type Actor = { ped: Ped, path: WalkMath.Path, speed: number, t0: number, s0: number, dir: number, once: boolean }
+local actors: { [number]: Actor } = {}
+
+local function tag(model: Model, text: string, colour: Color3)
+	local highlight = Instance.new("Highlight") -- an outline that shows through walls
+	highlight.FillTransparency = 1
+	highlight.OutlineColor = colour
+	highlight.Parent = model
+	local gui = Instance.new("BillboardGui")
+	gui.Size = UDim2.fromOffset(180, 44)
+	gui.StudsOffset = Vector3.new(0, 4, 0)
+	gui.AlwaysOnTop = true
+	gui.MaxDistance = 600
+	local label = Instance.new("TextLabel")
+	label.Size = UDim2.fromScale(1, 1)
+	label.BackgroundTransparency = 1
+	label.Text = text
+	label.TextScaled = true
+	label.Font = Enum.Font.FredokaOne
+	label.TextColor3 = colour
+	label.TextStrokeTransparency = 0
+	label.Parent = gui
+	gui.Adornee = model:FindFirstChild("Head") :: BasePart
+	gui.Parent = model
+end
+
+remote.OnClientEvent:Connect(function(kind: string, data: any)
+	if kind == "Actor" then
+		local path = WalkMath.path(data.points)
+		local ped = newPed(path, data.s0, data.model)
+		ped.speed = data.speed
+		if data.kind == "thief" then
+			tag(ped.model, "THIEF!", Color3.fromRGB(255, 70, 70))
+		else
+			tag(ped.model, "CUSTOMER", Color3.fromRGB(120, 255, 160))
+		end
+		actors[data.id] =
+			{ ped = ped, path = path, speed = data.speed, t0 = data.t0, s0 = data.s0, dir = data.dir, once = data.once }
+	elseif kind == "ActorGone" then
+		local a = actors[data]
+		if a then
+			actors[data] = nil
+			a.ped.model:Destroy()
+		end
+	end
+end)
+
 ---------------------------------------------------------------------------- the loop
 
 local spawnTimer = 0
-local moveParts: { BasePart } = {}
-local moveCFrames: { CFrame } = {}
 
 RunService.Heartbeat:Connect(function(dt)
 	local focus = camera.Focus.Position
@@ -261,7 +318,7 @@ RunService.Heartbeat:Connect(function(dt)
 	local root = character and character:FindFirstChild("HumanoidRootPart") :: BasePart?
 	local riderPos = root and root.Position
 	local riderVel = root and root.AssemblyLinearVelocity or Vector3.zero
-	local fast = riderVel.Magnitude >= HIT_SPEED
+	local speed = riderVel.Magnitude
 
 	spawnTimer -= dt
 	if spawnTimer <= 0 then
@@ -275,21 +332,27 @@ RunService.Heartbeat:Connect(function(dt)
 	table.clear(moveCFrames)
 	for i = #live, 1, -1 do
 		local ped = live[i]
-		local pos = pointAt(ped.walk, ped.s)
+		local pos = WalkMath.at(ped.walk, ped.s)
 		if (pos - focus).Magnitude > DESPAWN_RADIUS then
 			ped.model:Destroy()
 			table.remove(live, i)
 			continue
 		end
-		if
-			fast
-			and riderPos
-			and (Vector3.new(pos.X, 0, pos.Z) - Vector3.new(riderPos.X, 0, riderPos.Z)).Magnitude < HIT_RADIUS
-			and math.abs(pos.Y - riderPos.Y) < 6
-		then
-			table.remove(live, i)
-			ragdoll(ped, riderVel)
-			continue
+		if riderPos and math.abs(pos.Y - riderPos.Y) < 6 then
+			local gap = (Vector3.new(pos.X, 0, pos.Z) - Vector3.new(riderPos.X, 0, riderPos.Z)).Magnitude
+			if gap < HIT_RADIUS and speed >= Config.PedHitSpeed then
+				table.remove(live, i)
+				ragdoll(ped, riderVel)
+				remote:FireServer("PedHit")
+				continue
+			elseif gap < Config.NearMissRange and speed >= Config.NearMissSpeed and not ped.missed then
+				ped.missed = true -- counted when you pass, once per person (the server caps and checks it)
+				task.delay(0.15, function()
+					if not ped.hit then -- still standing: it really was a miss
+						remote:FireServer("NearMiss")
+					end
+				end)
+			end
 		end
 
 		-- walk, pause at the ends (and now and then), turn round
@@ -306,26 +369,24 @@ RunService.Heartbeat:Connect(function(dt)
 		else
 			ped.pause -= dt
 		end
-		local here, along = pointAt(ped.walk, ped.s)
-		local face = along * ped.dir
-		local targetYaw = math.atan2(-face.X, -face.Z)
-		local turn = (targetYaw - ped.yaw + math.pi) % (2 * math.pi) - math.pi
-		ped.yaw += turn * math.min(1, dt * 8)
-
-		-- limbs: legs and arms swing in opposition while walking, settle while standing
-		ped.phase += dt * (if moving then ped.speed * 1.7 else 0)
-		local amount = if moving then 0.6 else 0
-		local swing = math.sin(ped.phase) * amount
-		local bob = if moving then math.abs(math.cos(ped.phase)) * 0.12 else 0
-		local base = CFrame.new(here + Vector3.new(0, bob, 0)) * CFrame.Angles(0, ped.yaw, 0)
-		local angles = { 0, 0, swing * 0.8, -swing * 0.8, -swing, swing }
-		for k, p in ped.parts do
-			local j = ped.joints[k]
-			local cf = base * CFrame.new(j) * CFrame.Angles(angles[k], 0, 0) * CFrame.new(-j) * ped.rest[k]
-			table.insert(moveParts, p)
-			table.insert(moveCFrames, cf)
-		end
+		local here, along = WalkMath.at(ped.walk, ped.s)
+		pose(ped, here, along * ped.dir, moving, dt)
 	end
+
+	-- customers and thieves: where the server says they are now
+	local now = workspace:GetServerTimeNow()
+	for _, a in actors do
+		local elapsed = math.max(0, now - a.t0)
+		local s, dir = a.s0 + a.speed * elapsed, 1
+		if a.once then
+			s = math.min(s, a.path.length)
+		else
+			s, dir = WalkMath.pingPong(a.path.length, a.s0, a.dir, a.speed, elapsed)
+		end
+		local here, along = WalkMath.at(a.path, s)
+		pose(a.ped, here, along * dir, not a.once or s < a.path.length, dt)
+	end
+
 	if #moveParts > 0 then
 		workspace:BulkMoveTo(moveParts, moveCFrames, Enum.BulkMoveMode.FireCFrameChanged)
 	end
