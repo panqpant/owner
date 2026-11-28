@@ -231,6 +231,36 @@ class Mesh:
             v.co *= 1 + rnd.uniform(-lumpiness, lumpiness)
         return self._merge(tmp, colour, _matrix(loc, (0, 0, rnd.uniform(0, 360)), scale), 0, 1)
 
+    def strip(self, left, right, colour, thickness=1.0):
+        """A solid ribbon between two matching polylines of (x, y, z) top points; `thickness` hangs below."""
+        tmp = bmesh.new()
+        n = len(left)
+        top = [tmp.verts.new(p) for p in left] + [tmp.verts.new(p) for p in right]
+        bot = [tmp.verts.new((p[0], p[1], p[2] - thickness)) for p in list(left) + list(right)]
+        for k in range(n - 1):
+            for layer in (top, bot):
+                tmp.faces.new((layer[k], layer[k + 1], layer[n + k + 1], layer[n + k]))
+            tmp.faces.new((top[k], bot[k], bot[k + 1], top[k + 1]))  # left wall
+            tmp.faces.new((top[n + k], top[n + k + 1], bot[n + k + 1], bot[n + k]))  # right wall
+        for k in (0, n - 1):  # end caps
+            tmp.faces.new((top[k], top[n + k], bot[n + k], bot[k]))
+        bmesh.ops.recalc_face_normals(tmp, faces=tmp.faces)
+        return self._merge(tmp, colour, Matrix.Identity(4), 0, 1)
+
+    def prism(self, outline, z_top, colour, thickness=1.0):
+        """A flat shape (list of (x, y), any simple polygon) extruded down from z_top."""
+        tmp = bmesh.new()
+        top = [tmp.verts.new((x, y, z_top)) for x, y in outline]
+        bot = [tmp.verts.new((x, y, z_top - thickness)) for x, y in outline]
+        tmp.faces.new(top)
+        tmp.faces.new(bot[::-1])
+        n = len(outline)
+        for k in range(n):
+            tmp.faces.new((top[k], bot[k], bot[(k + 1) % n], top[(k + 1) % n]))
+        bmesh.ops.recalc_face_normals(tmp, faces=tmp.faces)
+        bmesh.ops.triangulate(tmp, faces=tmp.faces[:])
+        return self._merge(tmp, colour, Matrix.Identity(4), 0, 1)
+
     def done(self, location=(0, 0, 0), sharp=35) -> bpy.types.Object:
         me = bpy.data.meshes.new(self.name)
         bmesh.ops.remove_doubles(self.bm, verts=self.bm.verts, dist=0.0001)

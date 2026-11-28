@@ -118,7 +118,7 @@ function MapBuilder.build(offset: Vector3?)
 			end
 			placeModel(model, target, v3(asset.centre))
 			recolour(model, item.c)
-			if item.d == "Terrain" then
+			if item.d == "Terrain" or item.d == "Roads" then
 				for _, d in model:GetDescendants() do
 					if d:IsA("MeshPart") then
 						d.CollisionFidelity = Enum.CollisionFidelity.PreciseConvexDecomposition -- hills need real collision, not a box
@@ -127,13 +127,35 @@ function MapBuilder.build(offset: Vector3?)
 			end
 			model.Parent = folder
 			imported += 1
-		elseif item.d == "Terrain" then
-			missing[item.a] = true -- no stand-in block: the flat district ground covers for it
+		elseif item.d == "Terrain" or item.d == "Roads" then
+			missing[item.a] = true -- no stand-in block: flat ground covers for terrain; roads get centreline blocks below
 		else
 			missing[item.a] = true
 			local colour = if item.c then Color3.fromHex(item.c) else Color3.fromRGB(170, 170, 180)
 			local stand = block(item.a, v3(asset.size), target * CFrame.new(v3(asset.centre)), colour)
 			stand.Parent = folder
+		end
+	end
+
+	-- Free-form roads (mountain switchbacks, causeway, roundabout) not imported yet: drivable blocks
+	-- along their centrelines, so the whole network works from day one.
+	local roadAsset = { Mountain = "Road_Mountain", Causeway = "Road_Causeway" }
+	for _, road in layout.freeRoads do
+		local assetName = roadAsset[road.n] or "Road_Roundabout"
+		if templates and templates:FindFirstChild(assetName) then
+			continue
+		end
+		local folder = Instance.new("Folder")
+		folder.Name = road.n
+		folder.Parent = city
+		local pts = road.p
+		local count = if road.c then #pts else #pts - 1
+		for k = 1, count do
+			local a, b = v3(pts[k]), v3(pts[k % #pts + 1])
+			local mid = (a + b) / 2
+			local seg = block("Road", Vector3.new(road.w, 1, (b - a).Magnitude + 1), origin * CFrame.lookAt(mid, b) * CFrame.new(0, -0.5, 0), Color3.fromRGB(64, 66, 74))
+			seg.Material = Enum.Material.Asphalt
+			seg.Parent = folder
 		end
 	end
 

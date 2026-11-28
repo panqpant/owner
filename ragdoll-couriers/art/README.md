@@ -72,6 +72,13 @@ harbour wall at the docks and beaches elsewhere, and a lake in the south-east. I
 files, `Terrain_NW/NE/SW/SE.fbx`, each holding 36 chunks of 250 × 250 studs (about 90k triangles for the
 whole map, with flat areas merged). Import each one as a Model named after its file.
 
+**Road kit (batch 5):** `map/roads.py` lays roads along smooth curves: the **mountain switchbacks**
+(five legs and four hairpins, never steeper than 16%, an avalanche shelter, summit car park), the
+**lake causeway** (a low curving bridge with railings and lamps) and a **roundabout** with a golden-courier
+island. The terrain cuts and fills itself to meet each road, except under bridges. They export as
+`Road_Mountain.fbx`, `Road_Causeway.fbx` and `Road_Roundabout.fbx` (import each as a Model). Grid corners
+are now rounded (`Road_Corner`).
+
 **Put it in Studio:**
 1. Import the models you have into **ServerStorage → CityAssets**, one Model per asset, named like its FBX
    (`House_A`, `Road_Straight`, ...). You don't need all of them: anything missing is drawn as a block of the

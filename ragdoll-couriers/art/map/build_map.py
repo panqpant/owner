@@ -154,6 +154,126 @@ def build_terrain(p):
     return info, items
 
 
+def build_free_roads(p):
+    """Mesh the free-form roads (roads.py) in ~200-stud MeshParts: asphalt, lines, pavements or
+    crash barriers, bridge decks and pillars over water, the avalanche shelter and the roundabout island."""
+    t = p["terrain"]
+    groups = {"Road_Mountain": ["Mountain"], "Road_Causeway": ["Causeway"], "Road_Roundabout": ["Roundabout", "RoundaboutW", "RoundaboutE", "RoundaboutN"]}
+    by_name = {r["name"]: r for r in p["free_roads"]}
+    info, items = {}, []
+    sample_base = 0
+    bridge_of = {}
+    for r in p["free_roads"]:  # bridge flags line up with RoadIndex samples, in road order
+        bridge_of[r["name"]] = t.bridge[sample_base : sample_base + len(r["points"])]
+        sample_base += len(r["points"])
+
+    for asset, names in groups.items():
+        objs = []
+        for name in names:
+            road = by_name[name]
+            pts, hw, closed = road["points"], road["width"] / 2, road.get("closed", False)
+            n = len(pts)
+
+            def frame(k):
+                a, b = pts[(k - 1) % n if closed else max(k - 1, 0)], pts[(k + 1) % n if closed else min(k + 1, n - 1)]
+                dx, dy = b[0] - a[0], b[1] - a[1]
+                ln = math.hypot(dx, dy) or 1
+                return pts[k], (-dy / ln, dx / ln), math.degrees(math.atan2(dy, dx))
+
+            def offset(ks, d, dz=0.0):
+                out = []
+                for k in ks:
+                    (x, y, z), (lx, ly), _ = frame(k % n)
+                    out.append((x + lx * d, y + ly * d, z + dz))
+                return out
+
+            span = list(range(n + 1)) if closed else list(range(n))
+            chunk = 50
+            for c0 in range(0, len(span) - 1, chunk):
+                ks = span[c0 : c0 + chunk + 1]
+                m = lib.Mesh(f"{name}_{c0 // chunk}")
+                lift = 0.03 if "joins" in road else 0.0  # approaches overlap the ring: sit a hair above it
+                m.strip(offset(ks, hw, lift), offset(ks, -hw, lift), "asphalt", thickness=1)
+                if road.get("lines", True):
+                    for side in (-1, 1):
+                        m.strip(offset(ks, side * (hw - 1.0), 0.03), offset(ks, side * (hw - 1.4), 0.03), "yellow" if road["edge"] == "pavement" else "white", thickness=0.03)
+                    for k in ks[:-1]:
+                        if (k // 3) % 2 == 0:
+                            m.strip(offset((k, k + 1), 0.25, 0.03), offset((k, k + 1), -0.25, 0.03), "white", thickness=0.03)
+                bridged = [bridge_of[name][k % n] for k in ks]
+                def open_at(k):  # inside a roundabout entry gap: no pavement or kerb here
+                    if "joins" in road:  # an approach: pavement stops where the ring's begins
+                        jx, jy, jr = road["joins"]
+                        return math.hypot(pts[k % n][0] - jx, pts[k % n][1] - jy) < jr
+                    if "gaps" not in road:
+                        return False
+                    cx, cy, _ = road["island"]
+                    x, y, _ = pts[k % n]
+                    ang = math.atan2(y - cy, x - cx)
+                    return any(abs((ang - a + math.pi) % math.tau - math.pi) < g for a, g in road["gaps"])
+
+                runs, run = [], []
+                for k in ks:
+                    if open_at(k):
+                        if len(run) > 1:
+                            runs.append(run)
+                        run = []
+                    else:
+                        run.append(k)
+                if len(run) > 1:
+                    runs.append(run)
+                for side in (-1, 1):
+                    if road["edge"] == "pavement":
+                        gapped = "joins" in road or ("gaps" in road and side < 0)  # ring: only its outer edge opens
+                        for rk in runs if gapped else [ks]:
+                            m.strip(offset(rk, side * hw, 0.4), offset(rk, side * (hw + 5), 0.4), "concrete", thickness=1.4)
+                    else:  # mountain: gravel shoulder and a crash barrier on both sides
+                        m.strip(offset(ks, side * hw), offset(ks, side * (hw + 3)), "stone", thickness=1.5)
+                        m.strip(offset(ks, side * (hw + 2.3), 2.6), offset(ks, side * (hw + 2.7), 2.6), "chrome", thickness=1.0)
+                    for k in ks[::3]:
+                        (x, y, z), (lx, ly), yaw = frame(k % n)
+                        if road["edge"] != "pavement" or bridged[ks.index(k)]:
+                            d = hw + (2.5 if road["edge"] != "pavement" else 4.6)
+                            m.box((0.5, 0.5, 2.8), (x + lx * d * side, y + ly * d * side, z + 1.3), "steel", rot=(0, 0, yaw), bevel=0)
+                    if any(bridged):  # bridge railing on top of the pavement edge
+                        m.strip(offset(ks, side * (hw + 4.4), 3.2), offset(ks, side * (hw + 4.9), 3.2), "steel", thickness=0.5)
+                if any(bridged):
+                    m.strip(offset(ks, hw + 6, -1), offset(ks, -hw - 6, -1), "concrete", thickness=2.5)  # deck
+                    for k in ks:
+                        if k % 10 == 0 and bridged[ks.index(k)]:
+                            (x, y, z), _, yaw = frame(k % n)
+                            bed = t.water_floor(x, y)
+                            for side in (-1, 1):
+                                (lx, ly) = frame(k % n)[1]
+                                px, py = x + lx * hw * 0.6 * side, y + ly * hw * 0.6 * side
+                                m.cyl(1.6, z - bed, (px, py, (z + bed) / 2 - 1.5), "concrete", segments=12, bevel=0)
+                lo, hi = road.get("shelter", (2, 2))
+                for k in ks[:-1]:
+                    if lo <= k / n <= hi:  # avalanche shelter: roof and pillars
+                        m.strip(offset((k, k + 1), hw + 4, 14), offset((k, k + 1), -hw - 4, 14), "concrete", thickness=1.2)
+                        if k % 4 == 0:
+                            for side in (-1, 1):
+                                (x, y, z), (lx, ly), yaw = frame(k)
+                                d = (hw + 3.5) * side
+                                m.box((1.4, 1.4, 14), (x + lx * d, y + ly * d, z + 7), "concrete", rot=(0, 0, yaw), bevel=0.1)
+                objs.append(m.done(sharp=40))
+            if "island" in road:
+                cx, cy, r = road["island"]
+                circle = [(cx + r * math.cos(a), cy + r * math.sin(a)) for a in (k * math.tau / 48 for k in range(48))]
+                isl = lib.Mesh("Island")
+                isl.prism(circle, 1.2, "grass", thickness=2.2)
+                isl.strip([(x, y, 0.5) for x, y in circle + circle[:1]], [(cx + (x - cx) * 1.06, cy + (y - cy) * 1.06, 0.5) for x, y in circle + circle[:1]], "concrete", thickness=1.5)
+                objs.append(isl.done())
+        meta = lib.export(asset, objs, {"kind": "road"})
+        assert max(part["triangles"] for part in meta["parts"].values()) <= 10000, asset
+        lo, hi = lib.bounds(objs)
+        c = [(lo[k] + hi[k]) / 2 for k in range(3)]
+        info[asset] = {"size": [round(hi[0] - lo[0], 3), round(hi[2] - lo[2], 3), round(hi[1] - lo[1], 3)], "centre": [round(c[0], 3), round(c[2], 3), round(-c[1], 3)], "paint": False}
+        items.append({"asset": asset, "x": 0, "y": 0, "rot": 0, "district": "Roads"})
+        print(f"road {asset}: {meta['triangles']} tris in {len(objs)} parts")
+    return info, items
+
+
 def place_all(p):
     root = bpy.data.collections.new("City")
     bpy.context.scene.collection.children.link(root)
@@ -185,6 +305,9 @@ def write_layout(p, kit_info, extra_items=()):
             {"a": it["asset"], "p": rb(it["x"], it["y"], it.get("z", 0)), "r": it["rot"], "c": it.get("paint"), "d": it["district"], "m": it.get("moving"), "k": it.get("parked")}
             for it in list(p["items"]) + list(extra_items)
         ],
+        # free-form roads as centrelines (every 8 studs), for routing and the no-import fallback
+        "freeRoads": [{"n": r["name"], "w": r["width"], "c": bool(r.get("closed")), "p": [rb(x, y, z) for x, y, z in r["points"][::2]]} for r in p["free_roads"]],
+        "links": [[[a[0], -a[1]], [b[0], -b[1]]] for a, b in p["links"]],
         "water": terrain.WATER,
         "extent": terrain.EXTENT,
         "addresses": [{"d": a["district"], "p": rb(a["x"], a["y"]), "b": a["building"]} for a in p["addresses"]],
@@ -253,8 +376,9 @@ def main(render=True):
     p = city.plan()
     kit_info = build_kit({it["asset"] for it in p["items"]})
     terrain_info, terrain_items = build_terrain(p)
+    road_info, road_items = build_free_roads(p)
     place_all(p)
-    write_layout(p, {**kit_info, **terrain_info}, terrain_items)
+    write_layout(p, {**kit_info, **terrain_info, **road_info}, terrain_items + road_items)
     setup_render(8, 64, 64)
     bpy.ops.wm.save_as_mainfile(filepath=os.path.join(HERE, "city.blend"))
     if not render:
@@ -266,6 +390,9 @@ def main(render=True):
     shot("mountain", (300, 260, 90), (870, 840, 140), lens=30)
     shot("lake", (430, -380, 70), (700, -640, 0), lens=30)
     shot("coast", (-640, -620, 90), (-960, -360, 0), lens=30)
+    shot("switchbacks", (760, 420, 260), (1110, 830, 70), lens=28)
+    shot("causeway", (500, -480, 60), (660, -700, 0), lens=28)
+    shot("roundabout", (560, -800, 70), (640, -880, 0), lens=30)
     shot("suburbs", (12 * C - 60, 4 * C - 150, 70), (14 * C, 6 * C, 0), lens=30)
     shot("oldtown", (2 * C + 10, 11 * C, 45), (-2 * C, 15 * C, 15), lens=26)
     shot("docks", (-12 * C, -6 * C, 140), (-19 * C, 2 * C, 0), lens=30)

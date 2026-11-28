@@ -5,7 +5,7 @@ import sys
 from collections import deque
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from plan import CELL, DIRS, HALF, N, E, S, W, open_sides, plan, roads, rotate, tile_for  # noqa: E402
+from plan import CELL, DIRS, HALF, LINKS, N, E, S, W, open_sides, plan, roads, rotate, tile_for  # noqa: E402
 
 # Tile picking: every connection pattern gets a tile whose rotated open sides match exactly.
 assert rotate({N, E}, 1) == {W, N}
@@ -28,8 +28,8 @@ start = next(iter(cells))
 seen, queue = {start}, deque([start])
 while queue:
     i, j = queue.popleft()
-    for di, dj in DIRS.values():
-        n = (i + di, j + dj)
+    linked = [b for a, b in LINKS if a == (i, j)] + [a for a, b in LINKS if b == (i, j)]
+    for n in [(i + di, j + dj) for di, dj in DIRS.values()] + linked:
         if n in cells and n not in seen:
             seen.add(n)
             queue.append(n)
@@ -37,7 +37,7 @@ assert seen == cells, f"{len(cells - seen)} road cells are cut off, e.g. {sorted
 
 p = plan()
 items = p["items"]
-limit = (HALF + 0.5) * CELL
+limit = 1400  # inside the terrain (EXTENT 1500): the mountain road climbs past the city grid
 for it in items:
     assert -limit <= it["x"] <= limit and -limit <= it["y"] <= limit, it
 
@@ -68,7 +68,8 @@ for k, r in enumerate(rects):
 # Each address is on a road cell's pavement, so a rider can reach it.
 for a in p["addresses"]:
     cell = (round(a["x"] / CELL), round(a["y"] / CELL))
-    assert cell in cells, f"address off the road: {a}"
+    on_free = p["terrain"].free.nearest(a["x"], a["y"])[1] < 20
+    assert cell in cells or on_free, f"address off the road: {a}"
 
 districts = {a["district"] for a in p["addresses"]}
 assert {"Suburbs", "OldTown", "Docks", "Downtown"} <= districts, districts
@@ -80,11 +81,27 @@ from terrain import FLAT, WATER  # noqa: E402
 for cell in list(cells)[::7]:
     assert abs(t.height(cell[0] * CELL, cell[1] * CELL) - FLAT) < 0.01, f"road cell {cell} is not flat"
 for it in items:
-    if not it["asset"].startswith("Road") and it["asset"] != "Docks_QuayWall":
+    if not it["asset"].startswith("Road") and it["asset"] != "Docks_QuayWall" and not it.get("onroad"):
         assert t.height(it["x"], it["y"]) >= WATER + 1, f"{it['asset']} is underwater"
 peak = max(t.height(x, y) for x in range(600, 1100, 25) for y in range(600, 1100, 25))
 assert peak > 200, f"mountain too low: {peak}"
 assert t.height(-1200, 0) < WATER and t.height(680, -620) < WATER, "sea or lake is missing"
+
+# Free roads: graded, joined to the grid, and the bridge actually clears the lake.
+import math  # noqa: E402
+
+free = {r["name"]: r for r in p["free_roads"]}
+mountain = free["Mountain"]["points"]
+for a, b in zip(mountain, mountain[1:]):
+    assert abs(b[2] - a[2]) <= 0.161 * max(math.dist(a[:2], b[:2]), 1e-6) + 1e-6, "mountain road too steep"
+assert mountain[-1][2] > 100, f"mountain road only reaches {mountain[-1][2]}"
+for x, y, z in mountain[::25]:
+    assert abs(t.height(x, y) - (z - 1.6)) < 1.0, f"ground doesn't sit just under the mountain road at {(x, y)}"
+causeway = free["Causeway"]["points"]
+assert any(t.water_floor(x, y) < WATER and z > WATER + 6 for x, y, z in causeway), "causeway never bridges the lake"
+for road, cell in (("Mountain", (21, 14)), ("Causeway", (16, -10))):
+    x, y, _ = free[road]["points"][0]
+    assert math.dist((x, y), (cell[0] * CELL + (20 if road == "Mountain" else 0), cell[1] * CELL - (20 if road == "Causeway" else 0))) < 1, f"{road} doesn't meet its stub"
 
 counts = {}
 for it in items:

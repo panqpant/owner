@@ -55,8 +55,21 @@ class Terrain:
     def __init__(self, p: dict):
         self.roads = {tuple(c) for c in p["roads"]}
         self.flat_rects = [p["districts"][d]["rect"] for d in FLAT_DISTRICTS]
-        # Buildings out in the hills (mountain cabins) get a flat pad.
-        self.pads = [(it["x"], it["y"]) for it in p["items"] if it["asset"] == "Mountain_Cabin"]
+        # Buildings out in the hills (mountain cabins) get a flat pad; so does the summit car park.
+        self.pads = [(it["x"], it["y"], FLAT, 25) for it in p["items"] if it["asset"] == "Mountain_Cabin"]
+        if "summit" in p:
+            sx, sy, sz = p["summit"]
+            self.pads.append((sx, sy, sz - 0.1, 45))
+        from roads import RoadIndex
+
+        for road in p.get("free_roads", []):
+            if "island" in road:  # level ground for the whole roundabout
+                cx, cy, r = road["island"]
+                self.pads.append((cx, cy, FLAT, r + 30))
+
+        self.free = RoadIndex(p.get("free_roads", []))
+        # Where a free road crosses water it's a bridge: the ground underneath is left alone.
+        self.bridge = [self.water_floor(x, y) < z - 1 for x, y, z, *_ in self.free.samples]
 
     # ------------------------------------------------------------ how flat must the ground be here?
     def _road_distance(self, x: float, y: float, reach: int = 4) -> float:
@@ -77,8 +90,9 @@ class Terrain:
             dx = max(x0 - x, 0, x - x1)
             dy = max(y0 - y, 0, y - y1)
             m = max(m, 1 - smoothstep(0, 90, math.hypot(dx, dy)))
-        for px, py in self.pads:
-            m = max(m, 1 - smoothstep(25, 70, math.hypot(x - px, y - py)))
+        for px, py, pz, r in self.pads:
+            if pz == FLAT:
+                m = max(m, 1 - smoothstep(r, r + 45, math.hypot(x - px, y - py)))
         return m
 
     # ------------------------------------------------------------ landscape before flattening
@@ -124,7 +138,35 @@ class Terrain:
         h = FLAT * m + land * (1 - m)
         if x < COAST_X - 300:  # open sea: no backdrop hills to the west
             h = min(h, -20.0)
-        return min(h, self.water_floor(x, y))
+        held = False
+        for px, py, pz, r in self.pads:  # raised pads (summit car park)
+            if pz != FLAT:
+                f = 1 - smoothstep(r, r + max(40, abs(h - pz) * 1.3), math.hypot(x - px, y - py))
+                h += (pz - h) * f
+                held = held or f > 0.5
+        h, road_held = self._free_road(x, y, h)
+        return h if (held or road_held) else min(h, self.water_floor(x, y))
+
+    def _free_road(self, x, y, h):
+        """Cut and fill the ground to meet the free roads. Every nearby stretch of road pulls on the
+        ground, averaged by closeness, so stacked hairpins blend instead of leaving cliffs between them."""
+        if not self.free.samples:
+            return h, False
+        pull, weight, strongest = 0.0, 0.0, 0.0
+        for k, d in self.free.near(x, y, reach=3):
+            if self.bridge[k]:
+                continue
+            _, _, z, hw, _ = self.free.samples[k]
+            # Sit the ground 1.6 under the asphalt (road and shoulders are 1-1.5 thick) so the terrain
+            # grid can't poke through; cuttings get sides about as wide as they are deep.
+            f = 1 - smoothstep(hw + 3, hw + 3 + 30 + min(abs(h - z), 60) * 1.2, d)
+            w = f**6  # the road you're on dominates; a hairpin leg further off only nudges the ground
+            pull += w * (z - 1.6 - h)
+            weight += w
+            strongest = max(strongest, f)
+        if weight == 0:
+            return h, False
+        return h + pull / max(1.0, weight), strongest > 0.5
 
     # ------------------------------------------------------------ ground colour (palette names)
     def colour(self, x: float, y: float, h: float, steepness: float, district: str) -> str:

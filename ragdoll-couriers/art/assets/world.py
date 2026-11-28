@@ -71,7 +71,24 @@ def road_straight():
 
 
 def road_corner():
-    return _tile({"N", "E"})
+    """A rounded corner joining the N and E edges: the road sweeps round instead of turning square."""
+    m = Mesh("Tile")
+    c = (TILE / 2, TILE / 2)  # centre of the turn: the tile's north-east corner
+
+    def arc(r, z, n=24):
+        return [(c[0] - r * math.cos(a), c[1] - r * math.sin(a), z) for a in (k * (math.pi / 2) / n for k in range(n + 1))]
+
+    inner, outer = TILE / 2 - ROAD / 2, TILE / 2 + ROAD / 2  # asphalt from r 5 to r 35
+    m.strip(arc(inner, 0), arc(outer, 0), "asphalt", thickness=1)
+    m.strip(arc(outer, KERB), arc(TILE, KERB), "concrete", thickness=1 + KERB)  # outer pavement
+    corner_fill = [(-TILE / 2, -TILE / 2)] + [(x, y) for x, y, _ in arc(TILE, 0)][::-1]
+    m.prism(corner_fill, KERB, "concrete", thickness=1 + KERB)
+    m.prism([c] + [(x, y) for x, y, _ in arc(inner, 0)], KERB, "concrete", thickness=1 + KERB)  # inner kerb
+    for k in range(0, 24, 3):  # centre dashes
+        a0, a1 = k * (math.pi / 2) / 24, (k + 1.4) * (math.pi / 2) / 24
+        mid = TILE / 2
+        m.strip([(c[0] - (mid - 0.25) * math.cos(a), c[1] - (mid - 0.25) * math.sin(a), 0.04) for a in (a0, a1)], [(c[0] - (mid + 0.25) * math.cos(a), c[1] - (mid + 0.25) * math.sin(a), 0.04) for a in (a0, a1)], "white", thickness=0.04)
+    return [m.done(sharp=60)], {"kind": "roadTile", "tile": TILE, "road": ROAD, "open": ["E", "N"]}
 
 
 def road_t():

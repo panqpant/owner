@@ -107,7 +107,14 @@ def roads() -> set:
     v(-22, -16, -9), h(-16, -22, -8)  # Docks <-> Site
     v(24, -22, -9), h(-22, 8, 24)  # Suburbs <-> Site
     h(22, 7, 14), v(14, 14, 22), h(14, 14, 20)  # Old Town <-> Mountain foot
+    # Free-form roads (roads.py) join the grid at stubs; the roundabout replaces three loop cells.
+    cells.update({(21, 14), (16, -10)})  # mountain road and lake causeway start here
+    cells.difference_update({(15, -22), (16, -22), (17, -22)})
     return cells
+
+
+# Grid cells joined by free-form roads instead of grid tiles (for routing and connectivity).
+LINKS = [((16, -10), (14, -22)), ((16, -10), (18, -22)), ((14, -22), (18, -22))]
 
 
 def open_sides(cell, road_cells) -> set:
@@ -406,17 +413,61 @@ def plan(seed: int = 7) -> dict:
     return result
 
 
+def place_free_road_props(result, t, rnd):
+    """Lamps along the causeway and roundabout, decor on the roundabout island, and the summit car park."""
+    items = result["items"]
+    for road in result["free_roads"]:
+        pts = road["points"]
+        if road["edge"] == "pavement" and len(pts) > 10:
+            for k in range(5, len(pts) - 5, 10):
+                (x0, y0, z), (x1, y1, _) = pts[k], pts[k + 1]
+                dx, dy = x1 - x0, y1 - y0
+                n = math.hypot(dx, dy)
+                lx, ly = -dy / n, dx / n
+                side = 1 if (k // 10) % 2 else -1
+                if "gaps" in road and side < 0:  # outer ring edge: keep lamps out of the entries
+                    cx, cy, _ = road["island"]
+                    ang = math.atan2(y0 - cy, x0 - cx)
+                    if any(abs((ang - a + math.pi) % math.tau - math.pi) < g + 0.15 for a, g in road["gaps"]):
+                        continue
+                off = road["width"] / 2 + 2.5
+                rot = math.degrees(math.atan2(-lx * side, ly * side))  # lamp arm reaches over the road
+                items.append({"asset": "Street_Lamp", "x": round(x0 + lx * off * side, 2), "y": round(y0 + ly * off * side, 2), "rot": round(rot) % 360, "district": "Outskirts", "z": z, "onroad": True})
+        if "island" in road:
+            cx, cy, r = road["island"]
+            items.append({"asset": "Parcel_GoldStatue", "x": cx, "y": cy, "rot": 180, "district": "Outskirts", "z": 1.6, "onroad": True})  # a giant golden courier trophy
+            for k in range(8):
+                a = k / 8 * math.tau
+                items.append({"asset": "Street_Bush" if k % 2 else "Street_Tree", "x": round(cx + math.cos(a) * r * 0.7, 2), "y": round(cy + math.sin(a) * r * 0.7, 2), "rot": rnd.randrange(360), "district": "Outskirts", "onroad": True})
+    mountain = result["free_roads"][0]
+    x, y, z = mountain["points"][-1]
+    result["summit"] = (x, y, z)
+    for k in range(5):  # summit car park, just past the end of the road
+        items.append({"asset": "Traffic_Car", "x": x - 30 + k * 10, "y": y + 26, "rot": 180, "district": "Mountain", "z": z, "paint": CAR_PAINT[k], "parked": True, "onroad": True})
+    for k in (-1, 1):
+        items.append({"asset": "Street_Bench", "x": x + k * 18, "y": y - 24, "rot": 0, "district": "Mountain", "z": z, "onroad": True})
+    result["addresses"].append({"district": "Mountain", "x": x, "y": y, "building": "Summit"})
+
+
 def settle(result: dict):
     """Sit everything on the terrain: props in the hills get the ground height, and anything that
     would end up in the sea or the lake is dropped. Roads and city buildings are on flat ground."""
+    from roads import make_roads
     from terrain import Terrain, WATER
 
+    result["free_roads"] = make_roads(Terrain(result).height)  # graded against the terrain before it's cut
+    result["links"] = LINKS
     t = Terrain(result)
+    rnd = random.Random(11)
+    place_free_road_props(result, t, rnd)
     kept = []
     for it in result["items"]:
-        if it["asset"].startswith("Road") or it["asset"] == "Docks_QuayWall":
+        if it["asset"].startswith("Road") or it["asset"] == "Docks_QuayWall" or it.get("onroad"):
             kept.append(it)
             continue
+        s, d = t.free.nearest(it["x"], it["y"])
+        if s and d < s[3] + 4:
+            continue  # the new roads run through here
         h = t.height(it["x"], it["y"])
         if h < WATER + 1:
             continue
