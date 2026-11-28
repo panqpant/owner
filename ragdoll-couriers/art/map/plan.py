@@ -190,8 +190,10 @@ def plan(seed: int = 7) -> dict:
                 place("SpeedBump", x, y, 0 if along_ns else 90, district)
             if district == "Downtown" and (i, j) in ((4, -13), (-4, -19), (0, -13)):
                 place("Ramp", x, y, 0 if along_ns else 90, district)
-            if i == SEA_I + 1 and district == "Docks" and j % 2 == 0:  # mooring bollards on the quay edge
-                place("Docks_Bollard", x - 17.5, y, 0, district)
+            if i == SEA_I + 1 and district == "Docks":
+                place("Docks_QuayWall", (SEA_I + 0.5) * CELL - 1.5, y, 90, district)  # harbour wall faces the sea
+                if j % 2 == 0:  # mooring bollards on the quay edge
+                    place("Docks_Bollard", x - 17.5, y, 0, district)
             if district == "Docks" and (i, j) == (-14, 2):
                 place("Ramp", x, y, 0, district)
         elif name in ("Road_T", "Road_Cross") and district in ("Hub", "Suburbs", "OldTown", "Downtown") and (i + j) % 2 == 0:
@@ -377,12 +379,17 @@ def plan(seed: int = 7) -> dict:
         place("Street_Bench", cx, cy - 10, 0, "Hub")
         place("Street_Bench", cx, cy + 10, 180, "Hub")
         place("Street_Lamp", cx + 12, cy, 0, "Hub")
+    for side in (-1, 1):  # hedges frame the plaza, with gaps to ride through in the middle and corners
+        for t in range(-150, 151, 10):
+            if 40 < abs(t) < 150:
+                place("Street_Hedge", side * 176, t, 90, "Hub")
+                place("Street_Hedge", t, side * 176, 0, "Hub")
     for y in range(-180, 61, 40):  # tree-lined drive from the spawn to the south exit
         for x in (-22, 22):
             if abs(y) > 30:
                 place("Street_Tree", x, y, 0, "Hub")
 
-    return {
+    result = {
         "cell": CELL,
         "half": HALF,
         "items": items,
@@ -393,3 +400,26 @@ def plan(seed: int = 7) -> dict:
         "districts": {k: {"rect": [r[0] * CELL - CELL / 2, r[1] * CELL - CELL / 2, r[2] * CELL + CELL / 2, r[3] * CELL + CELL / 2], "colour": c} for k, (r, c) in DISTRICTS.items()},
         "hub_cells": sorted(hub_special),
     }
+    settle(result)
+    return result
+
+
+def settle(result: dict):
+    """Sit everything on the terrain: props in the hills get the ground height, and anything that
+    would end up in the sea or the lake is dropped. Roads and city buildings are on flat ground."""
+    from terrain import Terrain, WATER
+
+    t = Terrain(result)
+    kept = []
+    for it in result["items"]:
+        if it["asset"].startswith("Road") or it["asset"] == "Docks_QuayWall":
+            kept.append(it)
+            continue
+        h = t.height(it["x"], it["y"])
+        if h < WATER + 1:
+            continue
+        if h > 0.5:
+            it["z"] = round(it.get("z", 0) + h, 2)
+        kept.append(it)
+    result["items"] = kept
+    result["terrain"] = t

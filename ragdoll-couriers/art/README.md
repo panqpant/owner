@@ -66,6 +66,12 @@ python map/build_map.py          # builds map/city.blend, renders previews/map_*
 **Open the city in Blender:** `map/city.blend`. Each piece is a linked instance of the kit (the `Kit`
 collection), so editing one house edits every copy. Paint colours come from each instance's object colour.
 
+**Terrain (batch 4):** `map/terrain.py` shapes the land: the city stays flat, with rolling hills in the
+outskirts, a snow-capped mountain in the north-east, a ring of backdrop hills past the edge, a coast with a
+harbour wall at the docks and beaches elsewhere, and a lake in the south-east. It's exported as four
+files, `Terrain_NW/NE/SW/SE.fbx`, each holding 36 chunks of 250 × 250 studs (about 90k triangles for the
+whole map, with flat areas merged). Import each one as a Model named after its file.
+
 **Put it in Studio:**
 1. Import the models you have into **ServerStorage → CityAssets**, one Model per asset, named like its FBX
    (`House_A`, `Road_Straight`, ...). You don't need all of them: anything missing is drawn as a block of the

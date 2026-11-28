@@ -66,25 +66,33 @@ function MapBuilder.build(offset: Vector3?)
 	local city = Instance.new("Folder")
 	city.Name = "City"
 
-	-- Ground per district (placeholder until the terrain batch) and the sea to the west.
+	-- Water everywhere at sea level: the terrain covers it except in the sea and the lake.
+	-- Parts max out at 2048 studs, so the sheet is four tiles.
 	local groundFolder = Instance.new("Folder")
 	groundFolder.Name = "Ground"
 	groundFolder.Parent = city
-	local layer = 0
-	for _, name in { "Outskirts", "Hub", "Suburbs", "OldTown", "Docks", "Downtown", "Mountain" } do
-		local d = layout.districts[name]
-		local r = d.rect
-		layer += 1
-		local g = block(name, Vector3.new(r[3] - r[1], 1, r[4] - r[2]), origin * CFrame.new((r[1] + r[3]) / 2, -0.6 + layer * 0.002, (r[2] + r[4]) / 2), Color3.fromHex(d.colour))
-		g.Material = Enum.Material.Grass
-		g.Parent = groundFolder
+	local half = layout.extent / 2
+	for _, q in { { -1, -1 }, { -1, 1 }, { 1, -1 }, { 1, 1 } } do
+		local water = block("Water", Vector3.new(layout.extent, 1, layout.extent), origin * CFrame.new(q[1] * half, layout.water - 0.5, q[2] * half), Color3.fromHex("3f9be0"))
+		water.Material = Enum.Material.Glass
+		water.Transparency = 0.2
+		water.CanCollide = false -- ride off the quay and the parcel is lost
+		water.Parent = groundFolder
 	end
-	local seaWest = -(layout.cell * 25.5) - 400
-	local sea = block("Sea", Vector3.new(layout.seaXMax - seaWest, 1, layout.cell * 51 + 800), origin * CFrame.new((seaWest + layout.seaXMax) / 2, -3, 0), Color3.fromHex("3f9be0"))
-	sea.Material = Enum.Material.Glass
-	sea.Transparency = 0.25
-	sea.CanCollide = false -- ride off the quay and the parcel is lost
-	sea.Parent = groundFolder
+
+	-- Until the terrain is imported, flat district-coloured ground stands in for it.
+	local hasTerrain = templates ~= nil and templates:FindFirstChild("Terrain_NW") ~= nil
+	if not hasTerrain then
+		local layer = 0
+		for _, name in { "Outskirts", "Hub", "Suburbs", "OldTown", "Docks", "Downtown", "Mountain" } do
+			local r = layout.districts[name].rect
+			layer += 1
+			local g =
+				block(name, Vector3.new(r[3] - r[1], 1, r[4] - r[2]), origin * CFrame.new((r[1] + r[3]) / 2, -0.6 + layer * 0.002, (r[2] + r[4]) / 2), Color3.fromHex(layout.districts[name].colour))
+			g.Material = Enum.Material.Grass
+			g.Parent = groundFolder
+		end
+	end
 
 	-- Every placed piece, grouped by district so the map streams and selects sensibly.
 	local districts: { [string]: Folder } = {}
@@ -110,8 +118,17 @@ function MapBuilder.build(offset: Vector3?)
 			end
 			placeModel(model, target, v3(asset.centre))
 			recolour(model, item.c)
+			if item.d == "Terrain" then
+				for _, d in model:GetDescendants() do
+					if d:IsA("MeshPart") then
+						d.CollisionFidelity = Enum.CollisionFidelity.PreciseConvexDecomposition -- hills need real collision, not a box
+					end
+				end
+			end
 			model.Parent = folder
 			imported += 1
+		elseif item.d == "Terrain" then
+			missing[item.a] = true -- no stand-in block: the flat district ground covers for it
 		else
 			missing[item.a] = true
 			local colour = if item.c then Color3.fromHex(item.c) else Color3.fromRGB(170, 170, 180)

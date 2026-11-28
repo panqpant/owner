@@ -333,6 +333,22 @@ def warehouse():
     return [paint.done(), body.done()], {"kind": "building", "footprint": [w + 2, d + 2]}
 
 
+def quay_wall():
+    """40 studs of harbour wall. Top is at street level; the face (+Y) drops 14 studs to deep water."""
+    m = Mesh("QuayWall")
+    m.box((40, 3, 14.4), (0, 0, -7), "concrete", bevel=0.15)
+    m.box((40, 3.2, 0.5), (0, 0.05, 0.15), "yellow", bevel=0.05)  # edge line
+    for k in range(-3, 4):
+        m.box((0.4, 0.2, 14), (k * 5.7, 1.55, -7.2), "stone", bevel=0)  # pour joints
+    for x in (-14, 0, 14):
+        m.tire(1.3, 0.9, (x, 2.2, -2.5), "rubber", "rubber", rot=(90, 0, 0), segments=16)  # fenders
+    for k in range(10):
+        m.tube((9.2, 1.7, -1 - k * 1.2), (10.8, 1.7, -1 - k * 1.2), 0.08, "steel", segments=6)  # ladder
+    for x in (9.2, 10.8):
+        m.tube((x, 1.7, 0.2), (x, 1.7, -12.5), 0.1, "steel", segments=6)
+    return _one(m, "prop", note="top at y = 0.4; place one per 40 studs of quay")
+
+
 def bollard():
     m = Mesh("Bollard")
     m.cyl(0.8, 2.2, (0, 0, 1.1), "charcoal", segments=16, bevel=0.1)
@@ -649,6 +665,14 @@ def lamp_post():
     return _one(m, "prop", light=[0, 11.6, -2.6], note="put a PointLight/SpotLight at `light` (Roblox space)")
 
 
+def hedge():
+    m = Mesh("Hedge")
+    m.box((10, 2.4, 2.6), (0, 0, 1.3), "darkgreen", bevel=0.5, segments=2)
+    for k in range(5):
+        m.rock(0.9, (-4 + k * 2, 0, 2.6), "green", scale=(1.3, 1.2, 0.7), seed=60 + k, lumpiness=0.15, subdivisions=1)
+    return [m.done(sharp=20)], {"kind": "prop", "note": "10 studs long"}
+
+
 def bench():
     m = Mesh("Bench")
     for k in range(3):
@@ -858,6 +882,7 @@ ASSETS = {
     "Docks_Container": container,
     "Docks_Forklift": forklift,
     "Docks_Warehouse": warehouse,
+    "Docks_QuayWall": quay_wall,
     "Docks_Bollard": bollard,
     "Docks_Barrel": barrel,
     "Docks_Crate": crate,
@@ -884,6 +909,7 @@ ASSETS = {
     "Street_Tree": tree_round,
     "Street_Bush": bush,
     "Street_Lamp": lamp_post,
+    "Street_Hedge": hedge,
     "Street_Bench": bench,
     "Street_Fence": fence,
     "Street_Hydrant": hydrant,

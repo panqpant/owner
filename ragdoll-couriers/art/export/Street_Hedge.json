@@ -1,0 +1,20 @@
+{
+ "triangles": 208,
+ "parts": {
+  "Hedge": {
+   "triangles": 208,
+   "centre": [
+    0.0,
+    1.629,
+    -0.0
+   ]
+  }
+ },
+ "size_studs": [
+  10.0,
+  3.26,
+  2.4
+ ],
+ "kind": "prop",
+ "note": "10 studs long"
+}

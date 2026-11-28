@@ -73,6 +73,19 @@ for a in p["addresses"]:
 districts = {a["district"] for a in p["addresses"]}
 assert {"Suburbs", "OldTown", "Docks", "Downtown"} <= districts, districts
 
+# Terrain: the city is flat, the landscape is not, and nothing is left underwater.
+t = p["terrain"]
+from terrain import FLAT, WATER  # noqa: E402
+
+for cell in list(cells)[::7]:
+    assert abs(t.height(cell[0] * CELL, cell[1] * CELL) - FLAT) < 0.01, f"road cell {cell} is not flat"
+for it in items:
+    if not it["asset"].startswith("Road") and it["asset"] != "Docks_QuayWall":
+        assert t.height(it["x"], it["y"]) >= WATER + 1, f"{it['asset']} is underwater"
+peak = max(t.height(x, y) for x in range(600, 1100, 25) for y in range(600, 1100, 25))
+assert peak > 200, f"mountain too low: {peak}"
+assert t.height(-1200, 0) < WATER and t.height(680, -620) < WATER, "sea or lake is missing"
+
 counts = {}
 for it in items:
     counts[it["asset"]] = counts.get(it["asset"], 0) + 1

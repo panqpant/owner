@@ -25,6 +25,7 @@ import bpy  # noqa: E402
 from mathutils import Vector  # noqa: E402
 
 import plan as city  # noqa: E402
+import terrain  # noqa: E402
 from assets import parcels, vehicles, world  # noqa: E402
 
 KIT = {**world.ASSETS, **vehicles.ASSETS, **parcels.ASSETS}
@@ -81,35 +82,76 @@ def build_kit(names):
     return info
 
 
-def ground(p):
-    """Flat district colours and the sea. Placeholder until the terrain batch."""
-    m = lib.Mesh("Ground")
-    order = list(city.DISTRICTS)
-    for name in order:
-        x0, y0, x1, y1 = p["districts"][name]["rect"]
-        m.box((x1 - x0, y1 - y0, 1), ((x0 + x1) / 2, (y0 + y1) / 2, -0.55 + order.index(name) * 0.001), "grass", bevel=0)
-    obj = m.done()
-    mat = bpy.data.materials.new("Ground")
+STEP, CHUNK = 10, 250  # terrain grid spacing and chunk size, studs
+
+
+def build_terrain(p):
+    """Faceted terrain in 250-stud chunks (one MeshPart each), exported as four quarter FBX files.
+    Flat same-colour areas are merged into big faces, so the city costs almost nothing."""
+    import bmesh
+
+    t = p["terrain"]
+    n = int(2 * terrain.EXTENT / STEP) + 1
+    xs = [-terrain.EXTENT + k * STEP for k in range(n)]
+    heights = [[t.height(x, y) for y in xs] for x in xs]
+    per = CHUNK // STEP
+    nch = (n - 1) // per
+    coll = bpy.data.collections.new("Terrain")
+    bpy.context.scene.collection.children.link(coll)
+    quarters = {}
+    for cx in range(nch):
+        for cy in range(nch):
+            centre = (xs[cx * per] + CHUNK / 2, xs[cy * per] + CHUNK / 2)
+            bm = bmesh.new()
+            uv = bm.loops.layers.uv.new("UVMap")
+            v = {}
+            for a in range(per + 1):
+                for b in range(per + 1):
+                    ix, iy = cx * per + a, cy * per + b
+                    v[a, b] = bm.verts.new((xs[ix] - centre[0], xs[iy] - centre[1], heights[ix][iy]))
+            for a in range(per):
+                for b in range(per):
+                    q = (v[a, b], v[a + 1, b], v[a + 1, b + 1], v[a, b + 1])
+                    tris = ((q[0], q[1], q[2]), (q[0], q[2], q[3])) if (a + b) % 2 == 0 else ((q[0], q[1], q[3]), (q[1], q[2], q[3]))
+                    for tri in tris:
+                        f = bm.faces.new(tri)
+                        f.normal_update()
+                        c = (tri[0].co + tri[1].co + tri[2].co) / 3
+                        wx, wy = c.x + centre[0], c.y + centre[1]
+                        district = city.district_of(round(wx / city.CELL), round(wy / city.CELL))
+                        u = lib.uv_of(t.colour(wx, wy, c.z, 1 - abs(f.normal.z), district))
+                        for loop in f.loops:
+                            loop[uv].uv = u
+            bmesh.ops.dissolve_limit(bm, angle_limit=math.radians(1), verts=bm.verts[:], edges=bm.edges[:], delimit={"UV"})
+            bmesh.ops.triangulate(bm, faces=bm.faces[:])
+            me = bpy.data.meshes.new(f"Chunk_{cx}_{cy}")
+            bm.to_mesh(me)
+            bm.free()
+            me.materials.append(lib.material())
+            obj = bpy.data.objects.new(f"Chunk_{cx}_{cy}", me)
+            obj.location = (centre[0], centre[1], 0)
+            coll.objects.link(obj)
+            name = "Terrain_" + ("N" if cy >= nch // 2 else "S") + ("E" if cx >= nch // 2 else "W")
+            quarters.setdefault(name, []).append(obj)
+    info, items = {}, []
+    for name, objs in quarters.items():
+        meta = lib.export(name, objs, {"kind": "terrain"})
+        assert max(part["triangles"] for part in meta["parts"].values()) <= 10000, name
+        lo, hi = lib.bounds(objs)
+        c = [(lo[k] + hi[k]) / 2 for k in range(3)]
+        info[name] = {"size": [round(hi[0] - lo[0], 3), round(hi[2] - lo[2], 3), round(hi[1] - lo[1], 3)], "centre": [round(c[0], 3), round(c[2], 3), round(-c[1], 3)], "paint": False}
+        items.append({"asset": name, "x": 0, "y": 0, "rot": 0, "district": "Terrain"})
+        print(f"terrain {name}: {meta['triangles']} tris in {len(objs)} chunks")
+
+    water = lib.Mesh("Water").box((2 * terrain.EXTENT, 2 * terrain.EXTENT, 0.2), (0, 0, terrain.WATER - 0.1), "water", bevel=0).done()
+    mat = bpy.data.materials.new("WaterMat")
     mat.use_nodes = True
-    obj.data.materials[0] = mat
-    # colour per district via a simple face colour attribute
-    col = obj.data.color_attributes.new("Col", "BYTE_COLOR", "CORNER")
-    faces_per_box = 6
-    for k, poly in enumerate(obj.data.polygons):
-        h = p["districts"][order[min(k // faces_per_box, len(order) - 1)]]["colour"]
-        for li in poly.loop_indices:
-            col.data[li].color = hexcol(h)
-    attr = mat.node_tree.nodes.new("ShaderNodeVertexColor")
-    attr.layer_name = "Col"
-    mat.node_tree.links.new(attr.outputs["Color"], mat.node_tree.nodes["Principled BSDF"].inputs["Base Color"])
-    half = (city.HALF + 0.5) * city.CELL
-    sea_x1 = (city.SEA_I + 0.5) * city.CELL
-    sea = lib.Mesh("Sea").box((sea_x1 + half + 400, 2 * half + 800, 1), ((sea_x1 - half - 400) / 2, 0, -2.5), "water", bevel=0).done()
-    sea.data.materials[0] = bpy.data.materials.new("SeaMat")
-    sea.data.materials[0].use_nodes = True
-    b = sea.data.materials[0].node_tree.nodes["Principled BSDF"]
+    b = mat.node_tree.nodes["Principled BSDF"]
     b.inputs["Base Color"].default_value = hexcol("3f9be0")
-    b.inputs["Roughness"].default_value = 0.15
+    b.inputs["Roughness"].default_value = 0.08
+    b.inputs["Alpha"].default_value = 0.85
+    water.data.materials[0] = mat
+    return info, items
 
 
 def place_all(p):
@@ -131,7 +173,7 @@ def place_all(p):
         g.objects.link(e)
 
 
-def write_layout(p, kit_info):
+def write_layout(p, kit_info, extra_items=()):
     def rb(x, y, z=0.0):
         return [round(x, 2), round(z, 2), round(-y, 2)]
 
@@ -141,8 +183,10 @@ def write_layout(p, kit_info):
         # m = a hazard the game moves (forklift, dog, wrecking ball, boulder); k = a parked car
         "items": [
             {"a": it["asset"], "p": rb(it["x"], it["y"], it.get("z", 0)), "r": it["rot"], "c": it.get("paint"), "d": it["district"], "m": it.get("moving"), "k": it.get("parked")}
-            for it in p["items"]
+            for it in list(p["items"]) + list(extra_items)
         ],
+        "water": terrain.WATER,
+        "extent": terrain.EXTENT,
         "addresses": [{"d": a["district"], "p": rb(a["x"], a["y"]), "b": a["building"]} for a in p["addresses"]],
         "spawn": {"p": rb(p["spawn"]["x"], p["spawn"]["y"]), "r": p["spawn"]["rot"]},
         # rect in Roblox x/z: [xMin, zMin, xMax, zMax]
@@ -208,16 +252,20 @@ def main(render=True):
     lib.write_palette()
     p = city.plan()
     kit_info = build_kit({it["asset"] for it in p["items"]})
-    ground(p)
+    terrain_info, terrain_items = build_terrain(p)
     place_all(p)
-    write_layout(p, kit_info)
+    write_layout(p, {**kit_info, **terrain_info}, terrain_items)
     setup_render(8, 64, 64)
     bpy.ops.wm.save_as_mainfile(filepath=os.path.join(HERE, "city.blend"))
     if not render:
         return
     C = city.CELL
     shot("topdown", (0, 0, 3000), (0, 0, 0), ortho=2100, samples=24, res=(2048, 2048))
+    shot("world", (0, 0, 4000), (0, 0, 0), ortho=3000, samples=24, res=(2048, 2048))
     shot("hub", (230, -220, 150), (0, 60, 10), lens=28)
+    shot("mountain", (300, 260, 90), (870, 840, 140), lens=30)
+    shot("lake", (430, -380, 70), (700, -640, 0), lens=30)
+    shot("coast", (-640, -620, 90), (-960, -360, 0), lens=30)
     shot("suburbs", (12 * C - 60, 4 * C - 150, 70), (14 * C, 6 * C, 0), lens=30)
     shot("oldtown", (2 * C + 10, 11 * C, 45), (-2 * C, 15 * C, 15), lens=26)
     shot("docks", (-12 * C, -6 * C, 140), (-19 * C, 2 * C, 0), lens=30)
