@@ -16,6 +16,7 @@ COAST_X = (SEA_I + 0.5) * CELL  # -900: the docks quay edge
 DOCKS_Y = (-9.5 * CELL, 9.5 * CELL)  # quay wall here; beaches north and south of it
 PEAK = (870.0, 840.0, 290.0)  # x, y, height
 LAKE = (680.0, -620.0, 175.0, 125.0)  # centre x, y, radius x, radius y
+HUB_PARKS = ((-130, -120), (130, -120), (-140, 10), (140, 10))  # same as the groves in plan.py
 FLAT_DISTRICTS = ("Hub", "Suburbs", "OldTown", "Docks", "Downtown")
 
 
@@ -89,7 +90,7 @@ class Terrain:
         r = math.hypot(x - px, y - py)
         ridge = 0.75 + 0.5 * fbm(x / 90, y / 90, 21)
         mountain = ph * max(0.0, 1 - r / 430) ** 1.6 * ridge
-        edge = max(abs(x), abs(y))
+        edge = (abs(x) ** 8 + abs(y) ** 8) ** 0.125  # a rounded square: no crease along the diagonals
         backdrop = smoothstep(1040, 1380, edge) * (110 + fbm(x / 180, y / 180, 5) * 110)
         return hills + mountain + backdrop
 
@@ -105,16 +106,22 @@ class Terrain:
             top = COAST_X - 5 - fbm(y / 150, 0.5, 31) * 40
             if x < top:
                 floor = max(FLAT - (top - x) * 0.12, -40)
-        lx, ly, rx, ry = LAKE
-        d = math.hypot((x - lx) / rx, (y - ly) / ry) * (0.85 + 0.3 * fbm(x / 60, y / 60, 41))
+        d = Terrain.lake_distance(x, y)
         if d < 1.25:  # sloping bank, then a flat-ish bed
-            bed = WATER + 2 - (1.25 - d) * 40 if d > 0.9 else -15 - (0.9 - d) * 5
+            bed = WATER + 2.5 - (1.25 - d) * 30 if d > 0.75 else -12.5 - (0.75 - d) * 5
             floor = min(floor, bed)
         return floor
 
+    @staticmethod
+    def lake_distance(x: float, y: float) -> float:
+        """1.0 is roughly the lake's edge; the outline wobbles."""
+        lx, ly, rx, ry = LAKE
+        return math.hypot((x - lx) / rx, (y - ly) / ry) * (0.85 + 0.3 * fbm(x / 60, y / 60, 41))
+
     def height(self, x: float, y: float) -> float:
         m = self.flatness(x, y)
-        h = FLAT * m + self.land(x, y) * (1 - m)
+        land = self.land(x, y) * smoothstep(1.2, 2.0, self.lake_distance(x, y))  # hills ease down to the shore
+        h = FLAT * m + land * (1 - m)
         if x < COAST_X - 300:  # open sea: no backdrop hills to the west
             h = min(h, -20.0)
         return min(h, self.water_floor(x, y))
@@ -123,19 +130,21 @@ class Terrain:
     def colour(self, x: float, y: float, h: float, steepness: float, district: str) -> str:
         if h < WATER + 0.5:
             return "sand" if h > WATER - 4 else "stone"
-        if h > 210:
-            return "white"  # snow cap
+        if h > 200 and math.hypot(x - PEAK[0], y - PEAK[1]) < 260:
+            return "white"  # snow cap on the mountain only
         if steepness > 0.55 and h > 15:
             return "stone" if (int(x / 30) + int(y / 30)) % 3 else "grey"
         if h < WATER + 3.5 and self.water_floor(x, y) != math.inf:
             return "sand"
-        checker = (math.floor(x / 20) + math.floor(y / 20)) % 2
+        patch = fbm(x / 90, y / 90, 55) > 0.6  # soft worn patches, not a pattern
         if district == "Hub":
-            return "concrete" if checker else "lightgrey"  # paved plaza
+            if any(math.hypot(x - px, y - py) < 40 for px, py in HUB_PARKS):
+                return "grass"
+            return "concrete" if patch else "lightgrey"
         if district == "Downtown" or district == "Docks":
-            return "concrete" if checker else "stone"
+            return "stone" if patch else "concrete"
         if district == "OldTown":
-            return "tan" if checker else "sand"
+            return "sand" if patch else "tan"
         if district == "Suburbs":
             return "grass"
         n = fbm(x / 120, y / 120, 77)

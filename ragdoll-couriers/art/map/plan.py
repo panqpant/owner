@@ -372,7 +372,9 @@ def plan(seed: int = 7) -> dict:
         place("Traffic_Car", 95 + k * 10, 160, 180, "Hub", CAR_PAINT[k % len(CAR_PAINT)], parked=True)
     for x in (-25, 25):
         place("Street_Bin", x, 105, 180, "Hub")
-    for cx, cy in ((-130, -120), (130, -120), (-140, 10), (140, 10)):  # four small parks
+    from terrain import HUB_PARKS
+
+    for cx, cy in HUB_PARKS:  # four small parks (grass under them comes from terrain.py)
         for k in range(7):
             a = k / 7 * math.tau
             place(rnd.choice(["Street_Tree", "Street_Tree", "Street_Bush"]), cx + math.cos(a) * 28, cy + math.sin(a) * 28, rnd.randrange(360), "Hub")
