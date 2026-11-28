@@ -1,0 +1,19 @@
+{
+ "triangles": 420,
+ "parts": {
+  "PhoneBox": {
+   "triangles": 420,
+   "centre": [
+    0.0,
+    4.55,
+    -0.0
+   ]
+  }
+ },
+ "size_studs": [
+  3.3,
+  9.1,
+  3.3
+ ],
+ "kind": "prop"
+}

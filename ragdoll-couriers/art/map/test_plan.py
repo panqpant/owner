@@ -133,6 +133,22 @@ quay = {round(it["y"] / CELL) for it in items if it["asset"] == "Docks_QuayWall"
 docks_quay = {j for i, j in cells if i == -22 and -9 <= j <= 9}
 assert docks_quay <= quay, f"harbour wall missing at quay cells {sorted(docks_quay - quay)}"
 
+# Batch 7: every piece of dressing is used, and nothing parked or planted sits on a straight road's
+# asphalt (only things meant to be there: moving traffic, speed bumps, ramps, cranes over the quay road).
+for asset in ("Traffic_Bus", "Traffic_Taxi", "Traffic_Van", "Street_Billboard", "Street_PowerPole", "Street_FlowerBed", "Street_BusStop",
+              "Street_Postbox", "Street_PhoneBox", "Street_BikeRack", "Bird_Seagull", "Bird_Pigeon"):
+    assert asset in names, f"{asset} was never placed"
+straight = {}
+for it in items:
+    if it["asset"] in ("Road_Straight", "Road_Cobble"):
+        straight[(round(it["x"] / CELL), round(it["y"] / CELL))] = it["rot"] % 180 == 0  # True: runs north-south
+allowed = ("Road_", "SpeedBump", "Ramp", "Docks_GantryCrane", "Docks_QuayWall")
+for it in items:
+    cell = (round(it["x"] / CELL), round(it["y"] / CELL))
+    if cell in straight and not it["asset"].startswith(allowed) and not it.get("moving"):
+        across = abs(it["x"] - cell[0] * CELL) if straight[cell] else abs(it["y"] - cell[1] * CELL)
+        assert across >= 15, f"{it['asset']} is on the asphalt at {cell} ({across:.1f} from the centre line)"
+
 counts = {}
 for it in items:
     counts[it["asset"]] = counts.get(it["asset"], 0) + 1

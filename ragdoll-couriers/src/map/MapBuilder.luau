@@ -118,6 +118,14 @@ function MapBuilder.build(offset: Vector3?)
 			end
 			placeModel(model, target, v3(asset.centre))
 			recolour(model, item.c)
+			if item.d == "Wires" then
+				for _, d in model:GetDescendants() do
+					if d:IsA("BasePart") then
+						d.CanCollide = false -- riders pass under the cables
+						d.CanQuery = false
+					end
+				end
+			end
 			if item.d == "Terrain" or item.d == "Roads" then
 				for _, d in model:GetDescendants() do
 					if d:IsA("MeshPart") then
@@ -127,7 +135,7 @@ function MapBuilder.build(offset: Vector3?)
 			end
 			model.Parent = folder
 			imported += 1
-		elseif item.d == "Terrain" or item.d == "Roads" then
+		elseif item.d == "Terrain" or item.d == "Roads" or item.d == "Wires" then
 			missing[item.a] = true -- no stand-in block: flat ground covers for terrain; roads get centreline blocks below
 		else
 			missing[item.a] = true

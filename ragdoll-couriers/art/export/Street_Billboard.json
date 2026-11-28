@@ -1,0 +1,28 @@
+{
+ "triangles": 516,
+ "parts": {
+  "Frame": {
+   "triangles": 504,
+   "centre": [
+    0.0,
+    12.01,
+    -1.037
+   ]
+  },
+  "Panel": {
+   "triangles": 12,
+   "centre": [
+    0.0,
+    16.0,
+    -0.2
+   ]
+  }
+ },
+ "size_studs": [
+  25.0,
+  24.02,
+  4.07
+ ],
+ "kind": "prop",
+ "note": "Panel's front: a decal slot for ads or crash-clip art"
+}

@@ -1,0 +1,27 @@
+{
+ "triangles": 5032,
+ "parts": {
+  "Paint": {
+   "triangles": 216,
+   "centre": [
+    0.0,
+    5.0,
+    -0.0
+   ]
+  },
+  "Body": {
+   "triangles": 4816,
+   "centre": [
+    0.0,
+    4.2,
+    -0.0
+   ]
+  }
+ },
+ "size_studs": [
+  7.4,
+  9.0,
+  17.0
+ ],
+ "kind": "hazard"
+}

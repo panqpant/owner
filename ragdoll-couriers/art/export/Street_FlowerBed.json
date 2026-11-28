@@ -1,0 +1,19 @@
+{
+ "triangles": 1224,
+ "parts": {
+  "FlowerBed": {
+   "triangles": 1224,
+   "centre": [
+    0.0,
+    1.11,
+    -0.0
+   ]
+  }
+ },
+ "size_studs": [
+  6.0,
+  2.22,
+  3.0
+ ],
+ "kind": "prop"
+}

@@ -1,0 +1,20 @@
+{
+ "triangles": 6912,
+ "parts": {
+  "Lines_0": {
+   "triangles": 6912,
+   "centre": [
+    18.0,
+    20.6,
+    102.0
+   ]
+  }
+ },
+ "size_studs": [
+  1846.16,
+  2.16,
+  1606.16
+ ],
+ "kind": "wires",
+ "note": "CanCollide off: riders pass underneath"
+}

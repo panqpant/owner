@@ -1,0 +1,20 @@
+{
+ "triangles": 444,
+ "parts": {
+  "Seagull": {
+   "triangles": 444,
+   "centre": [
+    0.0,
+    0.808,
+    -0.212
+   ]
+  }
+ },
+ "size_studs": [
+  0.96,
+  1.62,
+  1.83
+ ],
+ "kind": "prop",
+ "note": "scatters when you crash near it (animate in code)"
+}

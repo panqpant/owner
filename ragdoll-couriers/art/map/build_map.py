@@ -26,9 +26,9 @@ from mathutils import Vector  # noqa: E402
 
 import plan as city  # noqa: E402
 import terrain  # noqa: E402
-from assets import landmarks, parcels, vehicles, world  # noqa: E402
+from assets import dressing, landmarks, parcels, vehicles, world  # noqa: E402
 
-KIT = {**world.ASSETS, **landmarks.ASSETS, **vehicles.ASSETS, **parcels.ASSETS}
+KIT = {**world.ASSETS, **landmarks.ASSETS, **dressing.ASSETS, **vehicles.ASSETS, **parcels.ASSETS}
 LAYOUT = os.path.join(os.path.dirname(ART), "src", "map", "Layout.luau")
 
 
@@ -387,6 +387,44 @@ def build_free_roads(p):
     return info, items
 
 
+def build_power_lines(p):
+    """Sagging cables between consecutive power poles on the same straight run (80 studs apart).
+    No collision: riders pass under them. Exported like the roads, as one asset of ~10k-tri parts."""
+    poles = [it for it in p["items"] if it["asset"] == "Street_PowerPole"]
+    runs = {}
+    for it in poles:
+        runs.setdefault(tuple(it["line"]), []).append(it)
+    spans = []
+    for (along_ns, _), group in runs.items():
+        group.sort(key=lambda it: it["y"] if along_ns else it["x"])
+        for a, b in zip(group, group[1:]):
+            if math.dist((a["x"], a["y"]), (b["x"], b["y"])) <= 81:
+                spans.append((a, b, along_ns))
+    objs, m, count = [], None, 0
+    for a, b, along_ns in spans:
+        if m is None or count >= 40:
+            if m is not None:
+                objs.append(m.done(sharp=60))
+            m, count = lib.Mesh(f"Lines_{len(objs)}"), 0
+        for off in (-3, 0, 3):  # three cables from the crossarm ends and middle
+            ox, oy = (off, 0) if along_ns else (0, off)
+            p0 = (a["x"] + ox, a["y"] + oy, a.get("z", 0) + 21.6)
+            p1 = (b["x"] + ox, b["y"] + oy, b.get("z", 0) + 21.6)
+            pts = [(p0[0] + (p1[0] - p0[0]) * t, p0[1] + (p1[1] - p0[1]) * t, p0[2] + (p1[2] - p0[2]) * t - 2.0 * (1 - (2 * t - 1) ** 2)) for t in (k / 8 for k in range(9))]
+            for q0, q1 in zip(pts, pts[1:]):
+                m.tube(q0, q1, 0.08, "black", segments=4)
+        count += 1
+    if m is not None:
+        objs.append(m.done(sharp=60))
+    meta = lib.export("PowerLines", objs, {"kind": "wires", "note": "CanCollide off: riders pass underneath"})
+    assert max(part["triangles"] for part in meta["parts"].values()) <= 10000
+    lo, hi = lib.bounds(objs)
+    c = [(lo[k] + hi[k]) / 2 for k in range(3)]
+    info = {"PowerLines": {"size": [round(hi[0] - lo[0], 3), round(hi[2] - lo[2], 3), round(hi[1] - lo[1], 3)], "centre": [round(c[0], 3), round(c[2], 3), round(-c[1], 3)], "paint": False}}
+    print(f"power lines: {len(spans)} spans, {meta['triangles']} tris in {len(objs)} parts")
+    return info, [{"asset": "PowerLines", "x": 0, "y": 0, "rot": 0, "district": "Wires"}]
+
+
 def place_all(p):
     root = bpy.data.collections.new("City")
     bpy.context.scene.collection.children.link(root)
@@ -490,8 +528,9 @@ def main(render=True):
     kit_info = build_kit({it["asset"] for it in p["items"]})
     terrain_info, terrain_items = build_terrain(p)
     road_info, road_items = build_free_roads(p)
+    wire_info, wire_items = build_power_lines(p)
     place_all(p)
-    write_layout(p, {**kit_info, **terrain_info, **road_info}, terrain_items + road_items)
+    write_layout(p, {**kit_info, **terrain_info, **road_info, **wire_info}, terrain_items + road_items + wire_items)
     setup_render(8, 64, 64)
     bpy.ops.wm.save_as_mainfile(filepath=os.path.join(HERE, "city.blend"))
     if not render:
@@ -535,6 +574,13 @@ def main(render=True):
     shot("lm_harbour", (-1000, -170, 45), (-905, 10, 8), lens=28)
     shot("lm_lighthouse", (-860, 180, 25), (-1020, 300, 14), lens=30)
     shot("lm_plaza", (0, -240, 55), (0, 70, 8), lens=28)
+    # Set dressing checks (batch 7).
+    look("d_busstop", "Street_BusStop", 30, 9)
+    look("d_billboard", "Street_Billboard", 70, 18)
+    look("d_phonebox", "Street_PhoneBox", 28, 9)
+    look("d_bikerack", "Street_BikeRack", 26, 8)
+    pole = next(i for i in p["items"] if i["asset"] == "Street_PowerPole")
+    shot("d_powerlines", (pole["x"] + 60, pole["y"] - 70, 30), (pole["x"], pole["y"], 14), lens=30)
     shot("j_low_mtnfoot", (835, 548, 10), (905, 566, 3), lens=24, samples=16, res=(1200, 700))
     shot("suburbs", (12 * C - 60, 4 * C - 150, 70), (14 * C, 6 * C, 0), lens=30)
     shot("oldtown", (2 * C + 10, 11 * C, 45), (-2 * C, 15 * C, 15), lens=26)

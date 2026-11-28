@@ -177,13 +177,34 @@ def plan(seed: int = 7) -> dict:
             if j % 2 == 0 and W not in sides:  # mooring bollards on the quay edge
                 place("Docks_Bollard", x - 17.5, y, 0, district)
         straight = name in ("Road_Straight", "Road_Cobble")
-        along_ns = N in sides and S in sides
+        along_ns = rot % 180 == 0  # the tile's own direction: dead ends have only one open side, so sides can't tell
         # Pavement spots either side of a straight: 17.5 studs out, the middle of the 5-stud pavement.
         side_a = (x + 17.5, y) if along_ns else (x, y + 17.5)
         side_b = (x - 17.5, y) if along_ns else (x, y - 17.5)
         face_a = 90 if along_ns else 180  # props face the road
         face_b = 270 if along_ns else 0
         if straight:
+            # Batch 7 pavement props sit 12 studs along the pavement from the centre, clear of the
+            # lamps, trees and benches that stand at the centre.
+            ax, ay = (0, 12) if along_ns else (12, 0)
+            on_avenue = (i == 0 or j == 0) and district in ("Hub", "Suburbs", "OldTown", "Downtown", "Docks")
+            if on_avenue and (i + j) % 5 == 0:
+                place("Street_BusStop", side_a[0] + ax, side_a[1] + ay, face_a, district)  # open side faces the road
+            elif district in ("Suburbs", "OldTown") and (i * 3 + j) % 7 == 0:
+                place("Street_Postbox", side_b[0] + ax, side_b[1] + ay, face_b, district)
+            elif district == "OldTown" and (i + j * 3) % 11 == 0:
+                place("Street_PhoneBox", side_a[0] - ax, side_a[1] - ay, face_a, district)
+            elif district == "OldTown" and (i + j) % 6 == 3:
+                place("Street_FlowerBed", side_b[0] - ax, side_b[1] - ay, face_b, district)  # long side along the kerb
+            elif district == "Downtown" and (i + j) % 4 == 2:
+                place("Street_BikeRack", side_a[0] - ax, side_a[1] - ay, face_a, district)
+            elif district == "Outskirts" and (i + j) % 8 == 0 and ((i + 1, j) if along_ns else (i, j + 1)) not in road_cells:
+                bx, by = (x + 30, y) if along_ns else (x, y + 30)  # billboards face the road, back from the pavement
+                place("Street_Billboard", bx, by, face_a, district)
+            if district == "Outskirts" and (i + j) % 2 == 0 and ((i - 1, j) if along_ns else (i, j - 1)) not in road_cells:
+                # power poles on the far side, every 80 studs
+                px, py = (x - 22, y) if along_ns else (x, y - 22)
+                place("Street_PowerPole", px, py, 0 if along_ns else 90, district, line=(along_ns, round(x if along_ns else y)))
             if (i + j) % 2 == 0:
                 lx, ly = side_a if (i + j) % 4 == 0 else side_b
                 lamp_rot = (face_a if (i + j) % 4 == 0 else face_b) + 180  # lamp arm reaches over the road
@@ -388,6 +409,8 @@ def plan(seed: int = 7) -> dict:
                             place("Docks_Container", x - 12 + k * 10, y, 0, district, rnd.choice(CONTAINER_PAINT), z=level * 8.5)
                     for _ in range(rnd.randint(1, 3)):
                         place(rnd.choice(["Docks_Barrel", "Docks_Crate"]), x + rnd.uniform(-16, 16), y + rnd.uniform(12, 17) * rnd.choice((-1, 1)), rnd.randrange(360), district)
+                    if not sides and rnd.random() < 0.3:  # a rival courier's van loading at the yard
+                        place("Traffic_Van", x - 12, y + rnd.uniform(-6, 6), rnd.choice((0, 180)), district, rnd.choice(("43b85c", "8b5cf6", "e8443a")), parked=True)
                     if not sides and rnd.random() < 0.6:  # hazard: the game drives it up and down the yard
                         place("Docks_Forklift", x + 12, y + rnd.uniform(-8, 8), rnd.choice((0, 180)), district, moving=True)
             elif district == "Downtown":
@@ -399,8 +422,9 @@ def plan(seed: int = 7) -> dict:
                     asset = rnd.choices(["Downtown_OfficeTall", "Downtown_Office", "Downtown_OfficeShort", "Downtown_Apartments"], (4, 3, 1, 2) if near else (1, 3, 3, 4))[0]
                     building(asset, i, j, sides[0], district, rnd.choice(TOWER_PAINT if asset != "Downtown_Apartments" else HOUSE_PAINT), setback=3)
                 elif (i + j) % 2:
-                    for k in range(5):  # small car park
-                        place("Traffic_Car", x - 16 + k * 8, y, 90, district, rnd.choice(CAR_PAINT), parked=True)
+                    for k in range(5):  # small car park, with taxis waiting
+                        asset = "Traffic_Taxi" if k % 3 == 1 else "Traffic_Car"
+                        place(asset, x - 16 + k * 8, y, 90, district, "ffd23f" if asset == "Traffic_Taxi" else rnd.choice(CAR_PAINT), parked=True)
                 else:  # pocket plaza
                     for a in range(4):
                         place("Street_Tree", x + (12 if a % 2 else -12), y + (12 if a // 2 else -12), rnd.randrange(360), district)
@@ -430,6 +454,12 @@ def plan(seed: int = 7) -> dict:
     place("Hub_Garage", 110, 125, 180, "Hub", "3a7bf0")  # buy and upgrade vehicles
     place("Hub_VIPGarage", -110, 125, 180, "Hub", "23306b")
     place("Hub_Fountain", 0, -80, 0, "Hub")
+    for k in range(4):
+        a = k * math.pi / 2 + math.pi / 4
+        place("Street_FlowerBed", 22 * math.cos(a), -80 + 22 * math.sin(a), (math.degrees(a) + 90) % 360, "Hub")
+    for k in range(8):  # pigeons: scatter when you crash near them
+        a = k * 2.4
+        place("Bird_Pigeon", 30 * math.cos(a) + rnd.uniform(-3, 3), -80 + 30 * math.sin(a) + rnd.uniform(-3, 3), rnd.randrange(360), "Hub", moving=True)
     for x in (-40, 0, 40):  # leaderboards face the spawn, so they're the first thing you see
         place("Hub_Leaderboard", x, -150, 0, "Hub")
     for k in range(8):  # courier parking beside the depot
@@ -454,6 +484,17 @@ def plan(seed: int = 7) -> dict:
         for x in (-22, 22):
             if abs(y) > 30:
                 place("Street_Tree", x, y, 0, "Hub")
+
+    # Buses on the avenues (moving traffic: the traffic system drives them).
+    for bx, by, rot in ((7.5, -300, 0), (-7.5, 360, 180), (300, -7.5, 270), (-360, 7.5, 90)):
+        place("Traffic_Bus", bx, by, rot, district_of(round(bx / CELL), round(by / CELL)), rnd.choice(("e8443a", "3a7bf0", "43b85c")), moving=True)
+    for it in [i for i in items if i["asset"] == "Docks_Bollard"]:
+        place("Bird_Seagull", it["x"], it["y"], rnd.randrange(360), "Docks", z=2.55, onroad=True, moving=True)
+    tower = next((i for i in items if i["asset"] == "OldTown_ClockTower"), None)
+    if tower:
+        for k in range(6):
+            a = k * 1.1
+            place("Bird_Pigeon", tower["x"] + 9 * math.cos(a), tower["y"] + 9 * math.sin(a), rnd.randrange(360), "OldTown", moving=True)
 
     # Docks set pieces: a ship moored at the quay, cranes straddling the quay road, a lighthouse offshore.
     quay_x = (SEA_I + 0.5) * CELL
