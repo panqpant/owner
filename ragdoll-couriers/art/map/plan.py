@@ -6,7 +6,7 @@ about 2,000 x 2,000 studs. The hub sits in the middle with a district on each si
             Mountain (NE)
     Old Town (north)
   Docks (west)  HUB  Suburbs (east)
-    Building Site (south)
+    Downtown (south, with two construction sites)
 
 Outputs one list of placements: {"asset", "x", "y", "rot", "paint"?, "district"} in Blender studs
 (rot = degrees counter-clockwise about up), plus addresses, the road graph and district rectangles.
@@ -28,7 +28,7 @@ DISTRICTS = {
     "Suburbs": ((6, -9, 24, 9), "8fd07a"),
     "OldTown": ((-9, 6, 9, 24), "c9b79c"),
     "Docks": ((-22, -9, -6, 9), "a9b3bd"),
-    "Site": ((-9, -24, 9, -6), "d8bf8f"),
+    "Downtown": ((-9, -24, 9, -6), "bdbdb5"),
     "Mountain": ((10, 10, 24, 24), "9a9f8f"),
 }
 SEA_I = -23  # cells with i <= this are sea (docks quay faces it)
@@ -129,6 +129,8 @@ HOUSE_PAINT = ["fff1d6", "ffd6d6", "d6ecff", "e3ffd6", "fff3b0", "ffe0c2", "e8dc
 TERRACE_PAINT = ["b9553f", "b9553f", "a4452f", "c86a4e", "efe3c8", "dfe9e2", "c9d6e8", "e8cfa0", "d9b8b0", "f4f4f8"]  # brick reds weighted, then painted fronts
 SHOP_PAINT = ["f6c26b", "8fc1e3", "e98b7d", "b5d99c", "f4f4f8", "d4a5c9"]
 CONTAINER_PAINT = ["e8443a", "3a7bf0", "43b85c", "ff9a2e", "1fb5a8", "8b5cf6", "ffd23f"]
+TOWER_PAINT = ["f4f4f8", "c9ccd4", "3a3d46", "e8d39a", "8a8f9c", "d6ecff", "23306b"]
+CONSTRUCTION = {"Downtown A": ((1, -15), (3, -11), (2, -13)), "Downtown B": ((-7, -21), (-5, -17), (-6, -19))}  # cells, and the skeleton's cell
 CAR_PAINT = ["e8443a", "3a7bf0", "ffd23f", "f4f4f8", "43b85c", "3a3d46", "ff8fc7"]
 
 
@@ -172,6 +174,10 @@ def plan(seed: int = 7) -> dict:
                 place("Street_Tree", *(side_b if (i * 3 + j) % 2 else side_a), rnd.choice((0, 90, 180, 270)), district)
                 if rnd.random() < 0.15:
                     place("Street_Hydrant", *side_a, face_a, district)
+            elif district == "Downtown" and (i + j) % 2 == 1:
+                place("Street_Tree", *(side_a if i % 2 else side_b), 0, district)
+                if (i + j) % 4 == 1:
+                    place("Street_Bench", *(side_b if i % 2 else side_a), face_b if i % 2 else face_a, district)
             elif district == "OldTown" and (i + j) % 3 == 1:
                 place("Street_Bench", *side_b, face_b, district)
                 place("Street_Bin", *side_a, face_a, district)
@@ -182,13 +188,13 @@ def plan(seed: int = 7) -> dict:
             # Hazards on the road itself
             if district == "Suburbs" and along_ns is False and i % 3 == 0 and j in (4, -4):
                 place("SpeedBump", x, y, 0 if along_ns else 90, district)
-            if district == "Site" and (i, j) in ((4, -13), (-4, -19), (0, -13)):
+            if district == "Downtown" and (i, j) in ((4, -13), (-4, -19), (0, -13)):
                 place("Ramp", x, y, 0 if along_ns else 90, district)
             if i == SEA_I + 1 and district == "Docks" and j % 2 == 0:  # mooring bollards on the quay edge
                 place("Docks_Bollard", x - 17.5, y, 0, district)
             if district == "Docks" and (i, j) == (-14, 2):
                 place("Ramp", x, y, 0, district)
-        elif name in ("Road_T", "Road_Cross") and district in ("Hub", "Suburbs", "OldTown") and (i + j) % 2 == 0:
+        elif name in ("Road_T", "Road_Cross") and district in ("Hub", "Suburbs", "OldTown", "Downtown") and (i + j) % 2 == 0:
             place("Street_TrafficLight", x + 17.5, y + 17.5, 225, district)
 
     # ---------------------------------------------------------------- plots
@@ -225,6 +231,40 @@ def plan(seed: int = 7) -> dict:
             place(asset, x, y, FACING_ROT[side], "OldTown", rnd.choice(SHOP_PAINT if asset == "OldTown_Shop" else TERRACE_PAINT))
             ax, ay = i * CELL + dx * (CELL / 2 + 2.5) + px * along, j * CELL + dy * (CELL / 2 + 2.5) + py * along
             addresses.append({"district": "OldTown", "x": round(ax, 2), "y": round(ay, 2), "building": asset})
+
+    gates = set()
+
+    def construction_cell(i, j, sides, zone):
+        """A fenced construction site: hoardings on the street edges with one gate, the unfinished
+        skyscraper in the middle, a crane, and dirt jumps, pipes and cones to ride through."""
+        x, y = i * CELL, j * CELL
+        (i0, j0), (i1, j1), centre = zone
+        if (i, j) == centre:
+            place("Site_Skeleton", x, y, 0, "Downtown")
+            return
+        if (i, j) == (centre[0], j1):
+            return  # the skeleton's ramp runs into this cell
+        gate = sides and zone not in gates
+        if gate:
+            gates.add(zone)
+            building("Site_Portacabin", i, j, sides[0], "Downtown", "ffd23f", setback=8)
+        for side in sides:
+            dx, dy = DIRS[side]
+            px, py = -dy, dx
+            for k in range(4):
+                if gate and side == sides[0] and k in (1, 2):
+                    continue  # gate opening
+                along = -15 + k * 10
+                place("Site_Hoarding", x + dx * 19.5 + px * along, y + dy * 19.5 + py * along, FACING_ROT[side] + 90, "Downtown", rnd.choice(["2c7a43", "23306b", "e8443a"]))
+        if not gate:
+            if (i, j) == (i0, j0) or (i, j) == (i1, j0):
+                place("Site_TowerCrane", x, y, 90 if i == i0 else 270, "Downtown")
+                r = math.radians(90 if i == i0 else 270)
+                place("Site_WreckingBall", x - 28 * math.sin(r), y + 28 * math.cos(r), 0, "Downtown", z=33, moving=True)
+            else:
+                place(rnd.choice(["Site_DirtPile", "Site_DirtPile", "Site_Pipes", "Site_Scaffold"]), x + rnd.uniform(-5, 5), y + rnd.uniform(-5, 5), rnd.choice((0, 90, 180, 270)), "Downtown")
+                for _ in range(3):
+                    place("Site_Cone", x + rnd.uniform(-14, 14), y + rnd.uniform(-14, 14), 0, "Downtown")
 
     hub_special = set()
     for i in range(-HALF, HALF + 1):
@@ -287,22 +327,22 @@ def plan(seed: int = 7) -> dict:
                         place(rnd.choice(["Docks_Barrel", "Docks_Crate"]), x + rnd.uniform(-16, 16), y + rnd.uniform(12, 17) * rnd.choice((-1, 1)), rnd.randrange(360), district)
                     if not sides and rnd.random() < 0.6:  # hazard: the game drives it up and down the yard
                         place("Docks_Forklift", x + 12, y + rnd.uniform(-8, 8), rnd.choice((0, 180)), district, moving=True)
-            elif district == "Site":
-                if sides:
-                    asset = rnd.choice(["Site_Portacabin", "Site_Scaffold", "Site_Pipes", "Site_DirtPile"])
-                    building(asset, i, j, sides[0], district, "ffd23f" if asset == "Site_Portacabin" else None, setback=4, address=asset == "Site_Portacabin")
-                    dx, dy = DIRS[sides[0]]
-                    px, py = -dy, dx
-                    for k in (-1, 1):
-                        place("Site_Cone", x + dx * 17 + px * k * 12, y + dy * 17 + py * k * 12, 0, district)
-                    place("Site_Barrier", x + dx * 18.5, y + dy * 18.5, FACING_ROT[sides[0]] + 90, district)
-                elif (i * 7 + j * 3) % 11 == 0:
-                    rot = rnd.choice((0, 90, 180, 270))
-                    place("Site_TowerCrane", x, y, rot, district)
-                    r = math.radians(rot)  # hook hangs 28 studs out along the jib; ball centre 33 up
-                    place("Site_WreckingBall", x - 28 * math.sin(r), y + 28 * math.cos(r), 0, district, z=33, moving=True)
-                else:
-                    place("Site_DirtPile", x, y, rnd.randrange(360), district)
+            elif district == "Downtown":
+                zone = next((z for z in CONSTRUCTION.values() if z[0][0] <= i <= z[1][0] and z[0][1] <= j <= z[1][1]), None)
+                if zone:
+                    construction_cell(i, j, sides, zone)
+                elif sides:
+                    near = j >= -12  # taller towers toward the hub: a skyline that steps up
+                    asset = rnd.choices(["Downtown_OfficeTall", "Downtown_Office", "Downtown_OfficeShort", "Downtown_Apartments"], (4, 3, 1, 2) if near else (1, 3, 3, 4))[0]
+                    building(asset, i, j, sides[0], district, rnd.choice(TOWER_PAINT if asset != "Downtown_Apartments" else HOUSE_PAINT), setback=3)
+                elif (i + j) % 2:
+                    for k in range(5):  # small car park
+                        place("Traffic_Car", x - 16 + k * 8, y, 90, district, rnd.choice(CAR_PAINT), parked=True)
+                else:  # pocket plaza
+                    for a in range(4):
+                        place("Street_Tree", x + (12 if a % 2 else -12), y + (12 if a // 2 else -12), rnd.randrange(360), district)
+                    place("Street_Bench", x, y - 4, 0, district)
+                    place("Street_Bench", x, y + 4, 180, district)
             elif district == "Mountain":
                 if (i, j) in ((21, 14), (18, 20), (12, 17)):  # hazard: rolls downhill once the terrain exists
                     place("Mountain_Boulder", x, y, 0, district, z=3, moving=True)

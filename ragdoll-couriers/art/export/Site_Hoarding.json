@@ -1,0 +1,28 @@
+{
+ "triangles": 660,
+ "parts": {
+  "Paint": {
+   "triangles": 108,
+   "centre": [
+    0.0,
+    3.3,
+    -0.0
+   ]
+  },
+  "Body": {
+   "triangles": 552,
+   "centre": [
+    -0.128,
+    3.3,
+    -0.0
+   ]
+  }
+ },
+ "size_studs": [
+  0.95,
+  6.6,
+  10.6
+ ],
+ "kind": "prop",
+ "note": "10 studs long"
+}

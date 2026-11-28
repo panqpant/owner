@@ -71,6 +71,8 @@ PALETTE = {
     "pumpkin": ("ff8a1f", 0, 0.6, 1),
     "alien": ("8dff5a", 0, 0.3, 1),
     "comb": ("e8243a", 0, 0.6, 1),
+    "tint": ("7fb4d9", 0.2, 0.08, 1),  # opaque tower glass: reads as glass without transparency costs
+    "tintdark": ("3d6f99", 0.2, 0.08, 1),
 }
 NAMES = list(PALETTE)
 GRID = 8  # 8x8 swatches

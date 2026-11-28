@@ -472,6 +472,94 @@ def dirt_pile():
     return [m.done(sharp=5)], {"kind": "prop", "note": "doubles as a small jump"}
 
 
+# ------------------------------------------------------------------ downtown
+
+
+def office(floors=8):
+    """Glass office tower. `Paint` is the frame (floor bands, mullions, lobby), so towers come in many colours."""
+    paint, body = Mesh("Paint"), Mesh("Body")
+    w = d = 22
+    lobby, fh = 7, 5
+    h = lobby + floors * fh
+    body.box((w - 1.4, d - 1.4, h - lobby), (0, 0, lobby + (h - lobby) / 2), "tint" if floors % 2 else "tintdark", bevel=0.05)
+    paint.box((w, d, lobby), (0, 0, lobby / 2), bevel=0.15)
+    for k in range(floors + 1):
+        paint.box((w, d, 0.8), (0, 0, lobby + k * fh), bevel=0.08)  # floor bands
+    for t in (-w / 2 + 0.4, -w / 4, 0, w / 4, w / 2 - 0.4):
+        for side in (-1, 1):
+            paint.box((0.7, 0.7, h - lobby), (t, side * (d / 2 - 0.3), lobby + (h - lobby) / 2), bevel=0.05)  # mullions
+            paint.box((0.7, 0.7, h - lobby), (side * (w / 2 - 0.3), t, lobby + (h - lobby) / 2), bevel=0.05)
+    body.box((10, 0.4, 5), (0, d / 2 + 0.05, 2.7), "tint", bevel=0.05)  # lobby glazing
+    for x in (-1.6, 1.6):
+        body.box((2.8, 0.5, 4.4), (x, d / 2 + 0.1, 2.2), "glass", bevel=0.03)  # doors
+    body.box((12, 3, 0.5), (0, d / 2 + 1.5, 6.2), "charcoal", bevel=0.1)  # canopy
+    body.box((w + 0.6, d + 0.6, 1.2), (0, 0, h + 0.6), "concrete", bevel=0.15)  # parapet
+    body.box((8, 6, 3), (-4, -3, h + 2.7), "grey", bevel=0.2)  # roof plant
+    body.box((4, 4, 2), (6, 4, h + 2.2), "lightgrey", bevel=0.2)
+    if floors >= 10:
+        body.cyl(0.25, 12, (5, -5, h + 7), "steel", segments=8, bevel=0)  # antenna
+        body.sphere(0.5, (5, -5, h + 13), "taillight", segments=10, rings=6)
+    return [paint.done(), body.done()], {"kind": "building", "floors": floors}
+
+
+def apartments(floors=6):
+    """Apartment block with balconies on the street side."""
+    paint, body = Mesh("Paint"), Mesh("Body")
+    w, d, fh = 24, 14, 4.6
+    h = 1 + floors * fh
+    paint.box((w, d, h), (0, 0, h / 2), bevel=0.15)
+    body.box((w + 0.6, d + 0.6, 0.9), (0, 0, h + 0.45), "concrete", bevel=0.1)
+    _door(body, 0, d / 2, colour="glass", w=3.6, h=4.2)
+    for k in range(floors):
+        z = 1 + k * fh + fh / 2
+        for x in (-8.5, -3, 3, 8.5):
+            if k == 0 and abs(x) < 4:
+                continue  # entrance
+            for side in ((-1,) if k else (-1, 1)):  # simple two-box windows keep the block under budget
+                body.box((2.6, 0.3, 3.0), (x, side * (d / 2 + 0.05), z), "white", bevel=0.02, segments=1)
+                body.box((2.2, 0.36, 2.6), (x, side * (d / 2 + 0.07), z), "tintdark", bevel=0)
+            if k == 0:
+                continue
+            body.box((2.6, 0.3, 3.4), (x, d / 2 + 0.05, z - 0.2), "tintdark", bevel=0.03)  # balcony door
+            body.box((4.4, 1.8, 0.3), (x, d / 2 + 0.9, z - 2.0), "concrete", bevel=0.05)  # balcony slab
+            body.box((4.4, 0.12, 1.2), (x, d / 2 + 1.75, z - 1.3), "steel", bevel=0.02)  # railing
+    return [paint.done(), body.done()], {"kind": "building", "floors": floors}
+
+
+def skeleton():
+    """The unfinished skyscraper: concrete floors, then bare columns and rebar. Ride the dirt ramp onto floor 1."""
+    m = Mesh("Skeleton")
+    w, fh, done, total = 26, 6, 5, 9
+    cols = (-w / 2 + 1, -w / 6, w / 6, w / 2 - 1)
+    for k in range(1, done + 1):
+        m.box((w, w, 0.8), (0, 0, k * fh), "concrete", bevel=0.05)
+    for cx in cols:
+        for cy in cols:
+            top = total * fh if (cx + cy) % 3 else (done + 2) * fh  # some columns stop short
+            m.box((1.2, 1.2, top), (cx, cy, top / 2), "concrete", bevel=0.05)
+            for rx, ry in ((-0.3, -0.3), (0.3, 0.3), (0.3, -0.3)):
+                m.tube((cx + rx, cy + ry, top), (cx + rx * 1.6, cy + ry * 1.6, top + 2.2), 0.06, "rust", segments=5)
+    for k in (done + 1, done + 2):  # beams waiting for floors
+        for cy in cols[::3]:
+            m.box((w, 0.8, 0.8), (0, cy, k * fh), "steel", bevel=0.05)
+    m.wedge((10, 22, fh), (0, w / 2 + 11, fh / 2), "tan")  # dirt ramp: high end meets floor 1
+    for k in range(done):  # safety netting on two faces
+        m.box((w, 0.15, fh - 1.4), (0, -w / 2 - 0.2, k * fh + fh / 2 + 0.4), "orange", bevel=0)
+    return [m.done()], {"kind": "landmark", "rampFloor": fh}
+
+
+def hoarding():
+    """Construction site fence, 10 studs long. `Paint` boards for each developer's colours."""
+    paint, body = Mesh("Paint"), Mesh("Body")
+    paint.box((0.3, 10, 6), (0, 0, 3.3), bevel=0.05)
+    for y in (-5, 0, 5):
+        body.box((0.6, 0.6, 6.6), (-0.3, y, 3.3), "wood", bevel=0.08)
+    body.box((0.35, 10.05, 0.5), (0.02, 0, 1.2), "white", bevel=0.02)
+    body.box((0.4, 2.2, 1.6), (0.1, 2.5, 4.2), "yellow", bevel=0.05)  # warning sign
+    body.box((0.45, 1.2, 0.2), (0.12, 2.5, 4.2), "black", bevel=0)
+    return [paint.done(), body.done()], {"kind": "prop", "note": "10 studs long"}
+
+
 # ------------------------------------------------------------------ mountain
 
 
@@ -773,6 +861,12 @@ ASSETS = {
     "Docks_Bollard": bollard,
     "Docks_Barrel": barrel,
     "Docks_Crate": crate,
+    "Downtown_Office": office,
+    "Downtown_OfficeTall": lambda: office(floors=13),
+    "Downtown_OfficeShort": lambda: office(floors=5),
+    "Downtown_Apartments": apartments,
+    "Site_Skeleton": skeleton,
+    "Site_Hoarding": hoarding,
     "Site_TowerCrane": tower_crane,
     "Site_WreckingBall": wrecking_ball,
     "Site_Cone": cone,

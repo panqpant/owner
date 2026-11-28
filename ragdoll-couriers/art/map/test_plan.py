@@ -42,7 +42,7 @@ for it in items:
     assert -limit <= it["x"] <= limit and -limit <= it["y"] <= limit, it
 
 # No building sits on a road cell, and no two buildings share a spot.
-buildings = [it for it in items if it["asset"].startswith(("House", "OldTown_Shop", "OldTown_Town", "Docks_Ware", "Site_Porta", "Mountain_Cabin", "Hub_Depot"))]
+buildings = [it for it in items if it["asset"].startswith(("House", "OldTown_Shop", "OldTown_Town", "Docks_Ware", "Site_Porta", "Site_Skeleton", "Downtown_", "Mountain_Cabin", "Hub_Depot"))]
 for b in buildings:
     cell = (round(b["x"] / CELL), round(b["y"] / CELL))
     assert cell not in cells, f"{b['asset']} on a road at {cell}"
@@ -71,7 +71,7 @@ for a in p["addresses"]:
     assert cell in cells, f"address off the road: {a}"
 
 districts = {a["district"] for a in p["addresses"]}
-assert {"Suburbs", "OldTown", "Docks", "Site"} <= districts, districts
+assert {"Suburbs", "OldTown", "Docks", "Downtown"} <= districts, districts
 
 counts = {}
 for it in items:

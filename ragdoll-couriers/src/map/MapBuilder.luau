@@ -71,7 +71,7 @@ function MapBuilder.build(offset: Vector3?)
 	groundFolder.Name = "Ground"
 	groundFolder.Parent = city
 	local layer = 0
-	for _, name in { "Outskirts", "Hub", "Suburbs", "OldTown", "Docks", "Site", "Mountain" } do
+	for _, name in { "Outskirts", "Hub", "Suburbs", "OldTown", "Docks", "Downtown", "Mountain" } do
 		local d = layout.districts[name]
 		local r = d.rect
 		layer += 1

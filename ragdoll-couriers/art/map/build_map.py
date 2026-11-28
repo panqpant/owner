@@ -221,7 +221,7 @@ def main(render=True):
     shot("suburbs", (12 * C - 60, 4 * C - 150, 70), (14 * C, 6 * C, 0), lens=30)
     shot("oldtown", (2 * C + 10, 11 * C, 45), (-2 * C, 15 * C, 15), lens=26)
     shot("docks", (-12 * C, -6 * C, 140), (-19 * C, 2 * C, 0), lens=30)
-    shot("site", (10 * C, -6 * C, 160), (0, -16 * C, 0), lens=30)
+    shot("downtown", (9 * C, -7 * C, 110), (0, -15 * C, 20), lens=28)
 
 
 if __name__ == "__main__":
