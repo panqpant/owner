@@ -1,5 +1,5 @@
 {
- "triangles": 16566,
+ "triangles": 14805,
  "parts": {
   "Chunk_0_0": {
    "triangles": 40,
@@ -98,7 +98,7 @@
    ]
   },
   "Chunk_2_0": {
-   "triangles": 877,
+   "triangles": 879,
    "centre": [
     -875.0,
     96.445,
@@ -106,10 +106,10 @@
    ]
   },
   "Chunk_2_1": {
-   "triangles": 842,
+   "triangles": 879,
    "centre": [
     -875.0,
-    65.748,
+    70.109,
     1125.0
    ]
   },
@@ -130,7 +130,7 @@
    ]
   },
   "Chunk_2_4": {
-   "triangles": 362,
+   "triangles": 324,
    "centre": [
     -875.0,
     -3.426,
@@ -138,7 +138,7 @@
    ]
   },
   "Chunk_2_5": {
-   "triangles": 272,
+   "triangles": 106,
    "centre": [
     -875.0,
     -8.05,
@@ -149,15 +149,15 @@
    "triangles": 1154,
    "centre": [
     -625.0,
-    172.49,
+    172.529,
     1375.0
    ]
   },
   "Chunk_3_1": {
-   "triangles": 1062,
+   "triangles": 1055,
    "centre": [
     -625.0,
-    68.902,
+    69.922,
     1125.0
    ]
   },
@@ -178,7 +178,7 @@
    ]
   },
   "Chunk_3_4": {
-   "triangles": 576,
+   "triangles": 477,
    "centre": [
     -625.0,
     6.266,
@@ -186,7 +186,7 @@
    ]
   },
   "Chunk_3_5": {
-   "triangles": 338,
+   "triangles": 163,
    "centre": [
     -625.0,
     -0.1,
@@ -197,7 +197,7 @@
    "triangles": 1139,
    "centre": [
     -375.0,
-    160.606,
+    160.615,
     1375.0
    ]
   },
@@ -210,7 +210,7 @@
    ]
   },
   "Chunk_4_2": {
-   "triangles": 661,
+   "triangles": 499,
    "centre": [
     -375.0,
     19.022,
@@ -218,7 +218,7 @@
    ]
   },
   "Chunk_4_3": {
-   "triangles": 519,
+   "triangles": 388,
    "centre": [
     -375.0,
     16.462,
@@ -226,7 +226,7 @@
    ]
   },
   "Chunk_4_4": {
-   "triangles": 445,
+   "triangles": 234,
    "centre": [
     -375.0,
     5.196,
@@ -234,7 +234,7 @@
    ]
   },
   "Chunk_4_5": {
-   "triangles": 338,
+   "triangles": 161,
    "centre": [
     -375.0,
     -0.1,
@@ -258,7 +258,7 @@
    ]
   },
   "Chunk_5_2": {
-   "triangles": 380,
+   "triangles": 212,
    "centre": [
     -125.0,
     2.214,
@@ -266,7 +266,7 @@
    ]
   },
   "Chunk_5_3": {
-   "triangles": 338,
+   "triangles": 133,
    "centre": [
     -125.0,
     -0.1,
@@ -274,7 +274,7 @@
    ]
   },
   "Chunk_5_4": {
-   "triangles": 338,
+   "triangles": 173,
    "centre": [
     -125.0,
     -0.1,
@@ -282,7 +282,7 @@
    ]
   },
   "Chunk_5_5": {
-   "triangles": 338,
+   "triangles": 242,
    "centre": [
     -125.0,
     -0.1,
