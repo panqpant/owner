@@ -119,9 +119,10 @@ Run in this order (each needs Blender's Python module and Pillow):
 3. `python marketing/build_thumbnails.py [names...] [--draft]`: needs `map/city.blend`. Renders, staged in the real city:
    - 8 thumbnails (1920 × 1080);
    - `_title` variants carrying the logo and tagline;
-   - `icon.png` (512);
    - `loading_screen.png`.
    Contact sheet: `previews/_thumbnails.png`.
+
+4. `python marketing/build_poster_icon.py`: the game icon, `export/marketing/icon.png` (1024). It's front-page advert style: a big bacon-haired courier with a painted screaming face, ink outlines, a flying cake and the scooter, on a starburst. `previews/_icon_check.png` shows it at the 150 and 90 px sizes players actually see.
 
 Upload notes:
 - Game icon: `icon.png`.

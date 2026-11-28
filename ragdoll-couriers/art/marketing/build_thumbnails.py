@@ -1,7 +1,7 @@
-"""Batch 9: game thumbnails, the game icon and the loading screen, staged in the real city.
+"""Batch 9: game thumbnails and the loading screen, staged in the real city.
 
 Run:  python marketing/build_thumbnails.py [names...] [--draft]
-Needs map/city.blend (from map/build_map.py). Writes export/marketing/*.png (1920 x 1080, icon 512)
+Needs map/city.blend (from map/build_map.py). Writes export/marketing/*.png (1920 x 1080)
 and previews/_thumbnails.png. Thumbnails with "_title" have the game's name on them; Roblox lets you
 upload several and tests which gets the most clicks.
 """
@@ -275,16 +275,7 @@ def main(only):
         if name in ("thumb_ramp_crash", "thumb_oldtown_fishtank", "thumb_legendary"):
             title(path, os.path.join(OUT, name + "_title.png"), "LEGENDARY DELIVERIES!" if "legendary" in name else "DELIVER ANYTHING!")
             done.append(name + "_title")
-    if not only or "icon" in only:  # the game icon: the ramp crash, close and square
-        bpy.ops.wm.open_mainfile(filepath=os.path.join(ART, "map", "city.blend"))
-        sky("day")  # the icon: a tight crash against open sky, readable at phone size
-        cam = crash((0, -40, 2), (0, 0, 18), "Vehicle_Scooter", "Parcel_TV", "e8443a", near=9)  # low, looking up: courier against open sky
-        camera(cam[0], cam[1], 26, (512, 512))
-        bpy.context.scene.render.filepath = os.path.join(OUT, "icon.png")
-        bpy.ops.render.render(write_still=True)
-        grade(os.path.join(OUT, "icon.png"))
-        done.append("icon")
-        print("rendered icon")
+    # the game icon is marketing/build_poster_icon.py (advert style, no scenery)
     if not only or "loading" in only:  # loading screen: the city from above the hub, title on top
         bpy.ops.wm.open_mainfile(filepath=os.path.join(ART, "map", "city.blend"))
         sky("day")

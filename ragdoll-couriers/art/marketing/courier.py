@@ -28,7 +28,7 @@ def _part(name, builder, loc, parent):
     return obj
 
 
-def courier(pose="fly", location=(0, 0, 0), rotation=(0, 0, 0), shirt="orange", scale=1.0, face=None):
+def courier(pose="fly", location=(0, 0, 0), rotation=(0, 0, 0), shirt="orange", scale=1.0, face=None, hair=None):
     face = face or ("smile" if pose in ("ride", "wave") else "shock")
     """Builds a posed courier. Returns the root empty (move/rotate it) and the list of mesh objects."""
     root = bpy.data.objects.new("Courier", None)
@@ -54,13 +54,23 @@ def courier(pose="fly", location=(0, 0, 0), rotation=(0, 0, 0), shirt="orange", 
                 m.box((0.34, 0.08, 0.09), (sx * 0.3, 0.62, 1.02), "darkbrown", rot=(0, sx * -18, 0), bevel=0.03)
             m.sphere(0.2, (0, 0.6, 0.34), "darkbrown", scale=(1.1, 0.4, 0.9), segments=12, rings=8)
             m.sphere(0.12, (0, 0.65, 0.27), "red", scale=(1.2, 0.4, 0.6), segments=10, rings=6)  # tongue
-        else:
+        elif face == "smile":  # face="none" leaves the head blank for a painted face decal (marketing/build_poster_icon.py)
             for sx in (-1, 1):
                 m.sphere(0.11, (sx * 0.27, 0.6, 0.72), "black", segments=8, rings=6)  # eyes
             m.box((0.45, 0.05, 0.1), (0, 0.61, 0.38), "darkbrown", bevel=0.03)  # smile
-        m.box((1.35, 1.3, 0.45), (0, 0, 1.32), "red", bevel=0.18)  # cap
-        m.box((1.1, 0.7, 0.12), (0, 0.85, 1.12), "red", bevel=0.05)  # brim
-        m.box((0.5, 0.06, 0.3), (0, 0.66, 1.35), "white", bevel=0.02)  # cap badge
+        if hair == "bacon":  # messy ginger default-avatar hair: what front-page players read as "me"
+            m.box((1.38, 1.32, 0.4), (0, -0.02, 1.28), "ginger", bevel=0.17)  # crown
+            m.box((1.36, 0.35, 1.0), (0, -0.5, 0.85), "ginger", bevel=0.15)  # back
+            for sx in (-1, 1):
+                m.box((0.16, 1.0, 0.55), (sx * 0.66, -0.05, 1.0), "ginger", bevel=0.07)  # sides
+            for k, x in enumerate((-0.5, -0.2, 0.1, 0.4)):  # fringe locks swept across the forehead
+                m.sphere(0.24, (x, 0.5, 1.36 - k * 0.03), "ginger", scale=(0.8, 0.7, 1.7), rot=(25, -40, 0), segments=10, rings=6)
+            for k, (x, y) in enumerate(((-0.35, 0.1), (0.15, -0.15), (0.45, 0.25), (-0.1, 0.35))):  # spiky top
+                m.sphere(0.22, (x, y, 1.5), "ginger", scale=(0.8, 0.8, 1.9), rot=(15 - k * 10, -35 + k * 15, 0), segments=8, rings=5)
+        else:
+            m.box((1.35, 1.3, 0.45), (0, 0, 1.32), "red", bevel=0.18)  # cap
+            m.box((1.1, 0.7, 0.12), (0, 0.85, 1.12), "red", bevel=0.05)  # brim
+            m.box((0.5, 0.06, 0.3), (0, 0.66, 1.35), "white", bevel=0.02)  # cap badge
 
     def arm(m):
         m.box((0.9, 0.9, 1.4), (0, 0, -0.7), shirt, bevel=0.2)
